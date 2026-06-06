@@ -1,0 +1,24 @@
+# Environment & secrets
+.env
+credentials.json
+token.json
+temp_linkedin/
+
+# Python
+__pycache__/
+.venv/
+
+# Node
+node_modules/
+jobspy-mcp-server/node_modules/
+jobspy-mcp-server/.env
+
+# Ephemeral output
+reports/
+cache/
+
+# Tool binaries / caches
+bin/
+
+# macOS
+.DS_Store
