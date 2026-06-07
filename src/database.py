@@ -115,7 +115,7 @@ def init_db(db_path=None):
                 "matchScore": 75,
                 "matchType": "match",
                 "shouldProceed": 1,
-                "status": "applied",
+                "status": "contacted",
                 "resumeUsed": "data_analyst.md",
                 "strengths": json.dumps(["Excellent SQL database experience", "Experienced with Tableau and PowerBI", "Detail-oriented financial analysis"]),
                 "gaps": json.dumps(["No direct experience with FinTech compliance frameworks"]),
@@ -325,10 +325,10 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
 
     contacts[contact_idx]["contacted"] = bool(contacted)
 
-    # Auto-promote sourced → applied when a contact is first marked contacted
+    # Auto-promote sourced/enriching/enriched → contacted when a contact is first marked contacted
     status = job["status"]
-    if contacted and status == "sourced":
-        status = "applied"
+    if contacted and status in ["sourced", "enriching", "enriched"]:
+        status = "contacted"
 
     cursor.execute(
         "UPDATE jobs SET contacts = ?, status = ? WHERE id = ?",
@@ -352,16 +352,36 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     return updated
 
 
+def job_exists(title, company, link=None, db_path=None):
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    if link:
+        cursor.execute("SELECT id FROM jobs WHERE link = ?", (link,))
+        existing = cursor.fetchone()
+        if existing:
+            conn.close()
+            return True
+    cursor.execute("SELECT id FROM jobs WHERE title = ? AND company = ?", (title, company))
+    existing = cursor.fetchone()
+    conn.close()
+    return existing is not None
+
+
 def add_job(job, db_path=None):
     if db_path is None:
         db_path = DB_PATH
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
     
-    # Check if job with same link or (title + company) exists to avoid duplicates
     title = job.get("title") or job.get("Job title") or ""
     company = job.get("company") or job.get("Company + Company size") or ""
     link = job.get("link") or job.get("Posting link") or ""
+
+    if not title.strip() and not company.strip():
+        conn.close()
+        return None
     
     if link:
         cursor.execute("SELECT id FROM jobs WHERE link = ?", (link,))

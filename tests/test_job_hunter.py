@@ -64,6 +64,8 @@ async def test_run_search_calls_evaluate_when_not_mock():
         "shouldProceed": True,
         "strengths": ["Python expertise"],
         "gaps": ["No mobile testing"],
+        "remoteType": "hybrid",
+        "summary": "This is a concise summary of the QA Lead role."
     }
 
     with patch("src.cli.scrape_linkedin_jobs", return_value=mock_jobs), \
@@ -77,6 +79,8 @@ async def test_run_search_calls_evaluate_when_not_mock():
         assert mock_eval.called
         assert results[0]["matchScore"] == 88
         assert results[0]["shouldProceed"] is True
+        assert results[0]["remoteType"] == "hybrid"
+        assert results[0]["description"] == "This is a concise summary of the QA Lead role."
 
 
 @pytest.mark.asyncio

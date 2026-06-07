@@ -18,7 +18,9 @@ def mock_gemini_response():
         "matchType": "match",
         "strengths": ["Python expertise", "CI/CD experience"],
         "gaps": ["No WebUSB experience"],
-        "shouldProceed": True
+        "shouldProceed": True,
+        "remoteType": "remote",
+        "summary": "This is a mock summary of the job listing."
     }
     response = MagicMock()
     response.text = json.dumps(result)
@@ -63,13 +65,15 @@ async def test_evaluate_job_returns_structured_result(mock_gemini_response, samp
         mock_model_cls.return_value = mock_model
 
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
-            result = await evaluate_job(sample_job, "# QA Resume\nPython expert")
+            result = await evaluate_job(sample_job, "# QA Resume\nPython expert", allowed_remote_types=["remote"])
 
     assert result["matchScore"] == 89
     assert result["matchType"] == "match"
     assert result["shouldProceed"] is True
     assert "Python expertise" in result["strengths"]
     assert "No WebUSB experience" in result["gaps"]
+    assert result["remoteType"] == "remote"
+    assert result["summary"] == "This is a mock summary of the job listing."
 
 
 @pytest.mark.asyncio
@@ -146,3 +150,38 @@ async def test_evaluate_job_logs_warning_when_skipping(sample_job):
 
     assert result == {}
     assert any("GEMINI_API_KEY" in msg for _, msg in log_messages)
+
+
+def test_build_prompt_formatting():
+    from src.core.matcher import _build_prompt
+    
+    # 1. With allowed remote types
+    prompt_with_remote = _build_prompt(
+        resume="My Resume",
+        job_title="QA",
+        company="Google",
+        description="A job description",
+        allowed_remote_types=["remote", "hybrid"]
+    )
+    assert "Candidate's Allowed Remote Preferences: remote, hybrid" in prompt_with_remote
+    assert "remoteType" in prompt_with_remote
+    assert "summary" in prompt_with_remote
+    
+    # 2. Without allowed remote types or containing "any"
+    prompt_any = _build_prompt(
+        resume="My Resume",
+        job_title="QA",
+        company="Google",
+        description="A job description",
+        allowed_remote_types=None
+    )
+    assert "Candidate's Allowed Remote Preferences: any" in prompt_any
+
+    prompt_any_list = _build_prompt(
+        resume="My Resume",
+        job_title="QA",
+        company="Google",
+        description="A job description",
+        allowed_remote_types=["any", "remote"]
+    )
+    assert "Candidate's Allowed Remote Preferences: any" in prompt_any_list

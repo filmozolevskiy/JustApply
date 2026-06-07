@@ -8,7 +8,7 @@ Dedicated repository for the **Job Hunter** skill. Automates job search, resume 
 |:---|:---|
 | `python3 job_hunter.py --search "<position>"` | Search and evaluate jobs for a position (e.g. "QA", "Project/Delivery Manager") |
 | `python3 job_hunter.py --promote` | Sourced LinkedIn contacts, generate Cover Letters & promote to Applications |
-| `python3 scripts/google_sheets_mcp.py --auth` | Run Google Sheets OAuth browser authentication flow |
+| `python3 -m src.run_dashboard` | Launch local FastAPI Kanban Dashboard |
 | `pytest tests/` | Run all unit and integration tests |
 
 ## Constitution
@@ -36,13 +36,15 @@ You are a software engineer working on the Job Hunter automation system.
 ```text
 CLAUDE.md                    # Project rules
 CONTEXT.md                   # Job Hunter system architecture / context
-job_hunter.py                # Main orchestrator CLI
-scripts/
-└── google_sheets_mcp.py     # Custom Google Sheets MCP Server
-tests/
-├── test_job_hunter.py       # Orchestrator CLI tests
-└── test_google_sheets_mcp.py# Sheets MCP server tests
-jobspy-mcp-server/           # Node.js JobSpy MCP server wrapper
+job_hunter.py                # Thin CLI orchestrator launcher
+src/
+├── database.py              # SQLite database storage operations
+├── run_dashboard.py         # Launches local FastAPI server
+├── server.py                # FastAPI backend endpoints
+├── cli.py                   # CLI implementation
+├── dashboard.html           # Kanban board UI
+└── core/                    # Core modules (matcher, outreach, scraper)
+tests/                       # Pytest unit and integration tests
 .claude/
 ├── settings.json            # MCP server configuration
 └── skills/

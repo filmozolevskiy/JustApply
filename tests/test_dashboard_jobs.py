@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import database
+from src import database
 import src.server as server_module
 from src.server import app
 
@@ -44,19 +44,19 @@ def test_put_job_status_endpoint():
     job1 = next(j for j in jobs if j["id"] == 1)
     assert job1["status"] == "sourced"
 
-    put_response = client.put("/api/jobs/1/status", json={"status": "evaluating"})
+    put_response = client.put("/api/jobs/1/status", json={"status": "enriching"})
     assert put_response.status_code == 200
     updated_job = put_response.json()
-    assert updated_job["status"] == "evaluating"
+    assert updated_job["status"] == "enriching"
 
     response = client.get("/api/jobs")
     jobs = response.json()
     job1_updated = next(j for j in jobs if j["id"] == 1)
-    assert job1_updated["status"] == "evaluating"
+    assert job1_updated["status"] == "enriching"
 
 
 def test_put_job_status_nonexistent():
-    put_response = client.put("/api/jobs/999/status", json={"status": "evaluating"})
+    put_response = client.put("/api/jobs/999/status", json={"status": "enriching"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
 
@@ -82,3 +82,25 @@ def test_put_job_comment_nonexistent():
     put_response = client.put("/api/jobs/999/comment", json={"comment": "No job here"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
+
+
+def test_post_job_enrich_endpoint():
+    from unittest.mock import patch
+    
+    with patch("src.server.run_enrichment_task") as mock_enrich_task:
+        response = client.post("/api/jobs/1/enrich")
+        assert response.status_code == 200
+        assert response.json() == {"status": "enriching", "job_id": 1}
+        
+        # Verify status changed to enriching
+        get_response = client.get("/api/jobs")
+        jobs = get_response.json()
+        job1 = next(j for j in jobs if j["id"] == 1)
+        assert job1["status"] == "enriching"
+        assert mock_enrich_task.called
+
+
+def test_post_job_enrich_nonexistent():
+    response = client.post("/api/jobs/999/enrich")
+    assert response.status_code == 404
+    assert response.json() == {"message": "Job not found"}

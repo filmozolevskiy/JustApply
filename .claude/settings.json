@@ -6,27 +6,6 @@
         "-c",
         "export $(grep -v '^#' .env | xargs) && exec ./.venv/bin/mcp-server-git --repository ."
       ]
-    },
-    "linkedin": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "export $(grep -v '^#' .env | xargs) && exec ./.venv/bin/linkedin-scraper-mcp"
-      ]
-    },
-    "jobspy": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "export $(grep -v '^#' .env | xargs) && exec node ./jobspy-mcp-server/src/index.js"
-      ]
-    },
-    "google-sheets": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "export $(grep -v '^#' .env | xargs) && exec ./.venv/bin/python ./scripts/google_sheets_mcp.py"
-      ]
     }
   }
 }

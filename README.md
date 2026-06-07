@@ -7,13 +7,15 @@ This repository is dedicated to the **Job Hunting** system, which automates job 
 ```text
 CLAUDE.md                    # Project rules
 CONTEXT.md                   # Job Hunter system architecture
-job_hunter.py                # Main orchestrator CLI
-scripts/
-└── google_sheets_mcp.py     # Custom Google Sheets MCP Server
-tests/
-├── test_job_hunter.py       # Orchestrator CLI tests
-└── test_google_sheets_mcp.py# Sheets MCP server tests
-jobspy-mcp-server/           # Node.js JobSpy MCP server wrapper
+job_hunter.py                # Thin CLI orchestrator launcher
+src/
+├── database.py              # SQLite database storage operations
+├── run_dashboard.py         # Launches local FastAPI server
+├── server.py                # FastAPI backend endpoints
+├── cli.py                   # CLI implementation
+├── dashboard.html           # Kanban board UI
+└── core/                    # Core modules (matcher, outreach, scraper)
+tests/                       # Pytest unit and integration tests
 .claude/
 ├── settings.json            # MCP server configuration
 └── skills/
@@ -30,6 +32,8 @@ cp .env.example .env
 Ensure you have:
 * `GEMINI_API_KEY`: Required for resume evaluation and cover letter generation.
 * `GITHUB_PERSONAL_ACCESS_TOKEN`: Required for git/issues integration.
+* `BRIGHTDATA_API_KEY`: Required for job scraping.
+* `APIFY_API_KEY`: Required for fallback outreach contact scraping.
 
 ### 2. Python Virtual Environment Setup
 Create a virtual environment and install the required dependencies:
@@ -37,19 +41,6 @@ Create a virtual environment and install the required dependencies:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 3. Google Sheets MCP Authentication
-Make sure your Google Cloud Console `credentials.json` file is present in the root folder, then run the browser-based OAuth 2.0 flow to create `token.json`:
-```bash
-python3 scripts/google_sheets_mcp.py --auth
-```
-
-### 4. Jobspy MCP Node Server Setup
-Install Node dependencies for the JobSpy MCP server:
-```bash
-cd jobspy-mcp-server
-npm install
 ```
 
 ---
@@ -68,8 +59,15 @@ To source contacts, generate cover letters, and promote marked jobs to the appli
 python3 job_hunter.py --promote
 ```
 
+### Launch Kanban Dashboard
+To launch the local FastAPI dashboard:
+```bash
+python3 -m src.run_dashboard
+```
+Open `http://127.0.0.1:8000` in your web browser.
+
 ### Running Tests
 Execute python unit and integration tests using pytest:
 ```bash
-pytest tests/
+.venv/bin/pytest tests/
 ```

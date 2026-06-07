@@ -26,4 +26,5 @@ bin/
 # Databases
 *.db
 job_tracker.db
+uvicorn.log
 

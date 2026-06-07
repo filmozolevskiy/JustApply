@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import database
+from src import database
 import src.server as server_module
 from src.server import app
 from src.core.scraper import (
@@ -22,6 +22,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("MOCK_SCRAPER", "true")
     test_db = tmp_path / "test_job_tracker.db"
     test_db_str = str(test_db)
     monkeypatch.setattr(database, "DB_PATH", test_db_str)

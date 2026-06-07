@@ -6,7 +6,7 @@ import pytest
 # Add root directory to path to import database
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from database import init_db, get_jobs, update_job_status, add_job
+from src.database import init_db, get_jobs, update_job_status, add_job
 
 def test_database_lifecycle(tmp_path):
     test_db = tmp_path / "test_job_tracker.db"
@@ -74,7 +74,7 @@ def test_update_job_comment(tmp_path):
     db_str = str(test_db)
     init_db(db_str)
     
-    from database import update_job_comment
+    from src.database import update_job_comment
     
     # Verify initial comment of job 1
     jobs = get_jobs(db_str)
@@ -97,6 +97,46 @@ def test_update_job_comment_nonexistent(tmp_path):
     db_str = str(test_db)
     init_db(db_str)
     
-    from database import update_job_comment
+    from src.database import update_job_comment
     res = update_job_comment(999, "No comment", db_str)
     assert res is None
+
+
+def test_job_exists(tmp_path):
+    test_db = tmp_path / "test_job_tracker.db"
+    db_str = str(test_db)
+    init_db(db_str)
+    
+    from src.database import job_exists
+    
+    # 1. Initially, TechCorp QA Engineer exists (from seed data)
+    assert job_exists(
+        title="Senior QA Automation Engineer",
+        company="TechCorp",
+        link="https://linkedin.com/jobs/123",
+        db_path=db_str
+    ) is True
+    
+    # 2. Check existence by link only
+    assert job_exists(
+        title="Different Title",
+        company="Different Company",
+        link="https://linkedin.com/jobs/123",
+        db_path=db_str
+    ) is True
+    
+    # 3. Check existence by title/company only
+    assert job_exists(
+        title="Senior QA Automation Engineer",
+        company="TechCorp",
+        link="https://some-other-link.com",
+        db_path=db_str
+    ) is True
+    
+    # 4. Non-existent job
+    assert job_exists(
+        title="Staff Engineer",
+        company="Google",
+        link="https://some-new-link.com",
+        db_path=db_str
+    ) is False

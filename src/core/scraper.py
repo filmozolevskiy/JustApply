@@ -172,7 +172,10 @@ async def scrape_linkedin_jobs(
     remote_types: list = None, 
     seniorities: list = None, 
     company_sizes: list = None, 
-    log_func = None
+    countries: list = None,
+    time_range: str = "any",
+    log_func = None,
+    force_mock: bool = False
 ) -> list:
     """
     Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
@@ -196,8 +199,16 @@ async def scrape_linkedin_jobs(
     remote_types = remote_types or ["any"]
     seniorities = seniorities or ["any"]
     company_sizes = company_sizes or ["any"]
+    
+    if countries and isinstance(countries, str):
+        countries = [c.strip().lower() for c in countries.split(",") if c.strip()]
+    elif countries and isinstance(countries, list):
+        countries = [c.lower() for c in countries]
+    
+    countries = countries or ["us"]
+    time_range = time_range or "any"
 
-    mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
+    mock_scraper = force_mock or os.getenv("MOCK_SCRAPER", "false").lower() == "true"
     api_key = os.getenv("BRIGHTDATA_API_KEY")
     scraper_id = os.getenv("BRIGHTDATA_JOB_SCRAPER_ID", "gd_lpfll7v5hcqtkxl6l")
 
@@ -267,11 +278,22 @@ async def scrape_linkedin_jobs(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-        payload = [{
-            "keyword": query,
-            "location": location,
-            "country": "us"  # default to US
-        }]
+        payload = []
+        for country in countries:
+            item = {
+                "keyword": query,
+                "location": location,
+                "country": country.upper()
+            }
+            if time_range and time_range.lower() not in ["any", "anytime"]:
+                time_range_mapping = {
+                    "past 24 hours": "Past 24 hours",
+                    "past week": "Past week",
+                    "past month": "Past month"
+                }
+                normalized_key = time_range.lower().replace("_", " ")
+                item["time_range"] = time_range_mapping.get(normalized_key, time_range)
+            payload.append(item)
 
         await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -311,20 +333,24 @@ async def scrape_linkedin_jobs(
                 if snapshot_resp.status_code != 200:
                     raise Exception(f"Failed to fetch snapshot results: HTTP {snapshot_resp.status_code}")
                 
-                raw_mock_jobs = snapshot_resp.json()
+                try:
+                    raw_mock_jobs = snapshot_resp.json()
+                except json.JSONDecodeError:
+                    raw_mock_jobs = []
+                    for line in snapshot_resp.text.splitlines():
+                        line = line.strip()
+                        if line:
+                            try:
+                                raw_mock_jobs.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                pass
+                if not isinstance(raw_mock_jobs, list):
+                    raw_mock_jobs = [raw_mock_jobs]
                 await log(f"Retrieved {len(raw_mock_jobs)} raw results from Bright Data.", "info")
 
             except Exception as e:
-                await log(f"Bright Data API Error: {str(e)}. Falling back to local simulation.", "warning")
-                # Fallback to simulation
-                return await scrape_linkedin_jobs(
-                    query=query,
-                    location=location,
-                    remote_types=remote_types,
-                    seniorities=seniorities,
-                    company_sizes=company_sizes,
-                    log_func=log_func
-                )
+                await log(f"Bright Data API Error: {str(e)}.", "error")
+                raise e
 
     # Post-filtering phase
     await log(f"Processing and filtering {len(raw_mock_jobs)} raw results...", "info")
@@ -336,20 +362,20 @@ async def scrape_linkedin_jobs(
         normalized = normalize_brightdata_job(raw_job)
         
         # 1. Title/Keyword filter
-        if not matches_position_keywords(normalized["title"], keywords):
-            await log(f"Skipping '{normalized['title']}': Title does not match keywords {keywords}", "info")
-            continue
+        # if not matches_position_keywords(normalized["title"], keywords):
+        #     await log(f"Skipping '{normalized['title']}': Title does not match keywords {keywords}", "info")
+        #     continue
             
         # 2. Timezone filter
-        is_remote = normalized["remoteType"] == "remote"
-        if not is_eastern_timezone(normalized["location"], normalized["description"], is_remote):
-            await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
-            continue
+        # is_remote = normalized["remoteType"] == "remote"
+        # if not is_eastern_timezone(normalized["location"], normalized["description"], is_remote):
+        #     await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
+        #     continue
 
-        # 3. Settings Filter - Remote Type
-        if "any" not in remote_types and normalized["remoteType"] not in remote_types:
-            await log(f"Skipping '{normalized['title']}': Remote Type '{normalized['remoteType']}' not in target {remote_types}", "info")
-            continue
+        # 3. Settings Filter - Remote Type (Moved to LLM matcher)
+        # if "any" not in remote_types and normalized["remoteType"] not in remote_types:
+        #     await log(f"Skipping '{normalized['title']}': Remote Type '{normalized['remoteType']}' not in target {remote_types}", "info")
+        #     continue
 
         # 4. Settings Filter - Seniority
         if "any" not in seniorities and normalized["seniority"] not in seniorities:

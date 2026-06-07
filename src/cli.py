@@ -7,16 +7,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Add project root to path so database module is importable when run directly
+# Add project root to path so modules are importable when run directly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import database
+from . import database
 from src.core.scraper import scrape_linkedin_jobs
 from src.core.matcher import load_resume, evaluate_job
 from src.core.outreach import source_contacts
 
 
-async def run_search(position: str, sites: list = None, mock_eval: bool = False) -> list:
+async def run_search(
+    position: str,
+    sites: list = None,
+    mock_eval: bool = False,
+    allowed_remote_types: list = None
+) -> list:
     """Search for jobs using Bright Data scraper, evaluate via LLM, save to SQLite."""
     print(f"Starting search pipeline for position: {position}")
 
@@ -26,6 +31,7 @@ async def run_search(position: str, sites: list = None, mock_eval: bool = False)
     jobs = await scrape_linkedin_jobs(
         query=position,
         location="Remote",
+        remote_types=allowed_remote_types,
         log_func=log_sync,
     )
     print(f"Found {len(jobs)} matching jobs.")
@@ -47,6 +53,13 @@ async def run_search(position: str, sites: list = None, mock_eval: bool = False)
     database.init_db()
     saved = []
     for job in jobs:
+        title = job.get("title") or ""
+        company = job.get("company") or ""
+        link = job.get("link") or ""
+        if database.job_exists(title, company, link):
+            print(f"Skipping duplicate job: '{title}' at '{company}'", file=sys.stderr)
+            continue
+
         job["resumeUsed"] = resume_name
 
         if mock_eval or resume_content is None:
@@ -56,18 +69,23 @@ async def run_search(position: str, sites: list = None, mock_eval: bool = False)
             job.setdefault("strengths", [])
             job.setdefault("gaps", [])
         else:
-            evaluation = await evaluate_job(job, resume_content)
+            evaluation = await evaluate_job(job, resume_content, allowed_remote_types=allowed_remote_types)
             if evaluation:
                 job["matchScore"] = evaluation.get("matchScore", 0)
                 job["matchType"] = evaluation.get("matchType", "")
                 job["shouldProceed"] = evaluation.get("shouldProceed", False)
                 job["strengths"] = evaluation.get("strengths", [])
                 job["gaps"] = evaluation.get("gaps", [])
+                if "remoteType" in evaluation:
+                    job["remoteType"] = evaluation["remoteType"]
+                if "summary" in evaluation:
+                    job["description"] = evaluation["summary"]
 
         job_id = database.add_job(job)
-        job["id"] = job_id
-        saved.append(job)
-        print(f"Saved: {job.get('title')} at {job.get('company')} (id={job_id})")
+        if job_id is not None:
+            job["id"] = job_id
+            saved.append(job)
+            print(f"Saved: {job.get('title')} at {job.get('company')} (id={job_id})")
 
     print(f"Search complete. {len(saved)} jobs saved to database.")
     return saved
