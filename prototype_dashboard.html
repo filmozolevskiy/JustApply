@@ -1964,7 +1964,11 @@
         // Generate mock outreach if not present
         if (!job.outreachMessage) {
           const profile = activeResume === 'qa.md' ? 'QA Automator' : (activeResume === 'project_manager.md' ? 'Delivery Manager' : 'BI Analyst');
-          job.outreachMessage = `Hello ${job.contactName || 'Recruiter'},\n\nI recently saw your post for the ${job.title} role at ${job.company}. Based on my matched skills in ${activeResume} (${profile}), I believe my background aligning developer suites and testing cycles matches your goals.\n\nLet me know if we can schedule a quick discussion!\n\nBest,\nCandidate`;
+          const primaryContact = job.contacts && job.contacts[0];
+          const contactName = (primaryContact && primaryContact.name) || job.contactName || 'Recruiter';
+          const isRussian = primaryContact && primaryContact.russian_speaker;
+          const greeting = isRussian ? `Добрый день, ${contactName}!\n\n` : `Hello ${contactName},\n\n`;
+          job.outreachMessage = `${greeting}I recently saw your post for the ${job.title} role at ${job.company}. Based on my matched skills in ${activeResume} (${profile}), I believe my background aligning developer suites and testing cycles matches your goals.\n\nLet me know if we can schedule a quick discussion!\n\nBest,\nCandidate`;
         }
 
         addLogLine(`Job [${job.title} @ ${job.company}] promoted to Applications lane.`, 'success');
@@ -2401,12 +2405,14 @@
                     <input type="checkbox" id="contact-${job.id}-${idx}" ${contact.contacted ? 'checked' : ''} onchange="toggleContacted(${job.id}, ${idx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
                     <label for="contact-${job.id}-${idx}" style="cursor:pointer; display:flex; flex-direction:column;">
                       <span style="font-size:0.85rem; font-weight:500; color:${contact.contacted ? 'var(--accent-emerald)' : 'var(--text-primary)'};">
-                        ${contact.name} ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
+                        ${contact.name}
+                        ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
+                        ${contact.russian_speaker ? '<span style="font-size:0.65rem; background:rgba(239,68,68,0.15); color:#f87171; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🇷🇺 RU</span>' : ''}
                       </span>
-                      <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.role}</span>
+                      <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.title || contact.role || ''}</span>
                     </label>
                   </div>
-                  <a href="${contact.linkedin}" target="_blank" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
+                  <a href="${contact.url || contact.linkedin || '#'}" target="_blank" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
                 </div>
               `).join('') : '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>'}
             </div>
@@ -2477,21 +2483,33 @@
       }, 500);
     }
 
-    function toggleContacted(jobId, contactIdx, isChecked) {
+    async function toggleContacted(jobId, contactIdx, isChecked) {
       const job = masterJobs.find(j => j.id === jobId);
-      if (job && job.contacts && job.contacts[contactIdx]) {
-        job.contacts[contactIdx].contacted = isChecked;
+      if (!job || !job.contacts || !job.contacts[contactIdx]) return;
+
+      try {
+        const resp = await fetch(`/api/jobs/${jobId}/contacts/${contactIdx}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contacted: isChecked })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const updated = await resp.json();
+
+        // Sync in-memory state from server response
+        const masterIdx = masterJobs.findIndex(j => j.id === jobId);
+        if (masterIdx !== -1) masterJobs[masterIdx] = updated;
+
         addLogLine(`Marked contact ${job.contacts[contactIdx].name} as ${isChecked ? 'CONTACTED' : 'NOT CONTACTED'}.`, isChecked ? 'success' : 'warning');
-        
-        // Auto-promote to applied if a contact is marked contacted
         if (isChecked && job.status === 'sourced') {
-          promoteToApplication(jobId);
+          addLogLine(`Auto-promoted ${job.company} → Applied.`, 'success');
         }
-        
-        // Re-render
-        openJobDetailsDrawer(jobId);
-        renderActiveVariant();
+      } catch (err) {
+        addLogLine(`Failed to update contact: ${err.message}`, 'error');
       }
+
+      openJobDetailsDrawer(jobId);
+      renderActiveVariant();
     }
 
     function closeDrawer(e) {

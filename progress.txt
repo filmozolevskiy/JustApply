@@ -15,3 +15,29 @@ Integrated the matcher into `prototype_dashboard.py`'s `run_scraping_task`:
 The UI already rendered match score badges (color-coded `match-pill`) and strengths/gaps lists — no HTML changes were needed.
 
 Added 8 new unit tests in `tests/test_matcher.py` covering: structured result return, retry-on-rate-limit, empty result on missing API key, empty result on non-rate-limit error, max-retry exhaustion, and log warning behavior. All 46 tests pass.
+
+## Iteration 2 — Issue #7: Outreach Contacts Checklist & Referral Status Promotion
+
+Implemented `src/core/outreach.py` — contact sourcing with Apify two-stage fallback and Gemini Russian speaker classification:
+- `source_contacts(job)` returns direct poster contacts if populated from Bright Data; otherwise triggers Apify
+- Stage 1: queries Apify `harvestapi/linkedin-company-employees` with keyword "Russian"; if >= 5 results, marks all `russian_speaker=True` and returns
+- Stage 2 (fallback): queries Apify by HR job titles (`Recruiter`, `Hiring Manager`, etc.), then calls Gemini to classify Russian speakers
+- `_normalize_apify_employee(item)` maps raw Apify payloads to the `{name, title, url, contacted, russian_speaker}` schema
+- `_classify_russian_speakers(contacts)` uses Gemini `gemini-2.5-flash` to evaluate names/titles/URLs and set `russian_speaker` booleans
+
+Added `update_contact_status(job_id, contact_idx, contacted)` to `database.py`:
+- Updates the `contacts` JSON column for the given contact index
+- Auto-promotes job status from `sourced` → `applied` when a contact is first marked contacted
+- Does not downgrade status when unchecking a contact
+
+Added `PUT /api/jobs/{job_id}/contacts/{contact_idx}` endpoint to `prototype_dashboard.py`:
+- Accepts `{contacted: bool}`, delegates to `update_contact_status`, returns the updated job
+- Returns 404 if job or contact index not found
+
+Updated `prototype_dashboard.html`:
+- Contacts checklist now supports both `title`/`url` (new schema) and `role`/`linkedin` (legacy seed data) field names
+- Added Russian speaker badge (`🇷🇺 RU`) next to contact name when `russian_speaker=True`
+- `toggleContacted()` is now async — calls `PUT /api/jobs/{id}/contacts/{idx}` to persist state to SQLite
+- Outreach generation prepends `"Добрый день, {name}!"` in Russian if the primary contact is a Russian speaker
+
+Added 12 new tests in `tests/test_outreach.py` covering: direct poster passthrough, empty company guard, Stage 1 sufficient path, Stage 2 trigger path, Gemini classification, no-API-key guard, field normalization, contact toggle promote, no-downgrade, and 404 cases. All 58 tests pass.

@@ -301,6 +301,57 @@ def update_job_comment(job_id, comment, db_path=None):
     conn.close()
     return job
 
+def update_contact_status(job_id, contact_idx, contacted, db_path=None):
+    """Mark a single contact as contacted/not-contacted. Returns updated job or None."""
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    job = dict(row)
+    try:
+        contacts = json.loads(job.get("contacts") or "[]")
+    except Exception:
+        contacts = []
+
+    if contact_idx < 0 or contact_idx >= len(contacts):
+        conn.close()
+        return None
+
+    contacts[contact_idx]["contacted"] = bool(contacted)
+
+    # Auto-promote sourced → applied when a contact is first marked contacted
+    status = job["status"]
+    if contacted and status == "sourced":
+        status = "applied"
+
+    cursor.execute(
+        "UPDATE jobs SET contacts = ?, status = ? WHERE id = ?",
+        (json.dumps(contacts), status, job_id),
+    )
+    conn.commit()
+
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = dict(cursor.fetchone())
+    conn.close()
+
+    for field in ["strengths", "gaps", "contacts"]:
+        if updated.get(field):
+            try:
+                updated[field] = json.loads(updated[field])
+            except Exception:
+                updated[field] = []
+        else:
+            updated[field] = []
+    updated["shouldProceed"] = bool(updated["shouldProceed"])
+    return updated
+
+
 def add_job(job, db_path=None):
     if db_path is None:
         db_path = DB_PATH
