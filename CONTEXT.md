@@ -35,3 +35,8 @@ _Avoid_: Letter generator, email writer
 **Kanban Dashboard**:
 A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Enriching`, `Enriched`, `Contacted`, `Interviewing`, `Rejected`).
 _Avoid_: Sheets UI, Command Center
+
+**Board Controls**:
+A client-side UI component on the Kanban Dashboard allowing the user to filter job listings by remote type and company size, and sort them by match score or novelty in real-time.
+_Avoid_: DB filters, scraper filters, query controls
+

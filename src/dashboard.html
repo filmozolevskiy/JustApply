@@ -944,6 +944,50 @@
         </div>
       </div>
 
+      <!-- Board Controls (Filters & Sorting) -->
+      <div class="glass-panel" style="padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; background: rgba(20, 26, 48, 0.3);">
+        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-filter" style="color: var(--accent-cyan); font-size: 0.9rem;"></i>
+            <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Filters:</span>
+          </div>
+          
+          <!-- Remote Type Filter -->
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="board-filter-remote" style="font-size: 0.8rem; color: var(--text-muted);">Remote:</label>
+            <select id="board-filter-remote" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+              <option value="all">All Types</option>
+              <option value="remote">Remote Only</option>
+              <option value="hybrid">Hybrid Only</option>
+              <option value="in_office">In Office Only</option>
+            </select>
+          </div>
+          
+          <!-- Company Size Filter -->
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="board-filter-size" style="font-size: 0.8rem; color: var(--text-muted);">Company Size:</label>
+            <select id="board-filter-size" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+              <option value="all">All Sizes</option>
+              <option value="small">Small (1-50)</option>
+              <option value="medium">Medium (50-500)</option>
+              <option value="large">Large (500+)</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Sorting -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-arrow-down-wide-short" style="color: var(--accent-indigo); font-size: 0.9rem;"></i>
+          <label for="board-sort-by" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Sort By:</label>
+          <select id="board-sort-by" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+            <option value="match_desc">Match Score: High to Low</option>
+            <option value="match_asc">Match Score: Low to High</option>
+            <option value="novelty_desc">Novelty: Newest First</option>
+            <option value="novelty_asc">Novelty: Oldest First</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Kanban lanes -->
       <div class="kanban-board-container" id="kanban-lanes-container">
         <!-- Sourced Column -->
@@ -1215,11 +1259,60 @@
     // --- VARIANT B: KANBAN BOARD ---
     function renderVariantB() {
       const lanes = ['sourced', 'enriching', 'enriched', 'contacted', 'interviewing', 'rejected'];
+
+      const remoteFilter = document.getElementById('board-filter-remote')?.value || 'all';
+      const sizeFilter = document.getElementById('board-filter-size')?.value || 'all';
+      const sortBy = document.getElementById('board-sort-by')?.value || 'match_desc';
+
+      // 1. Filter jobs
+      let filteredJobs = masterJobs.filter(job => {
+        if (remoteFilter !== 'all') {
+          let normalizedRemote = (job.remoteType || '').toLowerCase().trim();
+          if (normalizedRemote === 'in office') normalizedRemote = 'in_office';
+          if (normalizedRemote !== remoteFilter) {
+            return false;
+          }
+        }
+        
+        if (sizeFilter !== 'all') {
+          const sizeCat = getCompanySizeCategory(job.size);
+          if (sizeCat !== sizeFilter) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+
+      // 2. Sort jobs
+      filteredJobs.sort((a, b) => {
+        if (sortBy === 'match_desc') {
+          return (b.matchScore || 0) - (a.matchScore || 0);
+        } else if (sortBy === 'match_asc') {
+          return (a.matchScore || 0) - (b.matchScore || 0);
+        } else if (sortBy === 'novelty_desc') {
+          if (a.date && b.date) {
+            if (a.date !== b.date) {
+              return b.date.localeCompare(a.date);
+            }
+          }
+          return (b.id || 0) - (a.id || 0);
+        } else if (sortBy === 'novelty_asc') {
+          if (a.date && b.date) {
+            if (a.date !== b.date) {
+              return a.date.localeCompare(b.date);
+            }
+          }
+          return (a.id || 0) - (b.id || 0);
+        }
+        return 0;
+      });
+
       lanes.forEach(lane => {
         const laneEl = document.getElementById(`lane-${lane}`);
         laneEl.innerHTML = '';
 
-        const jobsInLane = masterJobs.filter(j => j.status === lane);
+        const jobsInLane = filteredJobs.filter(j => j.status === lane);
         document.getElementById(`count-${lane}`).textContent = jobsInLane.length;
 
         jobsInLane.forEach(job => {
@@ -1265,6 +1358,53 @@
           laneEl.appendChild(card);
         });
       });
+    }
+
+    function getCompanySizeCategory(sizeStr) {
+      if (!sizeStr) return 'unknown';
+      const sizeLower = sizeStr.toLowerCase().trim();
+      
+      const numbers = sizeStr.match(/\d+/g);
+      if (numbers) {
+        const maxVal = Math.max(...numbers.map(Number));
+        if (maxVal <= 50) return 'small';
+        if (maxVal <= 500) return 'medium';
+        return 'large';
+      }
+      
+      if (sizeLower.includes('small') || sizeLower.includes('1-50') || sizeLower.includes('10-50')) {
+        return 'small';
+      }
+      if (sizeLower.includes('medium') || sizeLower.includes('50-500') || sizeLower.includes('100-500') || sizeLower.includes('200-500')) {
+        return 'medium';
+      }
+      return 'large';
+    }
+
+    function updateBoardFiltersAndSort() {
+      const remoteFilter = document.getElementById('board-filter-remote')?.value || 'all';
+      const sizeFilter = document.getElementById('board-filter-size')?.value || 'all';
+      const sortBy = document.getElementById('board-sort-by')?.value || 'match_desc';
+
+      localStorage.setItem('boardFilterRemote', remoteFilter);
+      localStorage.setItem('boardFilterSize', sizeFilter);
+      localStorage.setItem('boardSortBy', sortBy);
+
+      renderActiveVariant();
+    }
+
+    function initBoardControls() {
+      const remoteFilter = localStorage.getItem('boardFilterRemote') || 'all';
+      const sizeFilter = localStorage.getItem('boardFilterSize') || 'all';
+      const sortBy = localStorage.getItem('boardSortBy') || 'match_desc';
+
+      const remoteEl = document.getElementById('board-filter-remote');
+      const sizeEl = document.getElementById('board-filter-size');
+      const sortEl = document.getElementById('board-sort-by');
+
+      if (remoteEl) remoteEl.value = remoteFilter;
+      if (sizeEl) sizeEl.value = sizeFilter;
+      if (sortEl) sortEl.value = sortBy;
     }
 
     function getKanbanCardMovementButtons(job) {
@@ -2150,6 +2290,7 @@
     }
 
     // Initialize
+    initBoardControls();
     loadResumes();
     loadJobs().then(() => {
       restoreActiveScrapeTask();
