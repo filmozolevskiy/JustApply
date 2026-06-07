@@ -1602,6 +1602,7 @@
       })
       .then(data => {
         const taskId = data.task_id;
+        localStorage.setItem('activeScrapeTaskId', taskId);
         addLogLine(`FastAPI background task created: ${taskId}`, 'info');
 
         // Start SSE stream
@@ -1626,6 +1627,7 @@
           } else if (logData.type === 'done') {
             addLogLine("Scraper process complete.", 'success');
             logEventSource.close();
+            localStorage.removeItem('activeScrapeTaskId');
             if (btnTop) {
               btnTop.disabled = false;
               btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
@@ -1641,6 +1643,7 @@
         logEventSource.onerror = function(err) {
           console.error("SSE Error:", err);
           logEventSource.close();
+          localStorage.removeItem('activeScrapeTaskId');
           simulateLocalScrape();
         };
       })
@@ -2077,9 +2080,80 @@
         });
     }
 
+    function restoreActiveScrapeTask() {
+      const taskId = localStorage.getItem('activeScrapeTaskId');
+      if (!taskId) return;
+
+      const kbLogsPanel = document.getElementById('kb-logs-panel');
+      if (kbLogsPanel) {
+        kbLogsPanel.style.display = 'block';
+      }
+
+      const btnTop = document.getElementById('kb-scrape-btn-top');
+      const btnPanel = document.getElementById('kb-scrape-btn-panel');
+      if (btnTop) {
+        btnTop.disabled = true;
+        btnTop.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
+      }
+      if (btnPanel) {
+        btnPanel.disabled = true;
+        btnPanel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
+      }
+
+      addLogLine(`Reconnecting to active background task: ${taskId}`, 'info');
+
+      logEventSource = new EventSource(`/api/logs/${taskId}`);
+      
+      logEventSource.onmessage = function(event) {
+        const logData = JSON.parse(event.data);
+        
+        if (logData.type === 'log') {
+          addLogLine(logData.message, logData.level);
+        } else if (logData.type === 'result') {
+          if (logData.jobs && logData.jobs.length > 0) {
+            logData.jobs.forEach(newJob => {
+              if (!masterJobs.some(j => j.title === newJob.title && j.company === newJob.company)) {
+                masterJobs.unshift(newJob);
+              }
+            });
+            addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
+          }
+        } else if (logData.type === 'done') {
+          addLogLine("Scraper process complete.", 'success');
+          logEventSource.close();
+          localStorage.removeItem('activeScrapeTaskId');
+          if (btnTop) {
+            btnTop.disabled = false;
+            btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
+          }
+          if (btnPanel) {
+            btnPanel.disabled = false;
+            btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+          }
+          renderActiveVariant();
+        }
+      };
+
+      logEventSource.onerror = function(err) {
+        console.warn("SSE connection error or task not found. Cleaning up active task reference.", err);
+        logEventSource.close();
+        localStorage.removeItem('activeScrapeTaskId');
+        if (btnTop) {
+          btnTop.disabled = false;
+          btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
+        }
+        if (btnPanel) {
+          btnPanel.disabled = false;
+          btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+        }
+      };
+    }
+
     // Initialize
     loadResumes();
-    loadJobs();
+    loadJobs().then(() => {
+      restoreActiveScrapeTask();
+    });
   </script>
 </body>
 </html>
