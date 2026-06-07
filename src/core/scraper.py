@@ -1,0 +1,367 @@
+import os
+import re
+import json
+import asyncio
+import httpx
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Timezone filtering constants
+EASTERN_STATES = {
+    # US
+    "CT", "DE", "FL", "GA", "IN", "KY", "ME", "MD", "MA", "MI", "NH", "NJ", "NY", "NC", "OH", "PA", "RI", "SC", "VT", "VA", "DC", "WV",
+    # Canada
+    "ON", "QC"
+}
+
+POSITION_KEYWORDS = {
+    "qa": ["qa", "quality assurance", "test", "testing", "sdet", "automation engineer", "automation analyst"],
+    "project manager": ["project manager", "program manager", "delivery manager", "scrum master", "product owner"],
+    "developer": ["developer", "engineer", "programmer", "software engineer", "full stack", "backend", "frontend"]
+}
+
+def get_keywords_for_position(position: str) -> list:
+    """Determine the keywords matching the given target position."""
+    pos_lower = position.lower()
+    for key, keywords in POSITION_KEYWORDS.items():
+        if key in pos_lower or pos_lower in key:
+            return keywords
+    # Fallback: extract alphabetic words from target position
+    words = re.findall(r'\b[a-zA-Z]+\b', pos_lower)
+    return [w for w in words if len(w) > 1]
+
+def matches_position_keywords(title: str, keywords: list) -> bool:
+    """Verify if the job title matches at least one keyword using word boundaries."""
+    title_lower = title.lower()
+    for kw in keywords:
+        pattern = r'\b' + re.escape(kw) + r'\b'
+        if re.search(pattern, title_lower):
+            return True
+    return False
+
+def is_eastern_timezone(location: str, description: str, is_remote: bool) -> bool:
+    """Check if the job location or details align with Eastern Time Zone (EST/EDT)."""
+    if not is_remote and location:
+        # Extract US/Canada state or province abbreviations, e.g. New York, NY
+        state_match = re.search(r'\b([A-Z]{2})\b', location)
+        if state_match:
+            state = state_match.group(1)
+            if state in EASTERN_STATES:
+                return True
+        
+        # Check for full names of Eastern states or key cities
+        loc_lower = location.lower()
+        eastern_names = ["new york", "georgia", "ontario", "quebec", "florida", "massachusetts", "pennsylvania", "toronto", "atlanta", "boston", "miami"]
+        for name in eastern_names:
+            if name in loc_lower:
+                return True
+        return False
+        
+    # Remote jobs are compatible by default unless they explicitly restrict to non-Eastern zones
+    desc_lower = description.lower()
+    has_eastern = any(term in desc_lower for term in ["est", "edt", "eastern"])
+    
+    has_pacific = any(term in desc_lower for term in ["pst", "pdt", "pacific"])
+    has_mountain = any(term in desc_lower for term in ["mst", "mdt", "mountain"])
+    has_central = any(term in desc_lower for term in ["cst", "cdt", "central"])
+    
+    if (has_pacific or has_mountain or has_central) and not has_eastern:
+        restriction_patterns = [
+            r'must be in (?:pst|mst|cst|pacific|mountain|central)',
+            r'(?:pst|mst|cst|pacific|mountain|central) (?:only|required|timezone)',
+            r'located in (?:pst|mst|cst|pacific|mountain|central)',
+            r'work in (?:pst|mst|cst|pacific|mountain|central)'
+        ]
+        for pattern in restriction_patterns:
+            if re.search(pattern, desc_lower):
+                return False
+                
+    return True
+
+def match_company_size(job_size_str: str, allowed_sizes: list) -> bool:
+    """Match company size string against allowed category filters (small, medium, large)."""
+    if not allowed_sizes or "any" in allowed_sizes or not job_size_str:
+        return True
+    
+    # Extract numbers from size string (e.g., "100-500" -> [100, 500], "5000+" -> [5000])
+    numbers = [int(n) for n in re.findall(r'\d+', job_size_str)]
+    if not numbers:
+        # Check for text indications
+        size_lower = job_size_str.lower()
+        if "small" in size_lower or "1-50" in size_lower or "10-50" in size_lower:
+            max_val = 10
+        elif "medium" in size_lower or "50-500" in size_lower or "100-500" in size_lower or "200-500" in size_lower:
+            max_val = 100
+        else:
+            max_val = 1000
+    else:
+        max_val = max(numbers)
+    
+    matched = False
+    if "small" in allowed_sizes and max_val <= 50:
+        matched = True
+    if "medium" in allowed_sizes and 50 < max_val <= 500:
+        matched = True
+    if "large" in allowed_sizes and max_val > 500:
+        matched = True
+    return matched
+
+def normalize_brightdata_job(job: dict) -> dict:
+    """Normalize a Bright Data job object into the standard database schema."""
+    title = job.get("job_title") or job.get("title") or ""
+    company = job.get("company_name") or job.get("company") or ""
+    size = job.get("company_size") or job.get("size") or ""
+    link = job.get("url") or job.get("apply_link") or job.get("link") or ""
+    date = job.get("date_posted") or job.get("date") or ""
+    location = job.get("job_location") or job.get("location") or ""
+    
+    loc_lower = location.lower()
+    is_remote = job.get("is_remote") or "remote" in loc_lower
+    
+    if is_remote:
+        remote_type = "remote"
+    elif "hybrid" in loc_lower:
+        remote_type = "hybrid"
+    else:
+        remote_type = "in_office"
+        
+    title_lower = title.lower()
+    raw_seniority = (job.get("job_seniority_level") or job.get("seniority") or "").lower()
+    if any(term in raw_seniority or term in title_lower for term in ["sr", "senior", "lead", "principal", "staff", "manager", "director"]):
+        seniority = "senior"
+    elif any(term in raw_seniority or term in title_lower for term in ["jr", "junior", "entry", "intern", "associate"]):
+        seniority = "junior"
+    else:
+        seniority = "mid"
+        
+    salary = job.get("salary") or job.get("salary_formatted") or ""
+    description = job.get("job_summary") or job.get("description") or ""
+    
+    # Preserve job_poster if it exists (useful for Issue 7)
+    contacts = []
+    job_poster = job.get("job_poster")
+    if job_poster and isinstance(job_poster, dict):
+        contacts.append({
+            "name": job_poster.get("name") or "",
+            "title": job_poster.get("title") or "Recruiter",
+            "url": job_poster.get("url") or job_poster.get("profile_url") or "",
+            "contacted": False,
+            "russian_speaker": False
+        })
+    
+    return {
+        "title": title,
+        "company": company,
+        "size": size,
+        "link": link,
+        "date": date,
+        "location": location,
+        "remoteType": remote_type,
+        "seniority": seniority,
+        "salary": salary,
+        "description": description,
+        "status": "sourced",
+        "contacts": contacts
+    }
+
+async def scrape_linkedin_jobs(
+    query: str, 
+    location: str, 
+    remote_types: list = None, 
+    seniorities: list = None, 
+    company_sizes: list = None, 
+    log_func = None
+) -> list:
+    """
+    Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
+    Applies post-filtering for remote type, seniority, company size, keyword matching, and timezone.
+    """
+    async def log(msg: str, level: str = "info"):
+        if log_func:
+            if asyncio.iscoroutinefunction(log_func):
+                await log_func(msg, level)
+            else:
+                log_func(msg, level)
+
+    # Convert settings filters to lists of lowercase strings
+    if remote_types and isinstance(remote_types, str):
+        remote_types = [t.strip().lower() for t in remote_types.split(",") if t.strip()]
+    if seniorities and isinstance(seniorities, str):
+        seniorities = [s.strip().lower() for s in seniorities.split(",") if s.strip()]
+    if company_sizes and isinstance(company_sizes, str):
+        company_sizes = [c.strip().lower() for c in company_sizes.split(",") if c.strip()]
+
+    remote_types = remote_types or ["any"]
+    seniorities = seniorities or ["any"]
+    company_sizes = company_sizes or ["any"]
+
+    mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
+    api_key = os.getenv("BRIGHTDATA_API_KEY")
+    scraper_id = os.getenv("BRIGHTDATA_JOB_SCRAPER_ID", "gd_lpfll7v5hcqtkxl6l")
+
+    if mock_scraper or not api_key:
+        await log("Initializing Bright Data Mock API...", "info")
+        await asyncio.sleep(0.5)
+        await log("Connecting to mock proxy node...", "info")
+        await asyncio.sleep(0.5)
+        await log("Sending mock search request...", "warning")
+        await asyncio.sleep(0.5)
+        await log("Scraped 15 raw mock listings from simulated LinkedIn API", "info")
+        
+        # Simulated raw items returning from Bright Data
+        raw_mock_jobs = [
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-991",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": f"We are seeking a senior practitioner in {query} to lead our automation pipelines and delivery patterns. The ideal candidate will work remote or hybrid.",
+                "job_seniority_level": "senior",
+                "salary": "$145k - $175k",
+                "is_remote": True,
+                "job_poster": {
+                    "name": "Sarah Jenkins",
+                    "title": "Recruiting Director",
+                    "url": "https://linkedin.com/in/sarah-jenkins-mocked"
+                }
+            },
+            {
+                "job_title": f"Lead {query} Developer",
+                "company_name": "BrightFlow Co.",
+                "company_size": "150",
+                "url": "https://linkedin.com/jobs/mock-992",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": f"Lead development and QA integrations for our data processing streams. High proficiency in {query} required.",
+                "job_seniority_level": "senior",
+                "is_hybrid": True,
+                "salary": "$160k - $190k"
+            },
+            {
+                "job_title": f"Junior {query} Assistant",
+                "company_name": "WebStart LLC",
+                "company_size": "25",
+                "url": "https://linkedin.com/jobs/mock-993",
+                "date_posted": "2026-06-07",
+                "job_location": "San Francisco, CA", # Non-eastern location for timezone checks
+                "job_summary": f"Help our engineering team with entry level tasks regarding {query}. Work in PST timezone only.",
+                "job_seniority_level": "junior",
+                "salary": "$70k - $90k"
+            }
+        ]
+    else:
+        await log(f"Initializing Bright Data scraping engine for query: '{query}' in '{location}'", "info")
+        
+        trigger_url = "https://api.brightdata.com/datasets/v3/trigger"
+        params = {
+            "dataset_id": scraper_id,
+            "include_errors": "true",
+            "type": "discover_new",
+            "discover_by": "keyword"
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = [{
+            "keyword": query,
+            "location": location,
+            "country": "us"  # default to US
+        }]
+
+        await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(trigger_url, params=params, headers=headers, json=payload)
+                if response.status_code != 200:
+                    raise Exception(f"Failed to trigger scraper: HTTP {response.status_code} - {response.text}")
+                
+                trigger_data = response.json()
+                snapshot_id = trigger_data.get("snapshot_id")
+                if not snapshot_id:
+                    raise Exception(f"No snapshot_id returned in trigger response: {trigger_data}")
+                
+                await log(f"Bright Data scraping job triggered: {snapshot_id}", "warning")
+
+                # Polling loop
+                progress_url = f"https://api.brightdata.com/datasets/v3/progress/{snapshot_id}"
+                while True:
+                    await asyncio.sleep(5.0)
+                    progress_resp = await client.get(progress_url, headers=headers)
+                    if progress_resp.status_code != 200:
+                        await log(f"Error checking progress: HTTP {progress_resp.status_code}", "warning")
+                        continue
+                    
+                    progress_data = progress_resp.json()
+                    status = progress_data.get("status")
+                    await log(f"Scraper status: {status}", "info")
+                    
+                    if status == "ready":
+                        break
+                    elif status == "failed":
+                        raise Exception("Bright Data scraper job reported failure.")
+                
+                # Fetch results
+                snapshot_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
+                snapshot_resp = await client.get(snapshot_url, headers=headers)
+                if snapshot_resp.status_code != 200:
+                    raise Exception(f"Failed to fetch snapshot results: HTTP {snapshot_resp.status_code}")
+                
+                raw_mock_jobs = snapshot_resp.json()
+                await log(f"Retrieved {len(raw_mock_jobs)} raw results from Bright Data.", "info")
+
+            except Exception as e:
+                await log(f"Bright Data API Error: {str(e)}. Falling back to local simulation.", "warning")
+                # Fallback to simulation
+                return await scrape_linkedin_jobs(
+                    query=query,
+                    location=location,
+                    remote_types=remote_types,
+                    seniorities=seniorities,
+                    company_sizes=company_sizes,
+                    log_func=log_func
+                )
+
+    # Post-filtering phase
+    await log(f"Processing and filtering {len(raw_mock_jobs)} raw results...", "info")
+    
+    keywords = get_keywords_for_position(query)
+    filtered_jobs = []
+
+    for raw_job in raw_mock_jobs:
+        normalized = normalize_brightdata_job(raw_job)
+        
+        # 1. Title/Keyword filter
+        if not matches_position_keywords(normalized["title"], keywords):
+            await log(f"Skipping '{normalized['title']}': Title does not match keywords {keywords}", "info")
+            continue
+            
+        # 2. Timezone filter
+        is_remote = normalized["remoteType"] == "remote"
+        if not is_eastern_timezone(normalized["location"], normalized["description"], is_remote):
+            await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
+            continue
+
+        # 3. Settings Filter - Remote Type
+        if "any" not in remote_types and normalized["remoteType"] not in remote_types:
+            await log(f"Skipping '{normalized['title']}': Remote Type '{normalized['remoteType']}' not in target {remote_types}", "info")
+            continue
+
+        # 4. Settings Filter - Seniority
+        if "any" not in seniorities and normalized["seniority"] not in seniorities:
+            await log(f"Skipping '{normalized['title']}': Seniority '{normalized['seniority']}' not in target {seniorities}", "info")
+            continue
+
+        # 5. Settings Filter - Company Size
+        if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):
+            await log(f"Skipping '{normalized['title']}': Company Size '{normalized['size']}' does not match {company_sizes}", "info")
+            continue
+
+        filtered_jobs.append(normalized)
+
+    await log(f"Filtering complete. Yielded {len(filtered_jobs)} matching listings.", "success")
+    return filtered_jobs

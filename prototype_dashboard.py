@@ -71,8 +71,84 @@ async def get_dashboard():
         return FileResponse(HTML_PATH)
     return JSONResponse(status_code=404, content={"message": "HTML prototype file not found"})
 
+class TaskState:
+    def __init__(self, params):
+        self.params = params
+        self.logs = []
+        self.queue = asyncio.Queue()
+        self.jobs = []
+        self.status = "running"
+
+class SearchRequest(BaseModel):
+    query: str
+    location: str
+    platform: str = "brightdata_linkedin"
+    active_resume: str = "qa.md"
+    mock_eval: bool = True
+    remote_type: str = "any"
+    seniority: str = "any"
+    salary: str = ""
+    company_size: str = "any"
+
+async def run_scraping_task(task_id: str):
+    state = active_tasks.get(task_id)
+    if not state:
+        return
+    
+    params = state.params
+    
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        from src.core.scraper import scrape_linkedin_jobs
+        
+        # Run the scraper
+        jobs = await scrape_linkedin_jobs(
+            query=params["query"],
+            location=params["location"],
+            remote_types=params["remote_type"],
+            seniorities=params["seniority"],
+            company_sizes=params["company_size"],
+            log_func=log_callback
+        )
+        
+        # Save newly scraped jobs to SQLite DB and update IDs
+        saved_jobs = []
+        for job in jobs:
+            job["resumeUsed"] = params["active_resume"]
+            db_id = add_job(job)
+            job["id"] = db_id
+            saved_jobs.append(job)
+            
+        state.jobs = saved_jobs
+        state.status = "completed"
+        await log_callback("Jobs database sync completed successfully.", "success")
+        
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Task execution failed: {str(e)}", "error")
+        
+    finally:
+        # Put sentinel
+        await state.queue.put(None)
+
+@app.post("/api/search")
+async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    state = TaskState(request.model_dump())
+    active_tasks[task_id] = state
+    
+    # Start the scraping pipeline in a background task
+    background_tasks.add_task(run_scraping_task, task_id)
+    
+    return {"status": "triggered", "task_id": task_id}
+
 @app.post("/api/scrape")
 async def trigger_scrape(
+    background_tasks: BackgroundTasks,
     query: str = Query("Senior QA Automation"),
     location: str = Query("Remote"),
     platform: str = Query("brightdata_linkedin"),
@@ -84,8 +160,7 @@ async def trigger_scrape(
     company_size: str = Query("any")
 ):
     task_id = str(uuid.uuid4())
-    # Save the parameters for this task
-    active_tasks[task_id] = {
+    params = {
         "query": query,
         "location": location,
         "platform": platform,
@@ -96,6 +171,12 @@ async def trigger_scrape(
         "salary": salary,
         "company_size": company_size
     }
+    state = TaskState(params)
+    active_tasks[task_id] = state
+    
+    # Start the scraping pipeline in a background task
+    background_tasks.add_task(run_scraping_task, task_id)
+    
     return {"status": "triggered", "task_id": task_id}
 
 @app.get("/api/logs/{task_id}")
@@ -103,182 +184,62 @@ async def logs_stream(task_id: str):
     if task_id not in active_tasks:
         return JSONResponse(status_code=404, content={"message": "Task ID not found"})
     
-    params = active_tasks[task_id]
+    state = active_tasks[task_id]
     
     async def event_generator():
         try:
-            # 1. Start Scraper
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "info",
-                    "message": f"Initializing Bright Data scraping engine for query: '{params['query']}' in '{params['location']}'"
-                })
-            }
-            await asyncio.sleep(1.0)
-            
-            # 1.5 Show active filters
-            filters = []
-            if params.get("remote_type") and params["remote_type"] != "any":
-                filters.append(f"Remote = {params['remote_type']}")
-            if params.get("seniority") and params["seniority"] != "any":
-                filters.append(f"Seniority = {params['seniority']}")
-            if params.get("salary"):
-                filters.append(f"Salary Min = {params['salary']}")
-            if params.get("company_size") and params["company_size"] != "any":
-                filters.append(f"Company Size = {params['company_size']}")
-            
-            if filters:
+            # First, yield any logs that are already in the list
+            for log in state.logs:
                 yield {
                     "data": json.dumps({
                         "type": "log",
-                        "level": "warning",
-                        "message": f"Applying target filters: {', '.join(filters)}"
+                        "level": log["level"],
+                        "message": log["message"]
                     })
                 }
-                await asyncio.sleep(0.8)
             
-            # 2. Proxy Connect
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "info",
-                    "message": f"Establishing secure connection to proxy nodes via {params['platform']} client..."
-                })
-            }
-            await asyncio.sleep(1.2)
-            
-            # 3. HTTP Request
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "warning",
-                    "message": f"Sending HTTP search payload. Scraping LinkedIn DOM structure..."
-                })
-            }
-            await asyncio.sleep(1.8)
-            
-            # 4. Parse Results
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "info",
-                    "message": "Scraped 15 raw job listings. Filtering invalid postings and sponsored ads..."
-                })
-            }
-            await asyncio.sleep(1.0)
-
-            # 5. Load Resume
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "info",
-                    "message": f"Loading target profile: '{params['active_resume']}' from local storage..."
-                })
-            }
-            await asyncio.sleep(0.8)
-
-            # 6. LLM Match
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "warning",
-                    "message": f"Starting LLM Match evaluation on 3 candidate postings..."
-                })
-            }
-            await asyncio.sleep(1.5)
-
-            # Mock some dynamically created job items to inject on the client side
-            score_1 = 95 if "qa" in params["query"].lower() else 83
-            score_2 = 87 if "qa" in params["query"].lower() else 74
-
-            new_jobs = [
-                {
-                    "id": int(uuid.uuid4().int >> 96),
-                    "title": f"Senior {params['query']}",
-                    "company": "ScaleLabs Inc.",
-                    "size": "500-1000",
-                    "link": "https://linkedin.com/jobs/991",
-                    "date": "2026-06-07",
-                    "location": params["location"],
-                    "remoteType": "remote" if "remote" in params["location"].lower() else "hybrid",
-                    "seniority": "senior",
-                    "salary": "$145k - $175k",
-                    "description": f"We are seeking a senior practitioner in {params['query']} to lead our automation pipelines and delivery patterns. Experience with modern web architectures and scripting is essential.",
-                    "matchScore": score_1,
-                    "matchType": "match" if score_1 >= 85 else "no-match",
-                    "shouldProceed": True if score_1 >= 85 else False,
-                    "status": "sourced",
-                    "resumeUsed": params["active_resume"],
-                    "strengths": [f"Direct correlation with {params['query']} requirements", "Strong scripting and automation background"],
-                    "gaps": ["No Kubernetes container orchestrations listed"],
-                    "contactName": "Sarah Jenkins",
-                    "contactRole": "Recruiting Director",
-                    "outreachMessage": ""
-                },
-                {
-                    "id": int(uuid.uuid4().int >> 96),
-                    "title": f"Lead {params['query']} Developer",
-                    "company": "BrightFlow Co.",
-                    "size": "100-250",
-                    "link": "https://linkedin.com/jobs/992",
-                    "date": "2026-06-07",
-                    "location": params["location"],
-                    "remoteType": "remote" if "remote" in params["location"].lower() else "in office",
-                    "seniority": "senior",
-                    "salary": "$160k - $190k",
-                    "description": f"Lead development and QA integrations for our data processing streams. High proficiency in {params['query']} required.",
-                    "matchScore": score_2,
-                    "matchType": "match" if score_2 >= 85 else "no-match",
-                    "shouldProceed": True if score_2 >= 85 else False,
-                    "status": "sourced",
-                    "resumeUsed": params["active_resume"],
-                    "strengths": ["Excellent team lead history", "Python core framework experience"],
-                    "gaps": ["Lacks 8+ years enterprise system maintenance requirements"],
-                    "contactName": "David Chen",
-                    "contactRole": "Head of Engineering",
-                    "outreachMessage": ""
+            # Then, poll the queue for new logs
+            while True:
+                log = await state.queue.get()
+                if log is None:
+                    break
+                yield {
+                    "data": json.dumps({
+                        "type": "log",
+                        "level": log["level"],
+                        "message": log["message"]
+                    })
                 }
-            ]
-
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "success",
-                    "message": f"Match Complete. Job 1: {new_jobs[0]['title']} @ {new_jobs[0]['company']} -> {score_1}% Match."
-                })
-            }
-            yield {
-                "data": json.dumps({
-                    "type": "log",
-                    "level": "success",
-                    "message": f"Match Complete. Job 2: {new_jobs[1]['title']} @ {new_jobs[1]['company']} -> {score_2}% Match."
-                })
-            }
-            await asyncio.sleep(0.8)
-
-            # Save newly scraped jobs to SQLite DB and update IDs
-            for nj in new_jobs:
-                db_id = add_job(nj)
-                nj["id"] = db_id
-
-            # 7. Yield the integrated results
-            yield {
-                "data": json.dumps({
-                    "type": "result",
-                    "jobs": new_jobs
-                })
-            }
             
-            # 8. Done
-            yield {
-                "data": json.dumps({
-                    "type": "done"
-                })
-            }
-            
+            # Once complete, send the results and done event
+            if state.status == "completed":
+                yield {
+                    "data": json.dumps({
+                        "type": "result",
+                        "jobs": state.jobs
+                    })
+                }
+                yield {
+                    "data": json.dumps({
+                        "type": "done"
+                    })
+                }
+            else:
+                yield {
+                    "data": json.dumps({
+                        "type": "log",
+                        "level": "error",
+                        "message": "Scraping pipeline finished with errors."
+                    })
+                }
+                yield {
+                    "data": json.dumps({
+                        "type": "done"
+                    })
+                }
+                
         except asyncio.CancelledError:
-            # Client disconnected early
+            # Client disconnected
             pass
             
     return EventSourceResponse(event_generator())

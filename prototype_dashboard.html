@@ -1238,6 +1238,17 @@
         </div>
       </div>
 
+      <!-- Logs Console for Kanban View (initially hidden/collapsed, revealed when running) -->
+      <div class="glass-panel" id="kb-logs-panel" style="display: none; margin-bottom: 16px; padding: 16px 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0; border: none; padding: 0; font-size: 1.1rem; color: var(--text-primary);"><i class="fa-solid fa-terminal"></i> Task Logs</h3>
+          <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="clearLogs()">Clear</button>
+        </div>
+        <div class="terminal-console" id="kb-logs-console">
+          <div class="terminal-line"><span class="terminal-time">13:10:00</span><span class="terminal-text">System initialized. Ready to trigger.</span></div>
+        </div>
+      </div>
+
       <!-- Kanban lanes -->
       <div class="kanban-board-container" id="kanban-lanes-container">
         <!-- Sourced Column -->
@@ -2101,6 +2112,12 @@
         location = document.getElementById('cc-search-location') ? document.getElementById('cc-search-location').value : "Remote";
       }
 
+      // Reveal logs console panel in UI
+      const kbLogsPanel = document.getElementById('kb-logs-panel');
+      if (kbLogsPanel) {
+        kbLogsPanel.style.display = 'block';
+      }
+
       let logMsg = `Initiating async scraper task. Query: "${query}", Location: "${location}", Engine: ${platform}`;
       let activeFilters = [];
       if (remote_type !== 'any') activeFilters.push(`Remote: ${remote_type}`);
@@ -2121,12 +2138,30 @@
         logEventSource.close();
       }
 
-      // We call the POST /api/scrape endpoint, and then start an EventSource to listen to logs
-      const url = `/api/scrape?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&platform=${platform}&active_resume=${activeResume}&mock_eval=${mockEval}&remote_type=${remote_type}&seniority=${seniority}&salary=${encodeURIComponent(salary)}&company_size=${company_size}`;
+      const url = `/api/search`;
       fetch(url, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: query,
+          location: location,
+          platform: platform,
+          active_resume: activeResume,
+          mock_eval: mockEval,
+          remote_type: remote_type,
+          seniority: seniority,
+          salary: salary,
+          company_size: company_size
+        })
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Server returned HTTP ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         const taskId = data.task_id;
         addLogLine(`FastAPI background task created: ${taskId}`, 'info');
@@ -2160,7 +2195,6 @@
 
         logEventSource.onerror = function(err) {
           console.error("SSE Error:", err);
-          // If we are running static or without FastAPI, simulate it locally!
           logEventSource.close();
           simulateLocalScrape();
         };
@@ -2172,6 +2206,12 @@
     }
 
     function simulateLocalScrape() {
+      // Reveal logs console panel in UI
+      const kbLogsPanel = document.getElementById('kb-logs-panel');
+      if (kbLogsPanel) {
+        kbLogsPanel.style.display = 'block';
+      }
+
       // Simulate locally
       let steps = [
         { time: 1000, msg: "Initializing local mock scraper pipeline...", level: "info" },
@@ -2247,28 +2287,45 @@
     }
 
     function addLogLine(msg, level = 'info') {
-      const consoleEl = document.getElementById('cc-logs-console');
-      if (!consoleEl) return;
-      
-      const line = document.createElement('div');
-      line.className = 'terminal-line';
+      const consoles = [
+        document.getElementById('cc-logs-console'),
+        document.getElementById('kb-logs-console')
+      ];
       
       const now = new Date();
       const timeStr = now.toTimeString().split(' ')[0];
       
-      line.innerHTML = `
-        <span class="terminal-time">${timeStr}</span>
-        <span class="terminal-text ${level}">${msg}</span>
-      `;
-      consoleEl.appendChild(line);
-      consoleEl.scrollTop = consoleEl.scrollHeight;
+      consoles.forEach(consoleEl => {
+        if (!consoleEl) return;
+        
+        // Remove default placeholder line if it's the first real log
+        if (consoleEl.children.length === 1 && 
+            consoleEl.children[0].innerText.includes("System initialized")) {
+          consoleEl.innerHTML = '';
+        }
+        
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+        
+        line.innerHTML = `
+          <span class="terminal-time">${timeStr}</span>
+          <span class="terminal-text ${level}">${msg}</span>
+        `;
+        consoleEl.appendChild(line);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      });
     }
 
     function clearLogs() {
-      const consoleEl = document.getElementById('cc-logs-console');
-      if (consoleEl) {
-        consoleEl.innerHTML = '<div class="terminal-line"><span class="terminal-time">' + new Date().toTimeString().split(' ')[0] + '</span><span class="terminal-text">Console cleared. Ready.</span></div>';
-      }
+      const consoles = [
+        document.getElementById('cc-logs-console'),
+        document.getElementById('kb-logs-console')
+      ];
+      consoles.forEach(consoleEl => {
+        if (consoleEl) {
+          consoleEl.innerHTML = '<div class="terminal-line"><span class="terminal-time">' + new Date().toTimeString().split(' ')[0] + '</span><span class="terminal-text">Console cleared. Ready.</span></div>';
+        }
+      });
     }
 
     // --- DETAILED DRAWER (Kanban & Table Details) ---
