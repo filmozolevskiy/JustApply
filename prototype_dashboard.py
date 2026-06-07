@@ -104,7 +104,8 @@ async def run_scraping_task(task_id: str):
 
     try:
         from src.core.scraper import scrape_linkedin_jobs
-        
+        from src.core.matcher import load_resume, evaluate_job
+
         # Run the scraper
         jobs = await scrape_linkedin_jobs(
             query=params["query"],
@@ -114,15 +115,43 @@ async def run_scraping_task(task_id: str):
             company_sizes=params["company_size"],
             log_func=log_callback
         )
-        
-        # Save newly scraped jobs to SQLite DB and update IDs
+
+        # Load resume for LLM matching
+        active_resume = params["active_resume"]
+        mock_eval = params.get("mock_eval", True)
+        resume_content = None
+        if not mock_eval:
+            try:
+                resume_content = load_resume(active_resume)
+                await log_callback(f"Loaded resume profile: {active_resume}", "info")
+            except FileNotFoundError:
+                await log_callback(f"Resume not found: {active_resume}. Skipping evaluation.", "warning")
+
+        # Save newly scraped jobs to SQLite DB, running LLM evaluation per job
         saved_jobs = []
         for job in jobs:
-            job["resumeUsed"] = params["active_resume"]
+            job["resumeUsed"] = active_resume
+
+            if mock_eval:
+                job.setdefault("matchScore", 85)
+                job.setdefault("matchType", "match")
+                job.setdefault("shouldProceed", True)
+                job.setdefault("strengths", ["Good technical background"])
+                job.setdefault("gaps", ["Review job requirements carefully"])
+            elif resume_content:
+                await log_callback(f"Evaluating '{job['title']}' at {job['company']}...", "info")
+                evaluation = await evaluate_job(job, resume_content, log_callback)
+                if evaluation:
+                    job["matchScore"] = evaluation.get("matchScore", 0)
+                    job["matchType"] = evaluation.get("matchType", "")
+                    job["shouldProceed"] = evaluation.get("shouldProceed", False)
+                    job["strengths"] = evaluation.get("strengths", [])
+                    job["gaps"] = evaluation.get("gaps", [])
+
             db_id = add_job(job)
             job["id"] = db_id
             saved_jobs.append(job)
-            
+
         state.jobs = saved_jobs
         state.status = "completed"
         await log_callback("Jobs database sync completed successfully.", "success")
