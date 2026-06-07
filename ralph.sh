@@ -49,7 +49,7 @@ case "$AGENT" in
     CMD_TEMPLATE='agy --dangerously-skip-permissions -p {prompt}'
     SKILLS_DIR="$HOME/.gemini/config/skills" ;;
   claude)
-    CMD_TEMPLATE='claude --permission-mode acceptEdits {prompt}'
+    CMD_TEMPLATE='claude --dangerously-skip-permissions -p {prompt}'
     SKILLS_DIR="$HOME/.claude/skills" ;;
   *)
     echo "Unknown agent: $AGENT" && exit 1 ;;
@@ -85,7 +85,14 @@ for ((i=1; i<=ITERATIONS; i++)); do
   echo -e "\n${COLOR_ITERATION}=== Iteration $i of $ITERATIONS ===${COLOR_RESET}\n"
   
   # Stream output to terminal and capture it
-  OUTPUT=$(eval "$FINAL_CMD" 2>&1 | tee /dev/stderr)
+  TMPFILE=$(mktemp)
+  if command -v unbuffer >/dev/null 2>&1; then
+    unbuffer bash -c "$FINAL_CMD" 2>&1 | tee "$TMPFILE"
+  else
+    eval "$FINAL_CMD" 2>&1 | tee "$TMPFILE"
+  fi
+  OUTPUT=$(cat "$TMPFILE")
+  rm -f "$TMPFILE"
   
   # Extract active task from output
   CURRENT_TASK=$(echo "$OUTPUT" | grep -o -E '<task>[^<]*</task>' | sed -e 's/<task>//' -e 's/<\/task>//' | head -n 1)

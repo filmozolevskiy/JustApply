@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock, AsyncMock
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import database
-import prototype_dashboard
-from prototype_dashboard import app
+import src.server as server_module
+from src.server import app
 from fastapi.testclient import TestClient
 
 import src.core.outreach as outreach_module

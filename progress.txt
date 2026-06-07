@@ -41,3 +41,20 @@ Updated `prototype_dashboard.html`:
 - Outreach generation prepends `"Добрый день, {name}!"` in Russian if the primary contact is a Russian speaker
 
 Added 12 new tests in `tests/test_outreach.py` covering: direct poster passthrough, empty company guard, Stage 1 sufficient path, Stage 2 trigger path, Gemini classification, no-API-key guard, field normalization, contact toggle promote, no-downgrade, and 404 cases. All 58 tests pass.
+
+## Iteration 3 — Issue #8: CLI Runner Restructure & Legacy Code Cleanup
+
+Restructured the application into a clean `src/` package:
+
+- Created `src/cli.py` — CLI orchestrator using core modules (Bright Data scraper, LLM matcher, SQLite repository, Apify outreach). Exposes `run_search(position, sites, mock_eval)` and `run_promote()` async functions plus `main()` argparse entry point.
+- Created `src/server.py` — FastAPI dashboard server moved from `prototype_dashboard.py`. Serves `src/dashboard.html` and uses `database.py` for all persistence.
+- Created `src/dashboard.html` — dashboard UI (moved from `prototype_dashboard.html`).
+- Created `src/__init__.py` — package marker.
+- Rewrote root `job_hunter.py` as a thin launcher: `from src.cli import main`.
+- Created root `run_dashboard.py` — launches `uvicorn src.server:app --host 127.0.0.1 --port 8000`.
+
+Deleted obsolete files: `prototype_dashboard.py`, `prototype_dashboard.html`, `NOTES.md`, `scripts/google_sheets_mcp.py`, `credentials.json`, `token.json`, `jobspy-mcp-server/`.
+
+Updated test files: `test_dashboard_jobs.py` and `test_dashboard_resumes.py` now import from `src.server`; `test_outreach.py` and `test_scraper.py` updated likewise; `test_job_hunter.py` rewritten to test `src.cli.run_search` and `src.cli.run_promote` using patched core modules; `test_google_sheets_mcp.py` deleted alongside the script it tested.
+
+All 40 tests pass.
