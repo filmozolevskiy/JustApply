@@ -4,31 +4,26 @@ A system to automate job search, resume matching, personalized outreach, and app
 
 ## Language
 
-**Job Tracker Sheet**:
-The Google Sheets spreadsheet stored in Google Drive folder \`11DdZR63ul4OushN3MOvNFdaQIE3y3uP-\` serving as the persistent database for jobs, applications, and status. It contains two primary tabs:
-- **Jobs**: For scraped and evaluated listings. Columns: `Job title`, `Company + Company size`, `Posting link`, `Posting date`, `Location + Remote type (in office, hybrid, remote)`, `Seniority type (junior, mid, senior)`, `Salary type`, `Short description`, `match`, `no-match`, `Should proceed?`.
-- **Applications**: For tracked active applications. Columns: `Job title`, `Company + Company size`, `Posting link`, `Posting date`, `Application date`, `Location + Remote type (in office, hybrid, remote)`, `Salary type`, `Short description`, `match`, `no-match`, `People contacted`, `Contact message`, `Comment`.
-_Avoid_: Local database, Trello database
+**Job Tracker Database**:
+A local SQLite database (`job_tracker.db` in the project root) serving as the persistent storage for job listings, compatibility scores, outreach contacts, notes, and application pipeline workflows.
+_Avoid_: Google Sheets, Job Tracker Sheet, Drive database, Trello database
 
 **Resume Profiles**:
-Markdown files (.md) stored in a Google Drive subfolder within folder \`11DdZR63ul4OushN3MOvNFdaQIE3y3uP-\` representing the candidate's professional background tailored for specific target roles (e.g. QA, Project/Delivery Manager, Automation Specialist, Data/BI Analyst).
-_Avoid_: Local CVs, resume database
+Markdown files (`.md`) stored in a local `resumes/` folder in the project root representing the candidate's professional background tailored for specific target roles (e.g. `qa.md`, `project_manager.md`).
+_Avoid_: Google Drive CVs, resume database, cloud resumes
 
 **Resume Matcher**:
-An LLM-based component that compares job descriptions with candidate resumes to compute compatibility scores and identify skill gaps. The target role is configured upfront per search run (e.g. running a search for "QA" positions using `qa.md`).
+An LLM-based component that compares job descriptions with candidate resumes to compute compatibility scores, list strengths, and identify skill gaps. The target role is configured per search run using the corresponding profile.
 _Avoid_: Resume filter, CV checker
 
-**Google Sheets MCP Server**:
-A custom Model Context Protocol server developed in Python to perform CRUD operations on the Job Tracker Sheet.
-_Avoid_: Third-party sheets server, spreadsheet-mcp
-
-**OAuth 2.0 Credentials**:
-User-authenticated Google API credentials allowing the Google Sheets MCP Server to securely access the user's personal Google Drive and Sheets on their behalf.
-_Avoid_: Service account credentials, JSON key file
+**LinkedIn Scraper API**:
+A hybrid web scraping integration using third-party APIs (Bright Data for job listings and Apify for company employee details) to fetch data without requiring personal LinkedIn credentials or cookies.
+_Avoid_: Local scraper, browser automation, LinkedIn MCP server
 
 **Outreach Generator**:
-An LLM-based component that creates customized cover letters and referral request messages on-demand when a job is marked for tracking under the Applications tab.
+An LLM-based component that creates customized cover letters and referral request messages tailored to a specific job listing and the candidate's resume.
 _Avoid_: Letter generator, email writer
 
-
-
+**Kanban Dashboard**:
+A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Evaluating`, `Applied`, `Contacted`, `Interviewing`, `Rejected`).
+_Avoid_: Sheets UI, Command Center

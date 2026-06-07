@@ -1,0 +1,2473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Hunter Dashboard - Prototype</title>
+  
+  <!-- Premium Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Modern icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    /* ----------------------------------------------------
+       1. DESIGN SYSTEM & TOKENS (Glassmorphism & Neon Accent)
+       ---------------------------------------------------- */
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #161e38 0%, #0a0e1a 100%);
+      --bg-surface: rgba(20, 26, 48, 0.45);
+      --bg-surface-opaque: #141a30;
+      --border-color: rgba(255, 255, 255, 0.07);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      
+      --accent-cyan: #06b6d4;
+      --accent-indigo: #6366f1;
+      --accent-violet: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      
+      --glow-cyan: rgba(6, 182, 212, 0.15);
+      --glow-indigo: rgba(99, 102, 241, 0.15);
+      --glow-emerald: rgba(16, 185, 129, 0.15);
+      
+      --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Reset & Base */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg-primary);
+      background-image: var(--bg-gradient);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(10, 14, 26, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Common Components & Glassmorphism Utilities */
+    .glass-panel {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    
+    .glass-panel:hover {
+      border-color: var(--border-hover);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      border: 1px solid transparent;
+      outline: none;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+      color: white;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-color);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--border-hover);
+    }
+
+    .btn-cyan {
+      background: rgba(6, 182, 212, 0.1);
+      border-color: rgba(6, 182, 212, 0.3);
+      color: #22d3ee;
+    }
+    .btn-cyan:hover {
+      background: rgba(6, 182, 212, 0.2);
+      border-color: #22d3ee;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .status-sourced { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+    .status-evaluating { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .status-applied { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
+    .status-contacted { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .status-interviewing { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-closed { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.3); }
+    .status-rejected { background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); }
+
+    .match-pill {
+      font-weight: bold;
+      font-family: var(--font-sans);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .match-high { color: #34d399; background: rgba(16, 185, 129, 0.1); }
+    .match-mid { color: #fbbf24; background: rgba(245, 158, 11, 0.1); }
+    .match-low { color: #f43f5e; background: rgba(244, 63, 94, 0.1); }
+
+    /* Top Navigation bar */
+    .top-navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 40px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(10, 14, 26, 0.5);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #22d3ee, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand i {
+      background: linear-gradient(135deg, #22d3ee, #818cf8);
+      -webkit-background-clip: border-box;
+      -webkit-text-fill-color: initial;
+      color: white;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 1.1rem;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .resume-select-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    select {
+      background: var(--bg-surface-opaque);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 8px 12px;
+      border-radius: 6px;
+      outline: none;
+      cursor: pointer;
+      font-family: var(--font-sans);
+    }
+    select:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    /* Main Container */
+    .main-content {
+      flex: 1;
+      padding: 24px 40px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Prototype Notice */
+    .prototype-notice {
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 8px;
+      padding: 12px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+    .prototype-notice span {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .prototype-notice code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #a78bfa;
+      font-family: var(--font-mono);
+    }
+
+    /* ----------------------------------------------------
+       2. VARIANT A: COMMAND CENTER (Split Layout)
+       ---------------------------------------------------- */
+    #variant-a {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .cc-left-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .control-card {
+      padding: 20px;
+    }
+
+    .control-card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    .control-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-group input, .form-group select, .form-group textarea {
+      background: rgba(10, 14, 26, 0.6);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 10px;
+      border-radius: 6px;
+      outline: none;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      transition: border-color var(--transition-fast);
+    }
+
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    .terminal-console {
+      background: #05070c;
+      border: 1px solid #1a2238;
+      border-radius: 8px;
+      height: 220px;
+      overflow-y: auto;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #38bdf8;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .terminal-line {
+      display: flex;
+      gap: 8px;
+      line-height: 1.4;
+    }
+    .terminal-time {
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .terminal-text {
+      white-space: pre-wrap;
+    }
+    .terminal-text.error { color: var(--accent-rose); }
+    .terminal-text.success { color: var(--accent-emerald); }
+    .terminal-text.warning { color: var(--accent-amber); }
+
+    .cc-right-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .data-table-container {
+      padding: 20px;
+      overflow-x: auto;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .table-tabs {
+      display: flex;
+      background: rgba(10, 14, 26, 0.4);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all var(--transition-fast);
+    }
+
+    .tab-btn.active {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .job-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .job-table th {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .job-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    .job-table tr:hover td {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .job-title-col {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    
+    .job-company {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .action-icons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .action-icon-btn {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .action-icon-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+      background: rgba(255,255,255,0.08);
+    }
+    
+    .action-icon-btn.promote-btn:hover {
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    /* ----------------------------------------------------
+       3. VARIANT B: KANBAN BOARD (Stages Lanes)
+       ---------------------------------------------------- */
+    #variant-b {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      flex: 1;
+    }
+
+    .kanban-board-container {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(190px, 1fr));
+      gap: 12px;
+      flex: 1;
+      overflow-x: auto;
+      align-items: start;
+    }
+
+    .scraper-settings-panel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height var(--transition-normal), padding var(--transition-normal), margin var(--transition-normal), opacity var(--transition-normal);
+      padding: 0 24px;
+      margin-bottom: 0px;
+      opacity: 0;
+      border: 1px solid transparent;
+      background: rgba(13, 18, 36, 0.5);
+    }
+    .scraper-settings-panel.expanded {
+      max-height: 400px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      opacity: 1;
+      border: 1px solid var(--border-color);
+    }
+
+    .kanban-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 500px;
+      max-height: 70vh;
+      overflow-y: auto;
+      padding: 16px 12px;
+      background: rgba(10, 14, 26, 0.3);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .kanban-col-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 0 4px 8px 4px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .kanban-col-count {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-family: var(--font-mono);
+    }
+
+    .kanban-card {
+      background: rgba(20, 26, 48, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .kanban-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-hover);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    }
+
+    .kanban-card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.3;
+    }
+
+    .kanban-card-company {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .kanban-card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .kanban-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+
+    .kanban-card-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .kanban-action-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 2px;
+    }
+    .kanban-action-btn:hover {
+      color: var(--text-primary);
+    }
+
+    /* ----------------------------------------------------
+       4. VARIANT C: SPLIT FEED & ANALYTICS
+       ---------------------------------------------------- */
+    #variant-c {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .analytics-ribbon {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    .analytic-card {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .analytic-data h4 {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .analytic-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+    }
+
+    .analytic-icon {
+      font-size: 1.8rem;
+      color: rgba(99, 102, 241, 0.35);
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .analytic-card:nth-child(2) .analytic-icon {
+      color: rgba(6, 182, 212, 0.35);
+      background: rgba(6, 182, 212, 0.08);
+    }
+    
+    .analytic-card:nth-child(3) .analytic-icon {
+      color: rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .feed-split-container {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 24px;
+      align-items: start;
+      min-height: 500px;
+    }
+
+    .feed-list-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 65vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .feed-card {
+      padding: 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: all var(--transition-fast);
+      border: 1px solid var(--border-color);
+    }
+
+    .feed-card:hover {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: var(--border-hover);
+    }
+
+    .feed-card.active {
+      background: rgba(99, 102, 241, 0.06);
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.1) inset;
+    }
+
+    .feed-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .feed-detail-pane {
+      padding: 24px;
+      min-height: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
+    }
+
+    .detail-title h2 {
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+    }
+    
+    .detail-subtitle {
+      color: var(--text-secondary);
+      display: flex;
+      gap: 16px;
+      font-size: 0.9rem;
+    }
+
+    .detail-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .detail-section h3 {
+      font-size: 1rem;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .detail-description {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      background: rgba(0,0,0,0.15);
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.02);
+    }
+
+    .match-breakdown {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .match-factor-box {
+      background: rgba(10, 14, 26, 0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .factor-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .factor-title.strengths { color: var(--accent-emerald); }
+    .factor-title.gaps { color: var(--accent-rose); }
+
+    .factor-list {
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+
+    .factor-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .factor-list li i {
+      font-size: 0.75rem;
+    }
+
+    .outreach-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(99, 102, 241, 0.03);
+      border: 1px solid rgba(99, 102, 241, 0.1);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .outreach-text {
+      background: rgba(5, 7, 12, 0.8);
+      border: 1px solid rgba(255,255,255,0.05);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      padding: 12px;
+      border-radius: 6px;
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    /* ----------------------------------------------------
+       5. DETAILED SIDE DRAWER (Common Modal for Detail Preview)
+       ---------------------------------------------------- */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(5, 7, 12, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      transition: opacity var(--transition-normal);
+    }
+
+    .drawer-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    .drawer-content {
+      width: 720px;
+      max-width: 90%;
+      max-height: 85vh;
+      background: var(--bg-surface-opaque);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+      padding: 30px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transform: scale(0.9);
+      transition: transform var(--transition-normal);
+      position: relative;
+    }
+
+    .drawer-overlay.active .drawer-content {
+      transform: scale(1);
+    }
+
+    .drawer-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .drawer-close:hover {
+      color: var(--accent-cyan);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Checkbox Group Styles */
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 6px 0;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .checkbox-item input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: var(--accent-cyan);
+    }
+    .checkbox-item:hover {
+      color: var(--text-primary);
+    }
+
+    /* Resume Preview Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(5, 7, 12, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 110;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      width: 700px;
+      max-width: 90%;
+      max-height: 80vh;
+      background: var(--bg-surface-opaque);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 30px;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+    .modal-close:hover { color: var(--text-primary); }
+
+    .resume-body {
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      background: rgba(0,0,0,0.2);
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    /* ----------------------------------------------------
+       6. FLOATING SWITCHER BAR (Bottom center)
+       ---------------------------------------------------- */
+    .prototype-switcher {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(13, 18, 36, 0.9);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(139, 92, 246, 0.15);
+      padding: 8px 16px;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 2000;
+      backdrop-filter: blur(12px);
+      user-select: none;
+      transition: border-color var(--transition-fast);
+    }
+    
+    .prototype-switcher:hover {
+      border-color: rgba(139, 92, 246, 0.6);
+    }
+
+    .switcher-arrow {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .switcher-arrow:hover {
+      background: rgba(139, 92, 246, 0.2);
+      color: white;
+      border-color: rgba(139, 92, 246, 0.4);
+    }
+
+    .switcher-label {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      color: var(--text-primary);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .switcher-tag {
+      font-size: 0.7rem;
+      background: rgba(139, 92, 246, 0.2);
+      color: #a78bfa;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <header class="top-navbar">
+    <div class="brand">
+      <i class="fa-solid fa-crosshairs"></i>
+      <span>Job Hunter <span style="font-weight:300; font-size:1.1rem; opacity:0.8;">Dashboard</span></span>
+    </div>
+    <div class="nav-actions">
+      <!-- Resume Select Profile -->
+      <div class="resume-select-container">
+        <label style="font-size: 0.85rem; color: var(--text-secondary); font-family: var(--font-sans);" for="active-resume-select">Active Profile:</label>
+        <select id="active-resume-select" onchange="changeActiveResume(this.value)">
+          <option value="qa.md">qa.md (QA Engineer)</option>
+          <option value="project_manager.md">project_manager.md (Delivery Manager)</option>
+          <option value="data_analyst.md">data_analyst.md (Data Analyst)</option>
+        </select>
+        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="viewResumeProfile()"><i class="fa-regular fa-eye"></i> View</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Work Area -->
+  <main class="main-content">
+    
+    <!-- Prototype Info Bar -->
+    <div class="prototype-notice">
+      <span>
+        <i class="fa-solid fa-circle-info" style="color: #a78bfa;"></i>
+        <span><strong>UX Prototype Active:</strong> Flip between 3 layouts using the floating bar at the bottom or keys <code>←</code> / <code>→</code>. State is synchronized.</span>
+      </span>
+      <span>
+        Mode: <code id="connection-mode">Starlette Connected</code>
+      </span>
+    </div>
+
+    <!-- ----------------------------------------------------
+         VARIANT A: THE COMMAND CENTER
+         ---------------------------------------------------- -->
+    <section id="variant-a" style="display: none;">
+      <!-- Left control column -->
+      <div class="cc-left-pane">
+        <!-- Search and Scraping Trigger -->
+        <div class="glass-panel control-card">
+          <h3><i class="fa-solid fa-magnifying-glass"></i> Search & Scrape</h3>
+          <div class="control-form">
+            <div class="form-group">
+              <label>Target Role Query</label>
+              <input type="text" id="cc-search-query" value="Senior QA Automation">
+            </div>
+            <div class="form-group">
+              <label>Location</label>
+              <input type="text" id="cc-search-location" value="Remote">
+            </div>
+            <div class="form-group">
+              <label>Source Platform</label>
+              <select id="cc-search-platform">
+                <option value="brightdata_linkedin">Bright Data (LinkedIn API)</option>
+                <option value="mock_first">Mock-First Local Scraper</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: space-between; margin: 4px 0;">
+              <label style="margin: 0; cursor: pointer;" for="cc-mock-evaluation">Mock Evaluation Scores?</label>
+              <input type="checkbox" id="cc-mock-evaluation" checked style="width: 18px; height: 18px; cursor: pointer;">
+            </div>
+            <button class="btn btn-primary" onclick="triggerScrapeRun()" id="cc-scrape-btn">
+              <i class="fa-solid fa-play"></i> Trigger Scraping Run
+            </button>
+          </div>
+        </div>
+
+        <!-- Logs / Task Monitor console -->
+        <div class="glass-panel control-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; border: none; padding: 0;"><i class="fa-solid fa-terminal"></i> Task Logs</h3>
+            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="clearLogs()">Clear</button>
+          </div>
+          <div class="terminal-console" id="cc-logs-console">
+            <div class="terminal-line"><span class="terminal-time">13:10:00</span><span class="terminal-text">System initialized. Ready to trigger.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right table column -->
+      <div class="cc-right-pane">
+        <div class="glass-panel data-table-container">
+          <div class="table-header">
+            <h2 style="font-size: 1.3rem;">Job Tracker</h2>
+            <div class="table-tabs">
+              <button class="tab-btn active" onclick="setTableFilter('all', this)">All Sourced</button>
+              <button class="tab-btn" onclick="setTableFilter('high-match', this)">High Matches</button>
+              <button class="tab-btn" onclick="setTableFilter('applications', this)">Applications</button>
+            </div>
+          </div>
+          
+          <table class="job-table">
+            <thead>
+              <tr>
+                <th>Job & Company</th>
+                <th>Location & remote</th>
+                <th>Match Score</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cc-job-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------
+         VARIANT B: THE KANBAN PIPELINE
+         ---------------------------------------------------- -->
+    <section id="variant-b" style="display: none;">
+      <!-- Quick run bar at top -->
+      <div class="glass-panel" style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <h2 style="font-size: 1.2rem; color: var(--text-primary);">Pipeline Tracker</h2>
+          <span style="font-size: 0.85rem; color: var(--text-secondary);">Manage applications by status lanes</span>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button class="btn btn-secondary" onclick="toggleScraperSettings()" id="scraper-settings-toggle">
+            <i class="fa-solid fa-sliders"></i> Scraper Settings <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i>
+          </button>
+          <button class="btn btn-secondary" onclick="addNewJobPrompt()"><i class="fa-solid fa-plus"></i> Add Job</button>
+          <button class="btn btn-primary" onclick="triggerScrapeRun()"><i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync</button>
+        </div>
+      </div>
+
+      <!-- Foldable Scraper Settings Panel -->
+      <div class="scraper-settings-panel" id="scraper-settings-panel">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+          <div class="form-group">
+            <label>Position / Query</label>
+            <input type="text" id="kb-filter-position" value="Senior QA Automation">
+          </div>
+          <div class="form-group">
+            <label>Location</label>
+            <input type="text" id="kb-filter-location" value="Remote">
+          </div>
+          <div class="form-group">
+            <label>Remote Type</label>
+            <div class="checkbox-group">
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="remote" checked> Remote</label>
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="hybrid"> Hybrid</label>
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="in_office"> In Office</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Seniority (Optional)</label>
+            <div class="checkbox-group">
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="junior"> Junior</label>
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="mid"> Mid-level</label>
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="senior" checked> Senior</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Salary Min (Optional)</label>
+            <input type="text" id="kb-filter-salary" placeholder="e.g. $120k">
+          </div>
+          <div class="form-group">
+            <label>Company Size (Optional)</label>
+            <div class="checkbox-group">
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="small"> Small (1-50)</label>
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="medium"> Medium (50-500)</label>
+              <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="large"> Large (500+)</label>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px; border-top: 1px solid var(--border-color); padding-top:12px;">
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="resetKbFilters()"><i class="fa-solid fa-undo"></i> Reset Filters</button>
+          <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()"><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
+        </div>
+      </div>
+
+      <!-- Kanban lanes -->
+      <div class="kanban-board-container" id="kanban-lanes-container">
+        <!-- Sourced Column -->
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <span>Sourced</span>
+            <span class="kanban-col-count" id="count-sourced">0</span>
+          </div>
+          <div class="kanban-cards-wrapper" id="lane-sourced" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
+        </div>
+
+        <!-- Evaluating Column -->
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <span>Evaluating</span>
+            <span class="kanban-col-count" id="count-evaluating">0</span>
+          </div>
+          <div class="kanban-cards-wrapper" id="lane-evaluating" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
+        </div>
+
+        <!-- Applied Column -->
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <span>Applied</span>
+            <span class="kanban-col-count" id="count-applied">0</span>
+          </div>
+          <div class="kanban-cards-wrapper" id="lane-applied" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
+        </div>
+
+        <!-- Contacted Column -->
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <span>Contacted</span>
+            <span class="kanban-col-count" id="count-contacted">0</span>
+          </div>
+          <div class="kanban-cards-wrapper" id="lane-contacted" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
+        </div>
+
+        <!-- Interviewing Column -->
+        <div class="kanban-column">
+          <div class="kanban-col-header">
+            <span>Interviewing</span>
+            <span class="kanban-col-count" id="count-interviewing">0</span>
+          </div>
+          <div class="kanban-cards-wrapper" id="lane-interviewing" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
+        </div>
+
+        <!-- Rejected Column -->
+        <div class="kanban-column" style="border-color: rgba(244, 63, 94, 0.15); background: rgba(244, 63, 94, 0.01);">
+          <div class="kanban-col-header" style="color: var(--accent-rose);">
+            <span>Rejected</span>
+            <span class="kanban-col-count" id="count-rejected" style="background: rgba(244, 63, 94, 0.15); color: #fda4af;">0</span>
+          </div>
+          <div class="kanban-cards-wrapper" id="lane-rejected" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------
+         VARIANT C: SPLIT FEED & ANALYTICS
+         ---------------------------------------------------- -->
+    <section id="variant-c" style="display: none;">
+      <!-- Analytics Ribbon -->
+      <div class="analytics-ribbon">
+        <div class="glass-panel analytic-card">
+          <div class="analytic-data">
+            <h4>Total Sourced</h4>
+            <div class="analytic-value" id="analytic-sourced-val">0</div>
+          </div>
+          <div class="analytic-icon"><i class="fa-solid fa-database"></i></div>
+        </div>
+        <div class="glass-panel analytic-card">
+          <div class="analytic-data">
+            <h4>High Match Ratio</h4>
+            <div class="analytic-value" id="analytic-match-val">0%</div>
+          </div>
+          <div class="analytic-icon"><i class="fa-solid fa-bullseye"></i></div>
+        </div>
+        <div class="glass-panel analytic-card">
+          <div class="analytic-data">
+            <h4>Active Applications</h4>
+            <div class="analytic-value" id="analytic-active-val">0</div>
+          </div>
+          <div class="analytic-icon"><i class="fa-solid fa-paper-plane"></i></div>
+        </div>
+        <div class="glass-panel analytic-card">
+          <div class="analytic-data">
+            <h4>Average Score</h4>
+            <div class="analytic-value" id="analytic-avg-val">0%</div>
+          </div>
+          <div class="analytic-icon" style="color: var(--accent-violet); background: rgba(139,92,246,0.08);"><i class="fa-solid fa-chart-line"></i></div>
+        </div>
+      </div>
+
+      <!-- Split Feed Container -->
+      <div class="feed-split-container">
+        <!-- Left feed items column -->
+        <div class="feed-list-pane" id="feed-items-pane">
+          <!-- Feed items inserted dynamically -->
+        </div>
+
+        <!-- Right detail column -->
+        <div class="glass-panel feed-detail-pane" id="feed-detail-pane">
+          <!-- Selected job preview rendered here -->
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--text-secondary); gap: 16px;">
+            <i class="fa-solid fa-briefcase" style="font-size: 3rem; opacity: 0.3;"></i>
+            <p>Select a job from the feed to view full analysis, match metrics, and generated outreach templates.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Floating Switcher Panel -->
+  <div class="prototype-switcher">
+    <button class="switcher-arrow" onclick="prevVariant()" title="Previous Variant (Left Arrow)">
+      <i class="fa-solid fa-chevron-left"></i>
+    </button>
+    <div class="switcher-label">
+      Variant: <span id="current-variant-label">A — Command Center</span>
+      <span class="switcher-tag">Prototype</span>
+    </div>
+    <button class="switcher-arrow" onclick="nextVariant()" title="Next Variant (Right Arrow)">
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+  </div>
+
+  <!-- Detail side drawer (Used for Kanban detail view) -->
+  <div class="drawer-overlay" id="kanban-drawer" onclick="closeDrawer(event)">
+    <div class="drawer-content" onclick="event.stopPropagation()">
+      <button class="drawer-close" onclick="closeDrawer(null)"><i class="fa-solid fa-xmark"></i></button>
+      <div id="drawer-body">
+        <!-- Rendered dynamically when card clicked -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Resume View Modal -->
+  <div class="modal-overlay" id="resume-modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="resume-modal-title">Resume Profile</h3>
+        <button class="modal-close" onclick="closeModal(null)"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="resume-body" id="resume-modal-body">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript logic -->
+  <script>
+    // ----------------------------------------------------
+    // MOCK DATA SYSTEM (Synchronized master state)
+    // ----------------------------------------------------
+    let masterJobs = [
+      {
+        id: 1,
+        title: "Senior QA Automation Engineer",
+        company: "TechCorp",
+        size: "100-500",
+        link: "https://linkedin.com/jobs/123",
+        date: "2026-06-05",
+        location: "Remote",
+        remoteType: "remote",
+        seniority: "senior",
+        salary: "$130k - $160k",
+        description: "We are looking for a Senior QA Automation Engineer to build and execute end-to-end testing strategies. You will design automation frameworks using Python and Pytest, integration into GitHub actions, and lead testing standards.",
+        matchScore: 94,
+        matchType: "match",
+        shouldProceed: true,
+        status: "sourced",
+        resumeUsed: "qa.md",
+        strengths: ["Highly proficient in Python & Pytest", "Extensive CI/CD pipeline automation", "Playwright & Selenium Frameworks"],
+        gaps: ["No direct experience with WebUSB", "AWS Cloud Practitioner certification preferred"],
+        contacts: [
+          { name: "Jane Doe", role: "VP Engineering", linkedin: "https://linkedin.com/in/janedoe", contacted: false },
+          { name: "John Smith", role: "Recruiting Coordinator", linkedin: "https://linkedin.com/in/johnsmith", contacted: false }
+        ],
+        outreachMessage: "Hi Jane,\n\nI saw your listing for a Senior QA Automation Engineer at TechCorp. With my deep background in building Python/Pytest framework architectures and setting up robust CI/CD pipelines, I believe I can hit the ground running. I'd love to learn more about TechCorp's engineering goals.\n\nBest,\nCandidate",
+        comment: "Excellent match. Framework matches 100%."
+      },
+      {
+        id: 2,
+        title: "Technical Project & Delivery Manager",
+        company: "InnovateHQ",
+        size: "50-200",
+        link: "https://linkedin.com/jobs/124",
+        date: "2026-06-04",
+        location: "New York, NY",
+        remoteType: "hybrid",
+        seniority: "senior",
+        salary: "$140k - $170k",
+        description: "InnovateHQ is seeking a Technical Project Manager to coordinate cross-functional agile sprints, manage stakeholder delivery milestones, and ensure tight integration of engineering and product roadmaps.",
+        matchScore: 88,
+        matchType: "match",
+        shouldProceed: true,
+        status: "sourced",
+        resumeUsed: "project_manager.md",
+        strengths: ["Expert Scrum Master with 5+ years experience", "Strong technical background in Python systems", "Stakeholder communications"],
+        gaps: ["Prior experience at Series A startups is not documented"],
+        contacts: [
+          { name: "Marcus Vance", role: "Director of Product", linkedin: "https://linkedin.com/in/marcusvance", contacted: false },
+          { name: "Alice Adams", role: "Talent Lead", linkedin: "https://linkedin.com/in/aliceadams", contacted: false }
+        ],
+        outreachMessage: "Dear Marcus,\n\nI noticed InnovateHQ is hiring a Technical Project Manager. Given my extensive delivery management experience aligning engineering teams with product milestones, I'm excited about this opportunity. Let's connect!\n\nBest regards,\nCandidate",
+        comment: "Need to verify Series A startup history before applying."
+      },
+      {
+        id: 3,
+        title: "Data & BI Analyst",
+        company: "FinanceFlow",
+        size: "1000+",
+        link: "https://linkedin.com/jobs/125",
+        date: "2026-06-03",
+        location: "Charlotte, NC",
+        remoteType: "in office",
+        seniority: "mid",
+        salary: "$100k - $120k",
+        description: "FinanceFlow is hiring a Data Analyst to compile SQL reporting queries, construct Tableau dashboards, and deliver weekly metrics to financial compliance executives.",
+        matchScore: 75,
+        matchType: "match",
+        shouldProceed: true,
+        status: "applied",
+        resumeUsed: "data_analyst.md",
+        strengths: ["Excellent SQL database experience", "Experienced with Tableau and PowerBI", "Detail-oriented financial analysis"],
+        gaps: ["No direct experience with FinTech compliance frameworks"],
+        contacts: [
+          { name: "Sophia Patel", role: "Data Analytics Lead", linkedin: "https://linkedin.com/in/sophiapatel", contacted: true },
+          { name: "Robert Miller", role: "FinTech Recruiter", linkedin: "https://linkedin.com/in/robertmiller", contacted: false }
+        ],
+        outreachMessage: "Hi Sophia,\n\nI'm reaching out regarding the Data & BI Analyst vacancy. I have a proven track record creating high-impact SQL/Tableau dashboards. I'd love to help FinanceFlow drive metrics.\n\nThanks,\nCandidate",
+        comment: "Sophia responded! Phone screen scheduled next week."
+      },
+      {
+        id: 4,
+        title: "QA Automation Specialist",
+        company: "GameStudio",
+        size: "200-500",
+        link: "https://linkedin.com/jobs/126",
+        date: "2026-06-01",
+        location: "Austin, TX",
+        remoteType: "remote",
+        seniority: "mid",
+        salary: "$90k - $110k",
+        description: "Join our game build testing team. You will automate functional regression testing for web services and gameplay configurations using Python scripts.",
+        matchScore: 92,
+        matchType: "match",
+        shouldProceed: true,
+        status: "interviewing",
+        resumeUsed: "qa.md",
+        strengths: ["Automation framework expert", "Fast debugging of Python regression scripts"],
+        gaps: ["No experience with specific Game engines (Unreal/Unity)"],
+        contacts: [
+          { name: "Alex Mercer", role: "QA Manager", linkedin: "https://linkedin.com/in/alexmercer", contacted: true },
+          { name: "Emma Stone", role: "HR Business Partner", linkedin: "https://linkedin.com/in/emmastone", contacted: true }
+        ],
+        outreachMessage: "Hi Alex,\n\nI'd love to join GameStudio as a QA Automation Specialist. My scripting experience with Python makes me an excellent fit for your functional regression goals.\n\nBest,\nCandidate",
+        comment: "Completed round 1 interview. Focus was Python scripting."
+      },
+      {
+        id: 5,
+        title: "Agile Scrum Master",
+        company: "GlobalSystems",
+        size: "5000+",
+        link: "https://linkedin.com/jobs/127",
+        date: "2026-05-28",
+        location: "Remote",
+        remoteType: "remote",
+        seniority: "senior",
+        salary: "$120k - $140k",
+        description: "Seeking a senior scrum master to facilitate agile practices across 4 distributed software teams. Enterprise scale delivery planning required.",
+        matchScore: 68,
+        matchType: "no-match",
+        shouldProceed: false,
+        status: "rejected",
+        resumeUsed: "project_manager.md",
+        strengths: ["Scrum Master Certified"],
+        gaps: ["No experience with SAFe framework at enterprise scale"],
+        contacts: [
+          { name: "Evelyn Ross", role: "HR Partner", linkedin: "https://linkedin.com/in/evelynross", contacted: false }
+        ],
+        outreachMessage: "",
+        comment: "Enterprise SAFe requirement is a hard blocker."
+      },
+      {
+        id: 6,
+        title: "QA Lead",
+        company: "AppStart",
+        size: "10-50",
+        link: "https://linkedin.com/jobs/128",
+        date: "2026-06-06",
+        location: "San Francisco, CA",
+        remoteType: "remote",
+        seniority: "senior",
+        salary: "$150k - $180k",
+        description: "AppStart is seeking our first QA Lead to establish our test pipeline. You will be responsible for defining automation protocols, running manual exploratory testing, and implementing CI tools.",
+        matchScore: 91,
+        matchType: "match",
+        shouldProceed: true,
+        status: "sourced",
+        resumeUsed: "qa.md",
+        strengths: ["Startup experience (first QA hire)", "Established full-suite testing protocols from scratch", "Fast API testing"],
+        gaps: ["No mobile testing experience mentioned"],
+        contacts: [
+          { name: "Tariq Mahmood", role: "Co-Founder / CTO", linkedin: "https://linkedin.com/in/tariqmahmood", contacted: false },
+          { name: "Liam Neeson", role: "Talent Specialist", linkedin: "https://linkedin.com/in/liamneeson", contacted: false }
+        ],
+        outreachMessage: "Hi Tariq,\n\nCongratulations on expanding your engineering team. As a QA Lead who has previously built testing infrastructures for early stage startups, I would love to help AppStart structure its automation strategy.\n\nBest,\nCandidate",
+        comment: "Tariq is active on LinkedIn posting engineering updates."
+      }
+    ];
+
+    let mockResumes = {
+      "qa.md": `# QA Engineer / Automation Specialist Profile\n\n**SUMMARY**\nPassionate QA Automation Engineer with 5+ years experience building automated testing frameworks. Expert in Python, Pytest, Playwright, and Selenium. Proven success implementing CI/CD testing gates in GitHub Actions.\n\n**KEY SKILLS**\n- Programming Languages: Python, JavaScript, Bash\n- Testing Frameworks: Pytest, Playwright, Selenium, Postman\n- DevOps & CI/CD: GitHub Actions, Docker, Linux\n- Databases: SQL, SQLite, PostgreSQL\n- Methodologies: TDD, Agile/Scrum, BDD\n\n**EXPERIENCE**\n- **Lead QA Automator @ TechForge (2024-Present)**: Reduced production release bugs by 45% by automating regression suites.\n- **QA Engineer @ ByteSize (2021-2024)**: Designed REST API testing suite covering 150+ endpoints.`,
+      
+      "project_manager.md": `# Technical Project & Delivery Manager Profile\n\n**SUMMARY**\nResults-driven Delivery Manager and Scrum Master. Facilitated technical agile teams to launch distributed cloud-native services. Expert at removing blockers, managing stakeholders, and tracking budgets.\n\n**KEY SKILLS**\n- Agile Frameworks: Scrum, Kanban, Lean\n- PM Software: Jira, Confluence, Monday.com, Trello\n- Technical Alignment: Python Architecture basics, API design concepts, AWS Cloud\n- Certifications: PMP, Certified Scrum Master (CSM)\n\n**EXPERIENCE**\n- **Project Lead @ SoftCorp (2023-Present)**: Delivered 12 major releases on time using cross-functional Kanban systems.\n- **Agile Facilitator @ WebTech (2020-2023)**: Guided 3 distributed engineering sprints, improving team velocity by 30%.`,
+      
+      "data_analyst.md": `# Data & BI Analyst Profile\n\n**SUMMARY**\nData analyst skilled at turning raw business data into actionable dashboards. Expert in SQL, Python data manipulation (Pandas/NumPy), Tableau, and PowerBI. Strong communicator for executive presentations.\n\n**KEY SKILLS**\n- Data Visualization: Tableau, PowerBI, Looker\n- Analysis & SQL: Complex subqueries, Joins, Window functions\n- Code & Math: Python, R, Statistics, Predictive Modeling\n\n**EXPERIENCE**\n- **Business Intelligence Analyst @ FinData (2023-Present)**: Maintained SQL databases and produced revenue analytics dashboards for C-level executives.\n- **Data Analyst @ RetailGlow (2021-2023)**: Programmed automated email performance dashboard reports.`
+    };
+
+    // Active configuration state
+    let activeResume = "qa.md";
+    let activeTableFilter = "all";
+    let activeFeedJobId = 1;
+
+    // ----------------------------------------------------
+    // VARIANT MANAGER (A, B, C Switcher)
+    // ----------------------------------------------------
+    const variants = [
+      { key: "A", name: "Command Center" },
+      { key: "B", name: "Kanban Board" },
+      { key: "C", name: "Split Feed & Detail" }
+    ];
+    let currentVariantIndex = 1;
+
+    function initVariant() {
+      // Get URL param if exists
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVariant = urlParams.get('variant');
+      if (urlVariant) {
+        const foundIndex = variants.findIndex(v => v.key === urlVariant.toUpperCase());
+        if (foundIndex !== -1) {
+          currentVariantIndex = foundIndex;
+        }
+      }
+      applyVariant();
+    }
+
+    function applyVariant() {
+      const activeVariant = variants[currentVariantIndex];
+      
+      // Update URL search parameters without reloading
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?variant=' + activeVariant.key;
+      window.history.pushState({ path: newUrl }, '', newUrl);
+
+      // Toggle display
+      document.getElementById('variant-a').style.display = activeVariant.key === 'A' ? 'grid' : 'none';
+      document.getElementById('variant-b').style.display = activeVariant.key === 'B' ? 'flex' : 'none';
+      document.getElementById('variant-c').style.display = activeVariant.key === 'C' ? 'flex' : 'none';
+
+      // Update switcher labels
+      document.getElementById('current-variant-label').textContent = `${activeVariant.key} — ${activeVariant.name}`;
+
+      // Re-render the active view with latest data
+      renderActiveVariant();
+    }
+
+    function prevVariant() {
+      currentVariantIndex = (currentVariantIndex - 1 + variants.length) % variants.length;
+      applyVariant();
+    }
+
+    function nextVariant() {
+      currentVariantIndex = (currentVariantIndex + 1) % variants.length;
+      applyVariant();
+    }
+
+    // Keyboard controls
+    window.addEventListener('keydown', (e) => {
+      // Don't intercept if user is typing in forms
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        prevVariant();
+      } else if (e.key === 'ArrowRight') {
+        nextVariant();
+      }
+    });
+
+    // Handle back/forward browser history
+    window.addEventListener('popstate', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVariant = urlParams.get('variant');
+      if (urlVariant) {
+        const idx = variants.findIndex(v => v.key === urlVariant.toUpperCase());
+        if (idx !== -1) {
+          currentVariantIndex = idx;
+          applyVariant();
+        }
+      }
+    });
+
+    // ----------------------------------------------------
+    // RENDERING LOGIC FOR EACH LAYOUT
+    // ----------------------------------------------------
+    function renderActiveVariant() {
+      const activeVariant = variants[currentVariantIndex].key;
+      if (activeVariant === 'A') {
+        renderVariantA();
+      } else if (activeVariant === 'B') {
+        renderVariantB();
+      } else if (activeVariant === 'C') {
+        renderVariantC();
+      }
+    }
+
+    // --- VARIANT A: COMMAND CENTER TABLE ---
+    function renderVariantA() {
+      const tableBody = document.getElementById('cc-job-table-body');
+      tableBody.innerHTML = '';
+
+      let filteredJobs = masterJobs;
+      if (activeTableFilter === 'high-match') {
+        filteredJobs = masterJobs.filter(j => j.matchScore >= 85);
+      } else if (activeTableFilter === 'applications') {
+        filteredJobs = masterJobs.filter(j => j.status === 'applied' || j.status === 'contacted' || j.status === 'interviewing');
+      }
+
+      filteredJobs.forEach(job => {
+        const tr = document.createElement('tr');
+        
+        // Match score color class
+        let matchClass = 'match-low';
+        if (job.matchScore >= 85) matchClass = 'match-high';
+        else if (job.matchScore >= 70) matchClass = 'match-mid';
+
+        tr.innerHTML = `
+          <td>
+            <div class="job-title-col">${job.title}</div>
+            <div class="job-company">${job.company} (${job.size} employees)</div>
+          </td>
+          <td>
+            <div style="font-size:0.9rem;">${job.location}</div>
+            <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:capitalize;">${job.remoteType}</div>
+          </td>
+          <td>
+            <span class="match-pill ${matchClass}">${job.matchScore}%</span>
+          </td>
+          <td>
+            <span class="status-badge status-${job.status}">${job.status}</span>
+          </td>
+          <td>
+            <div class="action-icons">
+              <button class="action-icon-btn" onclick="openJobDetailsDrawer(${job.id})" title="Inspect and View Outreach"><i class="fa-regular fa-folder-open"></i></button>
+              ${job.status === 'sourced' ? 
+                `<button class="action-icon-btn promote-btn" onclick="promoteToApplication(${job.id})" title="Promote to Application"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>` : 
+                `<button class="action-icon-btn" style="color:var(--text-muted); cursor:not-allowed;" disabled><i class="fa-solid fa-check"></i></button>`
+              }
+              <button class="action-icon-btn" onclick="deleteJob(${job.id})" title="Delete Job"><i class="fa-regular fa-trash-can"></i></button>
+            </div>
+          </td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function setTableFilter(filter, el) {
+      activeTableFilter = filter;
+      document.querySelectorAll('#variant-a .tab-btn').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+      renderVariantA();
+    }
+
+    // --- VARIANT B: KANBAN BOARD ---
+    function renderVariantB() {
+      const lanes = ['sourced', 'evaluating', 'applied', 'contacted', 'interviewing', 'rejected'];
+      lanes.forEach(lane => {
+        const laneEl = document.getElementById(`lane-${lane}`);
+        laneEl.innerHTML = '';
+
+        const jobsInLane = masterJobs.filter(j => j.status === lane);
+        document.getElementById(`count-${lane}`).textContent = jobsInLane.length;
+
+        jobsInLane.forEach(job => {
+          const card = document.createElement('div');
+          card.className = 'kanban-card';
+          card.setAttribute('onclick', `openJobDetailsDrawer(${job.id})`);
+
+          let matchClass = 'match-low';
+          if (job.matchScore >= 85) matchClass = 'match-high';
+          else if (job.matchScore >= 70) matchClass = 'match-mid';
+
+          card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div class="kanban-card-title">${job.title}</div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <a href="${job.link}" target="_blank" onclick="event.stopPropagation()" style="color:#06b6d4; font-size:0.95rem;" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
+                <span class="match-pill ${matchClass}">${job.matchScore}%</span>
+              </div>
+            </div>
+            <div class="kanban-card-company">
+              <i class="fa-regular fa-building"></i> ${job.company}
+            </div>
+            <div class="kanban-card-meta">
+              <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
+              <span style="text-transform:capitalize;">${job.remoteType}</span>
+            </div>
+            ${job.comment ? `
+              <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <i class="fa-regular fa-comment-dots"></i> ${job.comment}
+              </div>
+            ` : ''}
+            <div class="kanban-card-footer">
+              <span style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">${job.resumeUsed}</span>
+              <div class="kanban-card-actions" onclick="event.stopPropagation()">
+                ${getKanbanCardMovementButtons(job)}
+              </div>
+            </div>
+          `;
+          laneEl.appendChild(card);
+        });
+      });
+    }
+
+    function getKanbanCardMovementButtons(job) {
+      const stages = ['sourced', 'evaluating', 'applied', 'contacted', 'interviewing', 'rejected'];
+      const idx = stages.indexOf(job.status);
+      let html = '';
+      if (idx > 0) {
+        html += `<button class="kanban-action-btn" onclick="moveJobStage(${job.id}, '${stages[idx-1]}')" title="Move Left"><i class="fa-solid fa-chevron-left"></i></button>`;
+      }
+      if (idx < stages.length - 1) {
+        html += `<button class="kanban-action-btn" onclick="moveJobStage(${job.id}, '${stages[idx+1]}')" title="Move Right"><i class="fa-solid fa-chevron-right"></i></button>`;
+      }
+      return html;
+    }
+
+    // --- VARIANT C: SPLIT FEED & ANALYTICS ---
+    function renderVariantC() {
+      // 1. Render Metrics
+      const totalSourced = masterJobs.length;
+      const highMatches = masterJobs.filter(j => j.matchScore >= 85).length;
+      const matchRatio = totalSourced > 0 ? Math.round((highMatches / totalSourced) * 100) : 0;
+      const activeApps = masterJobs.filter(j => ['applied', 'contacted', 'interviewing'].includes(j.status)).length;
+      const totalScoreSum = masterJobs.reduce((sum, j) => sum + j.matchScore, 0);
+      const avgScore = totalSourced > 0 ? Math.round(totalScoreSum / totalSourced) : 0;
+
+      document.getElementById('analytic-sourced-val').textContent = totalSourced;
+      document.getElementById('analytic-match-val').textContent = `${matchRatio}%`;
+      document.getElementById('analytic-active-val').textContent = activeApps;
+      document.getElementById('analytic-avg-val').textContent = `${avgScore}%`;
+
+      // 2. Render Left Feed
+      const feedPane = document.getElementById('feed-items-pane');
+      feedPane.innerHTML = '';
+
+      masterJobs.forEach(job => {
+        const item = document.createElement('div');
+        item.className = `glass-panel feed-card ${job.id === activeFeedJobId ? 'active' : ''}`;
+        item.setAttribute('onclick', `selectFeedJob(${job.id})`);
+
+        let matchClass = 'match-low';
+        if (job.matchScore >= 85) matchClass = 'match-high';
+        else if (job.matchScore >= 70) matchClass = 'match-mid';
+
+        item.innerHTML = `
+          <div class="feed-card-header">
+            <div>
+              <h3 style="font-size:1rem; margin-bottom:4px; color:var(--text-primary);">${job.title}</h3>
+              <div style="font-size:0.8rem; color:var(--text-secondary);">${job.company}</div>
+            </div>
+            <span class="match-pill ${matchClass}">${job.matchScore}%</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
+            <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
+            <span class="status-badge status-${job.status}" style="font-size:0.65rem; padding: 2px 6px;">${job.status}</span>
+          </div>
+        `;
+        feedPane.appendChild(item);
+      });
+
+      // 3. Render Right Detail Pane
+      renderFeedDetailPane();
+    }
+
+    function selectFeedJob(id) {
+      activeFeedJobId = id;
+      renderVariantC(); // full reload of split panels
+    }
+
+    function renderFeedDetailPane() {
+      const detailPane = document.getElementById('feed-detail-pane');
+      const job = masterJobs.find(j => j.id === activeFeedJobId);
+      
+      if (!job) {
+        detailPane.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--text-secondary); gap: 16px;">
+            <i class="fa-solid fa-briefcase" style="font-size: 3rem; opacity: 0.3;"></i>
+            <p>Select a job from the feed to view details.</p>
+          </div>
+        `;
+        return;
+      }
+
+      let matchClass = 'match-low';
+      if (job.matchScore >= 85) matchClass = 'match-high';
+      else if (job.matchScore >= 70) matchClass = 'match-mid';
+
+      detailPane.innerHTML = `
+        <div class="detail-header">
+          <div class="detail-title">
+            <h2>${job.title}</h2>
+            <div class="detail-subtitle">
+              <span><i class="fa-regular fa-building"></i> ${job.company}</span>
+              <span><i class="fa-solid fa-location-dot"></i> ${job.location} (${job.remoteType})</span>
+              <span><i class="fa-solid fa-coins"></i> ${job.salary || 'Not specified'}</span>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+            <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 6px 12px;">${job.matchScore}% Match Score</span>
+            <span class="status-badge status-${job.status}">${job.status}</span>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <h3><i class="fa-solid fa-align-left"></i> Job Description</h3>
+          <div class="detail-description">${job.description}</div>
+        </div>
+
+        <div class="match-breakdown">
+          <div class="match-factor-box">
+            <div class="factor-title strengths"><i class="fa-solid fa-circle-check"></i> Key Strengths</div>
+            <ul class="factor-list">
+              ${job.strengths.map(s => `<li><i class="fa-solid fa-check" style="color:var(--accent-emerald)"></i> ${s}</li>`).join('')}
+            </ul>
+          </div>
+          <div class="match-factor-box">
+            <div class="factor-title gaps"><i class="fa-solid fa-circle-xmark"></i> Identified Gaps</div>
+            <ul class="factor-list">
+              ${job.gaps.map(g => `<li><i class="fa-solid fa-xmark" style="color:var(--accent-rose)"></i> ${g}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+
+        <div class="outreach-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h3 style="font-size:1rem; color:var(--accent-indigo); margin:0; display:flex; align-items:center; gap:8px;">
+              <i class="fa-regular fa-paper-plane"></i> Outreach Referral Message
+            </h3>
+            <span style="font-size:0.8rem; color:var(--text-secondary);">Contact: <strong>${job.contactName || 'None'}</strong> (${job.contactRole || 'HR'})</span>
+          </div>
+          ${job.outreachMessage ? `
+            <textarea class="outreach-text" id="feed-outreach-text" readonly>${job.outreachMessage}</textarea>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+              <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="copyFeedOutreach()"><i class="fa-regular fa-copy"></i> Copy outreach</button>
+              <button class="btn btn-cyan" style="padding: 6px 12px; font-size: 0.85rem;" onclick="regenerateOutreach(${job.id})"><i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate</button>
+              ${job.status === 'applied' ? `
+                <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; background:linear-gradient(135deg, var(--accent-emerald), #059669); box-shadow: 0 4px 10px rgba(16,185,129,0.2);" onclick="changeJobStage(${job.id}, 'contacted')"><i class="fa-solid fa-check"></i> Mark as Contacted</button>
+              ` : ''}
+            </div>
+          ` : `
+            <p style="font-size:0.85rem; color:var(--text-secondary); text-align:center; padding:12px;">Outreach templates are generated when promoted to application.</p>
+            <div style="display:flex; justify-content:center; margin-top:4px;">
+              <button class="btn btn-primary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="promoteToApplication(${job.id})">Promote to Application</button>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // ----------------------------------------------------
+    // USER ACTIONS & INTERACTIVITY
+    // ----------------------------------------------------
+    function changeActiveResume(val) {
+      activeResume = val;
+      addLogLine(`Switched active resume profile configuration to: ${val}`, 'warning');
+      masterJobs.forEach(job => {
+        if (job.status === 'sourced') {
+          // Re-evaluate score mock
+          job.resumeUsed = val;
+        }
+      });
+      renderActiveVariant();
+    }
+
+    function viewResumeProfile() {
+      const modal = document.getElementById('resume-modal');
+      const title = document.getElementById('resume-modal-title');
+      const body = document.getElementById('resume-modal-body');
+
+      title.textContent = `Resume Profile: ${activeResume}`;
+      body.textContent = mockResumes[activeResume] || "Resume content not found.";
+      
+      modal.style.display = 'flex';
+    }
+
+    function closeModal(e) {
+      if (!e || e.target === document.getElementById('resume-modal') || e.target.classList.contains('modal-close') || e.target.closest('.modal-close')) {
+        document.getElementById('resume-modal').style.display = 'none';
+      }
+    }
+
+    function promoteToApplication(id) {
+      const job = masterJobs.find(j => j.id === id);
+      if (job) {
+        job.status = 'applied';
+        
+        // Generate mock outreach if not present
+        if (!job.outreachMessage) {
+          const profile = activeResume === 'qa.md' ? 'QA Automator' : (activeResume === 'project_manager.md' ? 'Delivery Manager' : 'BI Analyst');
+          job.outreachMessage = `Hello ${job.contactName || 'Recruiter'},\n\nI recently saw your post for the ${job.title} role at ${job.company}. Based on my matched skills in ${activeResume} (${profile}), I believe my background aligning developer suites and testing cycles matches your goals.\n\nLet me know if we can schedule a quick discussion!\n\nBest,\nCandidate`;
+        }
+
+        addLogLine(`Job [${job.title} @ ${job.company}] promoted to Applications lane.`, 'success');
+        addLogLine(`Outreach generated for ${job.contactName || 'Hiring Manager'} using ${activeResume}.`, 'success');
+        
+        renderActiveVariant();
+      }
+    }
+
+    function deleteJob(id) {
+      const job = masterJobs.find(j => j.id === id);
+      if (job) {
+        masterJobs = masterJobs.filter(j => j.id !== id);
+        addLogLine(`Job [${job.title}] deleted from tracker.`, 'error');
+        renderActiveVariant();
+      }
+    }
+
+    function moveJobStage(id, newStatus) {
+      const job = masterJobs.find(j => j.id === id);
+      if (job) {
+        const oldStatus = job.status;
+        job.status = newStatus;
+        addLogLine(`Moved card [${job.title}] from '${oldStatus}' to '${newStatus}'`, 'info');
+        renderActiveVariant();
+      }
+    }
+
+    function changeJobStage(id, newStatus) {
+      moveJobStage(id, newStatus);
+    }
+
+    function regenerateOutreach(id) {
+      const job = masterJobs.find(j => j.id === id);
+      if (job) {
+        addLogLine(`Regenerating outreach message for ${job.company}...`, 'warning');
+        setTimeout(() => {
+          job.outreachMessage = `Dear ${job.contactName},\n\nI am re-writing to express my high interest in ${job.title}. After looking over the requirements, my skillset in ${job.strengths[0]} is a direct match. Looking forward to discussing this.\n\nRespectfully,\nCandidate`;
+          addLogLine(`Outreach regenerated.`, 'success');
+          renderActiveVariant();
+        }, 600);
+      }
+    }
+
+    function copyFeedOutreach() {
+      const txt = document.getElementById('feed-outreach-text');
+      if (txt) {
+        txt.select();
+        document.execCommand('copy');
+        addLogLine('Outreach message copied to clipboard!', 'success');
+      }
+    }
+
+    function addNewJobPrompt() {
+      const title = prompt("Enter Job Title:", "QA Engineer");
+      if (!title) return;
+      const company = prompt("Enter Company Name:", "ByteLabs");
+      if (!company) return;
+      
+      const newJob = {
+        id: Date.now(),
+        title: title,
+        company: company,
+        size: "50-100",
+        link: "#",
+        date: new Date().toISOString().split('T')[0],
+        location: "Remote",
+        remoteType: "remote",
+        seniority: "mid",
+        salary: "$110k",
+        description: "Custom user-added job for simulation.",
+        matchScore: Math.floor(Math.random() * 30) + 70, // 70-100
+        matchType: "match",
+        shouldProceed: true,
+        status: "sourced",
+        resumeUsed: activeResume,
+        strengths: ["User defined job", "Flexible skills matching"],
+        gaps: ["Needs manual review"],
+        contactName: "Alex Hunter",
+        contactRole: "Talent Acquisition",
+        outreachMessage: ""
+      };
+      
+      masterJobs.unshift(newJob);
+      addLogLine(`Manually added job [${title} @ ${company}]`, 'info');
+      renderActiveVariant();
+    }
+
+    // --- LOG STREAMING & SSE INTEGRATION ---
+    let logEventSource = null;
+
+    function triggerScrapeRun() {
+      let query = "QA Engineer";
+      let location = "Remote";
+      let remote_type = "any";
+      let seniority = "any";
+      let salary = "";
+      let company_size = "any";
+      const platform = document.getElementById('cc-search-platform') ? document.getElementById('cc-search-platform').value : "brightdata_linkedin";
+      const mockEval = document.getElementById('cc-mock-evaluation') ? document.getElementById('cc-mock-evaluation').checked : true;
+
+      const activeVariant = variants[currentVariantIndex].key;
+      if (activeVariant === 'B') {
+        query = document.getElementById('kb-filter-position').value;
+        location = document.getElementById('kb-filter-location').value;
+        
+        const remoteEls = document.querySelectorAll('input[name="kb-filter-remote"]:checked');
+        remote_type = remoteEls.length > 0 ? Array.from(remoteEls).map(el => el.value).join(',') : 'any';
+        
+        const seniorityEls = document.querySelectorAll('input[name="kb-filter-seniority"]:checked');
+        seniority = seniorityEls.length > 0 ? Array.from(seniorityEls).map(el => el.value).join(',') : 'any';
+        
+        salary = document.getElementById('kb-filter-salary').value;
+        
+        const sizeEls = document.querySelectorAll('input[name="kb-filter-size"]:checked');
+        company_size = sizeEls.length > 0 ? Array.from(sizeEls).map(el => el.value).join(',') : 'any';
+      } else {
+        query = document.getElementById('cc-search-query') ? document.getElementById('cc-search-query').value : "QA Engineer";
+        location = document.getElementById('cc-search-location') ? document.getElementById('cc-search-location').value : "Remote";
+      }
+
+      let logMsg = `Initiating async scraper task. Query: "${query}", Location: "${location}", Engine: ${platform}`;
+      let activeFilters = [];
+      if (remote_type !== 'any') activeFilters.push(`Remote: ${remote_type}`);
+      if (seniority !== 'any') activeFilters.push(`Seniority: ${seniority}`);
+      if (salary) activeFilters.push(`Salary Min: ${salary}`);
+      if (company_size !== 'any') activeFilters.push(`Company Size: ${company_size}`);
+      if (activeFilters.length > 0) {
+        logMsg += ` | Filters: [${activeFilters.join(', ')}]`;
+      }
+      addLogLine(logMsg, 'warning');
+      
+      // Disable buttons during action
+      const btnA = document.getElementById('cc-scrape-btn');
+      if (btnA) { btnA.disabled = true; btnA.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...'; }
+
+      // Connect to FastAPI SSE endpoint to stream logs
+      if (logEventSource) {
+        logEventSource.close();
+      }
+
+      // We call the POST /api/scrape endpoint, and then start an EventSource to listen to logs
+      const url = `/api/scrape?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&platform=${platform}&active_resume=${activeResume}&mock_eval=${mockEval}&remote_type=${remote_type}&seniority=${seniority}&salary=${encodeURIComponent(salary)}&company_size=${company_size}`;
+      fetch(url, {
+        method: 'POST'
+      })
+      .then(response => response.json())
+      .then(data => {
+        const taskId = data.task_id;
+        addLogLine(`FastAPI background task created: ${taskId}`, 'info');
+
+        // Start SSE stream
+        logEventSource = new EventSource(`/api/logs/${taskId}`);
+        
+        logEventSource.onmessage = function(event) {
+          const logData = JSON.parse(event.data);
+          
+          if (logData.type === 'log') {
+            addLogLine(logData.message, logData.level);
+          } else if (logData.type === 'result') {
+            // Merge newly scraped jobs into our list
+            if (logData.jobs && logData.jobs.length > 0) {
+              logData.jobs.forEach(newJob => {
+                // Check if already exists by title/company
+                if (!masterJobs.some(j => j.title === newJob.title && j.company === newJob.company)) {
+                  masterJobs.unshift(newJob);
+                }
+              });
+              addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
+            }
+          } else if (logData.type === 'done') {
+            addLogLine("Scraper process complete.", 'success');
+            logEventSource.close();
+            if (btnA) { btnA.disabled = false; btnA.innerHTML = '<i class="fa-solid fa-play"></i> Trigger Scraping Run'; }
+            renderActiveVariant();
+          }
+        };
+
+        logEventSource.onerror = function(err) {
+          console.error("SSE Error:", err);
+          // If we are running static or without FastAPI, simulate it locally!
+          logEventSource.close();
+          simulateLocalScrape();
+        };
+      })
+      .catch(err => {
+        console.warn("FastAPI backend not responding, falling back to client-side simulated logging.", err);
+        simulateLocalScrape();
+      });
+    }
+
+    function simulateLocalScrape() {
+      // Simulate locally
+      let steps = [
+        { time: 1000, msg: "Initializing local mock scraper pipeline...", level: "info" },
+        { time: 2500, msg: "Connecting to Bright Data Mock API...", level: "info" },
+        { time: 4000, msg: "Found 2 matching roles on LinkedIn. Processing matching matrix...", level: "warning" },
+        { time: 5500, msg: "Job: 'Automation Analyst' @ 'InnovateCorp' -> 89% Match Score using " + activeResume, level: "success" },
+        { time: 7000, msg: "Job: 'QA SDET' @ 'ScaleWeb' -> 76% Match Score using " + activeResume, level: "info" },
+        { time: 8000, msg: "Scrape run completed. Appended 2 new rows to sourced jobs.", level: "success" }
+      ];
+
+      steps.forEach(step => {
+        setTimeout(() => {
+          addLogLine(step.msg, step.level);
+          
+          // On completion, inject jobs
+          if (step.msg.includes("Scrape run completed")) {
+            const btnA = document.getElementById('cc-scrape-btn');
+            if (btnA) { btnA.disabled = false; btnA.innerHTML = '<i class="fa-solid fa-play"></i> Trigger Scraping Run'; }
+            
+            // Add jobs to state
+            masterJobs.unshift(
+              {
+                id: Date.now() + 1,
+                title: "Automation Analyst",
+                company: "InnovateCorp",
+                size: "50-100",
+                link: "#",
+                date: new Date().toISOString().split('T')[0],
+                location: "Remote",
+                remoteType: "remote",
+                seniority: "mid",
+                salary: "$120k",
+                description: "Automate API and frontend tests using Playwright and Python. Coordinate with offshore delivery teams.",
+                matchScore: 89,
+                matchType: "match",
+                shouldProceed: true,
+                status: "sourced",
+                resumeUsed: activeResume,
+                strengths: ["Strong Playwright expertise", "API tests development"],
+                gaps: ["Requires cross-timezones communication with offshore teams"],
+                contactName: "Sarah Connor",
+                contactRole: "Scrum Master",
+                outreachMessage: ""
+              },
+              {
+                id: Date.now() + 2,
+                title: "QA SDET",
+                company: "ScaleWeb",
+                size: "10-50",
+                link: "#",
+                date: new Date().toISOString().split('T')[0],
+                location: "Remote",
+                remoteType: "remote",
+                seniority: "mid",
+                salary: "$105k",
+                description: "Seeking SDET to maintain regression framework in Python/unittest. Add UI automated test cases.",
+                matchScore: 76,
+                matchType: "match",
+                shouldProceed: true,
+                status: "sourced",
+                resumeUsed: activeResume,
+                strengths: ["Python automation experience"],
+                gaps: ["No Pytest experience (uses Unittest)", "No Playwright (strictly legacy Selenium)"],
+                contactName: "John Connor",
+                contactRole: "Tech Lead",
+                outreachMessage: ""
+              }
+            );
+            renderActiveVariant();
+          }
+        }, step.time);
+      });
+    }
+
+    function addLogLine(msg, level = 'info') {
+      const consoleEl = document.getElementById('cc-logs-console');
+      if (!consoleEl) return;
+      
+      const line = document.createElement('div');
+      line.className = 'terminal-line';
+      
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      
+      line.innerHTML = `
+        <span class="terminal-time">${timeStr}</span>
+        <span class="terminal-text ${level}">${msg}</span>
+      `;
+      consoleEl.appendChild(line);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearLogs() {
+      const consoleEl = document.getElementById('cc-logs-console');
+      if (consoleEl) {
+        consoleEl.innerHTML = '<div class="terminal-line"><span class="terminal-time">' + new Date().toTimeString().split(' ')[0] + '</span><span class="terminal-text">Console cleared. Ready.</span></div>';
+      }
+    }
+
+    // --- DETAILED DRAWER (Kanban & Table Details) ---
+    function openJobDetailsDrawer(id) {
+      const job = masterJobs.find(j => j.id === id);
+      if (!job) return;
+
+      const overlay = document.getElementById('kanban-drawer');
+      const body = document.getElementById('drawer-body');
+
+      let matchClass = 'match-low';
+      if (job.matchScore >= 85) matchClass = 'match-high';
+      else if (job.matchScore >= 70) matchClass = 'match-mid';
+
+      body.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
+          <div>
+            <h2 style="font-size:1.4rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+              ${job.title}
+              <a href="${job.link}" target="_blank" style="color:#06b6d4; font-size:1.15rem;" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
+            </h2>
+            <div style="color:var(--text-secondary); margin-top:4px; font-size:0.9rem;">
+              <strong>${job.company}</strong> &bull; ${job.location} &bull; ${job.salary || 'Not specified'}
+            </div>
+          </div>
+          <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Job Info</h4>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:0.85rem; color:var(--text-secondary);">
+              <div>Status: <span class="status-badge status-${job.status}" style="font-size:0.65rem; padding: 2px 6px;">${job.status}</span></div>
+              <div>Seniority: <span style="text-transform:capitalize;">${job.seniority}</span></div>
+              <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
+              <div>Resume Profile: <code>${job.resumeUsed}</code></div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Description</h4>
+            <div class="detail-description" style="font-size:0.85rem; max-height: 150px; overflow-y: auto;">${job.description}</div>
+          </div>
+
+          <div class="match-breakdown">
+            <div class="match-factor-box" style="padding:10px;">
+              <div class="factor-title strengths" style="font-size:0.75rem;"><i class="fa-solid fa-circle-check"></i> Strengths</div>
+              <ul class="factor-list" style="font-size:0.75rem;">
+                ${job.strengths.map(s => `<li><i class="fa-solid fa-check" style="color:var(--accent-emerald)"></i> ${s}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="match-factor-box" style="padding:10px;">
+              <div class="factor-title gaps" style="font-size:0.75rem;"><i class="fa-solid fa-circle-xmark"></i> Gaps</div>
+              <ul class="factor-list" style="font-size:0.75rem;">
+                ${job.gaps.map(g => `<li><i class="fa-solid fa-xmark" style="color:var(--accent-rose)"></i> ${g}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+
+          <!-- Comment / Notes Section -->
+          <div>
+            <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Notes / Comments</h4>
+            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="updateJobComment(${job.id}, this.value)">${job.comment || ''}</textarea>
+          </div>
+
+          <!-- Outreach Referral Checklist -->
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Outreach Contacts & Referral Status</h4>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              ${job.contacts && job.contacts.length > 0 ? job.contacts.map((contact, idx) => `
+                <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.18); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.02);">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" id="contact-${job.id}-${idx}" ${contact.contacted ? 'checked' : ''} onchange="toggleContacted(${job.id}, ${idx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
+                    <label for="contact-${job.id}-${idx}" style="cursor:pointer; display:flex; flex-direction:column;">
+                      <span style="font-size:0.85rem; font-weight:500; color:${contact.contacted ? 'var(--accent-emerald)' : 'var(--text-primary)'};">
+                        ${contact.name} ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
+                      </span>
+                      <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.role}</span>
+                    </label>
+                  </div>
+                  <a href="${contact.linkedin}" target="_blank" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
+                </div>
+              `).join('') : '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>'}
+            </div>
+          </div>
+
+          <div class="outreach-box" style="padding:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <h4 style="font-size:0.85rem; color:var(--accent-indigo); margin:0;">Outreach Message Draft</h4>
+            </div>
+            ${job.outreachMessage ? `
+              <textarea class="outreach-text" id="drawer-outreach-text" style="font-size:0.8rem; min-height:100px;">${job.outreachMessage}</textarea>
+              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyDrawerOutreach()"><i class="fa-regular fa-copy"></i> Copy</button>
+                <button class="btn btn-cyan" style="padding: 4px 10px; font-size: 0.75rem;" onclick="regenerateOutreach(${job.id})"><i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate</button>
+                ${job.status === 'applied' ? `
+                  <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="changeJobStage(${job.id}, 'contacted'); closeDrawer(null);"><i class="fa-solid fa-check"></i> Mark Contacted</button>
+                ` : ''}
+                ${job.status !== 'rejected' ? `
+                  <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.2);" onclick="changeJobStage(${job.id}, 'rejected'); closeDrawer(null);"><i class="fa-solid fa-ban"></i> Reject</button>
+                ` : ''}
+              </div>
+            ` : `
+              <p style="font-size:0.75rem; color:var(--text-secondary); text-align:center;">Promote to application to generate outreach.</p>
+              <div style="display:flex; justify-content:center; margin-top:6px;">
+                <button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem;" onclick="promoteToApplication(${job.id}); openJobDetailsDrawer(${job.id});">Promote now</button>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      overlay.classList.add('active');
+    }
+
+    function updateJobComment(id, value) {
+      const job = masterJobs.find(j => j.id === id);
+      if (job) {
+        job.comment = value;
+      }
+    }
+
+    function toggleContacted(jobId, contactIdx, isChecked) {
+      const job = masterJobs.find(j => j.id === jobId);
+      if (job && job.contacts && job.contacts[contactIdx]) {
+        job.contacts[contactIdx].contacted = isChecked;
+        addLogLine(`Marked contact ${job.contacts[contactIdx].name} as ${isChecked ? 'CONTACTED' : 'NOT CONTACTED'}.`, isChecked ? 'success' : 'warning');
+        
+        // Auto-promote to applied if a contact is marked contacted
+        if (isChecked && job.status === 'sourced') {
+          promoteToApplication(jobId);
+        }
+        
+        // Re-render
+        openJobDetailsDrawer(jobId);
+        renderActiveVariant();
+      }
+    }
+
+    function closeDrawer(e) {
+      if (!e || e.target === document.getElementById('kanban-drawer') || e.target.closest('.drawer-close')) {
+        document.getElementById('kanban-drawer').classList.remove('active');
+      }
+    }
+
+    function copyDrawerOutreach() {
+      const txt = document.getElementById('drawer-outreach-text');
+      if (txt) {
+        txt.select();
+        document.execCommand('copy');
+        addLogLine('Outreach message copied from drawer!', 'success');
+      }
+    }
+
+    function toggleScraperSettings() {
+      const panel = document.getElementById('scraper-settings-panel');
+      const chevron = document.getElementById('settings-chevron');
+      panel.classList.toggle('expanded');
+      if (panel.classList.contains('expanded')) {
+        chevron.style.transform = 'rotate(180deg)';
+      } else {
+        chevron.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    function resetKbFilters() {
+      document.getElementById('kb-filter-position').value = 'Senior QA Automation';
+      document.getElementById('kb-filter-location').value = 'Remote';
+      document.querySelectorAll('input[name="kb-filter-remote"]').forEach(cb => cb.checked = cb.value === 'remote');
+      document.querySelectorAll('input[name="kb-filter-seniority"]').forEach(cb => cb.checked = cb.value === 'senior');
+      document.querySelectorAll('input[name="kb-filter-size"]').forEach(cb => cb.checked = false);
+      document.getElementById('kb-filter-salary').value = '';
+      addLogLine("Kanban scraper settings reset to default values.", 'info');
+    }
+
+    // Connect to FastAPI to check connection
+    fetch('/api/health')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('connection-mode').innerHTML = `<span style="color:var(--accent-emerald);"><i class="fa-solid fa-plug"></i> Connected to FastAPI</span>`;
+      addLogLine("Successfully verified backend connection with FastAPI on localhost.", 'success');
+    })
+    .catch(err => {
+      document.getElementById('connection-mode').innerHTML = `<span style="color:var(--accent-amber);"><i class="fa-solid fa-wifi"></i> Local Standalone Mode</span>`;
+      addLogLine("Backend server offline. Running in browser sandbox mode with offline triggers.", 'warning');
+    });
+
+    function loadResumes() {
+      return fetch('/api/resumes')
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP error " + r.status);
+          return r.json();
+        })
+        .then(data => {
+          if (data && data.length > 0) {
+            mockResumes = {};
+            const selectEl = document.getElementById('active-resume-select');
+            selectEl.innerHTML = '';
+            
+            data.forEach((resume) => {
+              mockResumes[resume.name] = resume.content;
+              const option = document.createElement('option');
+              option.value = resume.name;
+              
+              let displayName = resume.name;
+              if (resume.name === 'qa.md') displayName += ' (QA Engineer)';
+              else if (resume.name === 'project_manager.md') displayName += ' (Delivery Manager)';
+              else if (resume.name === 'data_analyst.md') displayName += ' (Data Analyst)';
+              option.textContent = displayName;
+              selectEl.appendChild(option);
+            });
+            
+            // Set the active resume to the first retrieved resume
+            activeResume = data[0].name;
+            selectEl.value = activeResume;
+            addLogLine(`Loaded ${data.length} resume profiles dynamically from /api/resumes`, 'success');
+          }
+        })
+        .catch(err => {
+          addLogLine("Could not fetch resumes from backend. Using static fallback profiles.", 'info');
+        });
+    }
+
+    // Initialize
+    initVariant();
+    loadResumes();
+  </script>
+</body>
+</html>

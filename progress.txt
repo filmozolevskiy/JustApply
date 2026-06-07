@@ -1,0 +1,3 @@
+# Ralph Loop Progress Log
+
+- **Iteration 1**: Implemented Issue #2: "Job Hunter: Resume Profile Folder & Header Selector Dropdown". Created the local `resumes/` folder containing candidate profiles, added `/api/resumes` endpoint in `prototype_dashboard.py`, updated `prototype_dashboard.html` to dynamically fetch and populate the selector dropdown and update active resume state, and added corresponding unit tests in `tests/test_dashboard_resumes.py`. All tests pass successfully.
