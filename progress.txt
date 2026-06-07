@@ -1,3 +1,6 @@
 # Ralph Loop Progress Log
 
 - **Iteration 1**: Implemented Issue #2: "Job Hunter: Resume Profile Folder & Header Selector Dropdown". Created the local `resumes/` folder containing candidate profiles, added `/api/resumes` endpoint in `prototype_dashboard.py`, updated `prototype_dashboard.html` to dynamically fetch and populate the selector dropdown and update active resume state, and added corresponding unit tests in `tests/test_dashboard_resumes.py`. All tests pass successfully.
+
+- **Iteration 2**: Implemented Issue #3: "Job Hunter: Local DB Schema & 6-Lane Kanban Board UI". Created a local SQLite database setup in `database.py` with a unified `jobs` table schema and initial data seeding. Implemented backend endpoints `GET /api/jobs` and `PUT /api/jobs/{id}/status` in `prototype_dashboard.py`. Updated the frontend `prototype_dashboard.html` to fetch the state from the backend via `/api/jobs` on startup, and to persist Kanban card transitions to the SQLite database via `/api/jobs/{id}/status`. Added test cases in `tests/test_database.py` and `tests/test_dashboard_jobs.py`. All tests pass successfully.
+

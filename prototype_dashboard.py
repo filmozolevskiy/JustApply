@@ -5,6 +5,11 @@ import asyncio
 from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import FileResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
+from pydantic import BaseModel
+from database import init_db, get_jobs, update_job_status, add_job
+
+# Initialize SQLite database
+init_db()
 
 app = FastAPI(title="Job Hunter Dashboard - Prototype")
 
@@ -34,6 +39,20 @@ async def get_resumes():
             except Exception:
                 pass
     return resumes
+
+@app.get("/api/jobs")
+async def get_all_jobs():
+    return get_jobs()
+
+class StatusUpdate(BaseModel):
+    status: str
+
+@app.put("/api/jobs/{job_id}/status")
+async def update_status(job_id: int, update: StatusUpdate):
+    updated = update_job_status(job_id, update.status)
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return updated
 
 @app.get("/")
 @app.get("/prototype")
@@ -227,6 +246,11 @@ async def logs_stream(task_id: str):
                 })
             }
             await asyncio.sleep(0.8)
+
+            # Save newly scraped jobs to SQLite DB and update IDs
+            for nj in new_jobs:
+                db_id = add_job(nj)
+                nj["id"] = db_id
 
             # 7. Yield the integrated results
             yield {

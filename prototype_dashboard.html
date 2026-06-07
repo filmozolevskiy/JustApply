@@ -1975,9 +1975,35 @@
       const job = masterJobs.find(j => j.id === id);
       if (job) {
         const oldStatus = job.status;
+        
+        // Optimistically update status and render
         job.status = newStatus;
-        addLogLine(`Moved card [${job.title}] from '${oldStatus}' to '${newStatus}'`, 'info');
+        addLogLine(`Moving card [${job.title}] from '${oldStatus}' to '${newStatus}'...`, 'info');
         renderActiveVariant();
+
+        fetch(`/api/jobs/${id}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: newStatus })
+        })
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP error " + r.status);
+          return r.json();
+        })
+        .then(updatedJob => {
+          // Sync with the backend's returned status
+          job.status = updatedJob.status;
+          addLogLine(`Successfully moved card [${job.title}] to '${updatedJob.status}' (persisted to DB)`, 'success');
+          renderActiveVariant();
+        })
+        .catch(err => {
+          // Revert status on failure
+          job.status = oldStatus;
+          addLogLine(`Failed to persist status change for [${job.title}]: ${err.message}. Reverted to '${oldStatus}'.`, 'warning');
+          renderActiveVariant();
+        });
       }
     }
 
@@ -2465,9 +2491,28 @@
         });
     }
 
+    function loadJobs() {
+      return fetch('/api/jobs')
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP error " + r.status);
+          return r.json();
+        })
+        .then(data => {
+          if (data && data.length > 0) {
+            masterJobs = data;
+            addLogLine(`Loaded ${data.length} jobs dynamically from /api/jobs`, 'success');
+            renderActiveVariant();
+          }
+        })
+        .catch(err => {
+          addLogLine("Could not fetch jobs from backend. Using static fallback database.", 'info');
+        });
+    }
+
     // Initialize
     initVariant();
     loadResumes();
+    loadJobs();
   </script>
 </body>
 </html>

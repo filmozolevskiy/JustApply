@@ -22,3 +22,8 @@ bin/
 
 # macOS
 .DS_Store
+
+# Databases
+*.db
+job_tracker.db
+
