@@ -273,6 +273,34 @@ def update_job_status(job_id, status, db_path=None):
     conn.close()
     return job
 
+def update_job_comment(job_id, comment, db_path=None):
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE jobs SET comment = ? WHERE id = ?", (comment, job_id))
+    conn.commit()
+    
+    # Get updated job
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+        
+    job = dict(row)
+    for field in ["strengths", "gaps", "contacts"]:
+        if job.get(field):
+            try:
+                job[field] = json.loads(job[field])
+            except Exception:
+                job[field] = []
+        else:
+            job[field] = []
+    job["shouldProceed"] = bool(job["shouldProceed"])
+    conn.close()
+    return job
+
 def add_job(job, db_path=None):
     if db_path is None:
         db_path = DB_PATH

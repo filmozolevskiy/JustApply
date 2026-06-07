@@ -1564,6 +1564,7 @@
     let activeResume = "qa.md";
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
+    let commentTimeout = null;
 
     // ----------------------------------------------------
     // VARIANT MANAGER (A, B, C Switcher)
@@ -2387,7 +2388,36 @@
       const job = masterJobs.find(j => j.id === id);
       if (job) {
         job.comment = value;
+        // Sync to board immediately (updates card snippet on board face)
+        renderActiveVariant();
       }
+
+      // Debounce database sync to 500ms
+      if (commentTimeout) {
+        clearTimeout(commentTimeout);
+      }
+      commentTimeout = setTimeout(() => {
+        fetch(`/api/jobs/${id}/comment`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ comment: value })
+        })
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP error " + r.status);
+          return r.json();
+        })
+        .then(updatedJob => {
+          if (job) {
+            job.comment = updatedJob.comment;
+          }
+          addLogLine(`Successfully saved comment for [${job ? job.title : id}] to DB`, 'success');
+        })
+        .catch(err => {
+          addLogLine(`Failed to save comment: ${err.message}`, 'warning');
+        });
+      }, 500);
     }
 
     function toggleContacted(jobId, contactIdx, isChecked) {

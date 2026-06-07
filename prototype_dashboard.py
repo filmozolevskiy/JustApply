@@ -6,7 +6,7 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import FileResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
-from database import init_db, get_jobs, update_job_status, add_job
+from database import init_db, get_jobs, update_job_status, add_job, update_job_comment
 
 # Initialize SQLite database
 init_db()
@@ -50,6 +50,16 @@ class StatusUpdate(BaseModel):
 @app.put("/api/jobs/{job_id}/status")
 async def update_status(job_id: int, update: StatusUpdate):
     updated = update_job_status(job_id, update.status)
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return updated
+
+class CommentUpdate(BaseModel):
+    comment: str
+
+@app.put("/api/jobs/{job_id}/comment")
+async def update_comment(job_id: int, update: CommentUpdate):
+    updated = update_job_comment(job_id, update.comment)
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     return updated

@@ -68,3 +68,35 @@ def test_update_nonexistent_job(tmp_path):
     
     res = update_job_status(999, "applied", db_str)
     assert res is None
+
+def test_update_job_comment(tmp_path):
+    test_db = tmp_path / "test_job_tracker.db"
+    db_str = str(test_db)
+    init_db(db_str)
+    
+    from database import update_job_comment
+    
+    # Verify initial comment of job 1
+    jobs = get_jobs(db_str)
+    job1 = next(j for j in jobs if j["id"] == 1)
+    assert job1["comment"] == "Excellent match. Framework matches 100%."
+    
+    # Update comment
+    new_comment = "New test comment here"
+    updated = update_job_comment(1, new_comment, db_str)
+    assert updated is not None
+    assert updated["comment"] == new_comment
+    
+    # Verify persistence
+    jobs_after = get_jobs(db_str)
+    job1_after = next(j for j in jobs_after if j["id"] == 1)
+    assert job1_after["comment"] == new_comment
+
+def test_update_job_comment_nonexistent(tmp_path):
+    test_db = tmp_path / "test_job_tracker.db"
+    db_str = str(test_db)
+    init_db(db_str)
+    
+    from database import update_job_comment
+    res = update_job_comment(999, "No comment", db_str)
+    assert res is None

@@ -64,3 +64,27 @@ def test_put_job_status_nonexistent():
     put_response = client.put("/api/jobs/999/status", json={"status": "evaluating"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
+
+def test_put_job_comment_endpoint():
+    # Verify initial comment is whatever was seeded
+    response = client.get("/api/jobs")
+    jobs = response.json()
+    job1 = next(j for j in jobs if j["id"] == 1)
+    assert job1["comment"] == "Excellent match. Framework matches 100%."
+    
+    # Update comment
+    put_response = client.put("/api/jobs/1/comment", json={"comment": "Verified API testing framework."})
+    assert put_response.status_code == 200
+    updated_job = put_response.json()
+    assert updated_job["comment"] == "Verified API testing framework."
+    
+    # Verify via subsequent GET
+    response = client.get("/api/jobs")
+    jobs = response.json()
+    job1_updated = next(j for j in jobs if j["id"] == 1)
+    assert job1_updated["comment"] == "Verified API testing framework."
+
+def test_put_job_comment_nonexistent():
+    put_response = client.put("/api/jobs/999/comment", json={"comment": "No job here"})
+    assert put_response.status_code == 404
+    assert put_response.json() == {"message": "Job not found"}
