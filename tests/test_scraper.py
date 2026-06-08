@@ -148,3 +148,34 @@ def test_api_logs_replay_reconnection():
         # Clean up
         active_tasks.pop(task_id, None)
 
+
+@pytest.mark.asyncio
+async def test_scraper_fallback_on_api_error(monkeypatch):
+    # Temporarily set API key to force real scraper path
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    
+    # Mock httpx.AsyncClient.post to raise an exception, simulating API error
+    import httpx
+    
+    async def mock_post(*args, **kwargs):
+        raise httpx.RequestError("Mocked Bright Data API failure")
+        
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+    
+    # Run scraper, it should hit the exception, log it, and safely fall back to mock data
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="New York",
+        remote_types="remote",
+        seniorities="senior",
+        company_sizes="large",
+        log_func=print,
+        force_mock=False
+    )
+    
+    # Verify we successfully got the fallback mock job
+    assert len(jobs) == 1
+    assert jobs[0]["company"] == "ScaleLabs Inc."
+
+

@@ -311,12 +311,17 @@ async def scrape_linkedin_jobs(
 
                 # Polling loop
                 progress_url = f"https://api.brightdata.com/datasets/v3/progress/{snapshot_id}"
+                max_polls = 120  # 120 * 5s = 10 minutes maximum
+                polls = 0
                 while True:
+                    polls += 1
+                    if polls > max_polls:
+                        raise Exception("Bright Data scraping job timed out after 10 minutes.")
+
                     await asyncio.sleep(5.0)
                     progress_resp = await client.get(progress_url, headers=headers)
                     if progress_resp.status_code != 200:
-                        await log(f"Error checking progress: HTTP {progress_resp.status_code}", "warning")
-                        continue
+                        raise Exception(f"Failed to check scraper progress: HTTP {progress_resp.status_code} - {progress_resp.text}")
                     
                     progress_data = progress_resp.json()
                     status = progress_data.get("status")
@@ -349,8 +354,19 @@ async def scrape_linkedin_jobs(
                 await log(f"Retrieved {len(raw_mock_jobs)} raw results from Bright Data.", "info")
 
             except Exception as e:
-                await log(f"Bright Data API Error: {str(e)}.", "error")
-                raise e
+                await log(f"Bright Data API Error: {str(e)}. Falling back to local simulation.", "warning")
+                # Fallback to simulation by forcing the mock scraper
+                return await scrape_linkedin_jobs(
+                    query=query,
+                    location=location,
+                    remote_types=remote_types,
+                    seniorities=seniorities,
+                    company_sizes=company_sizes,
+                    countries=countries,
+                    time_range=time_range,
+                    log_func=log_func,
+                    force_mock=True
+                )
 
     # Post-filtering phase
     await log(f"Processing and filtering {len(raw_mock_jobs)} raw results...", "info")
