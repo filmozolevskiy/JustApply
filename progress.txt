@@ -1,32 +1,5 @@
 # Ralph Loop Progress Log
 
-- Implemented Recruiting Company Guard & Salary Extraction (Backend) (#12):
-  - Added isRecruiter column to SQLite jobs table schema with migration on startup
-  - Modified Gemini matcher prompt to output isRecruiter and salary fields in structured JSON response
-  - Implemented check_recruiter_by_name local regex check to override/complement LLM results
-  - Applied 15-point matchScore penalty (capping at 70), set shouldProceed = False, and added agency notice to gaps for recruiting company listings
-  - Updated server.py and cli.py to parse, log, and write isRecruiter and salary details to database
-  - Created unit tests verifying classification, overrides, and penalization logic
-
-- Implemented UI Badges for Recruiter Warning and Extracted Salaries (#13):
-  - Updated job cards in dashboard.html to show a red 'Recruiter' badge when isRecruiter is true
-  - Grouped and displayed the extracted salary text next to remote policies on the job cards
-  - Updated the job details drawer to display a prominent gradient amber/rose warning banner explaining the match score penalty when isRecruiter is true
-  - Guaranteed the details drawer lists 'Posted by a recruiting agency/staffing firm' under Gaps
-  - Added a new mock recruiter contractor job to seed database and frontend mock data for direct verification
-  - Updated unit tests in test_database.py and test_dashboard_jobs.py to verify recruiter status/salary fields on seed jobs
-
-- Reconnected Scrape Task Logs on Page Refresh (#10):
-  - Stored the active background search task_id in localStorage when starting a job scrape run
-  - Implemented client-side initialization logic to check for active task_id on page reload
-  - Automatically restored the loading spinner state and display status of the log console panel
-  - Connected the EventSource to /api/logs/{task_id} to replay past logs and continue streaming new logs
-  - Cleared the task_id from localStorage upon task completion or failure
-  - Added automated integration tests verifying the SSE log replay reconnection behavior
-
-- Implemented Client-Side Board Filtering & Sorting (#11):
-  - Configured Remote Type, Company Size, and Sorting dropdowns to immediately filter and sort cards client-side
-  - Restored saved filter and sort values from localStorage on page refresh and applied them during initial card rendering
-  - Fixed company size matching bug for formatted numbers with commas (e.g. "1,000+", "10,000") in both frontend JS and backend Python
-  - Updated python unit tests in test_scraper.py to verify matching of company sizes with commas
-  - Ensured board rendering is triggered on load even when backend database is empty or fails to load, gracefully falling back to static database
+- Refactored scrape_linkedin_jobs in src/core/scraper.py into private helper functions _scrape_linkedin_jobs_mock and _scrape_linkedin_jobs_real.
+- Added upfront configuration validation to raise a ValueError immediately when running in production mode (MOCK_SCRAPER false/unset) without a configured BRIGHTDATA_API_KEY.
+- Implemented unit tests verifying that missing credentials trigger the ValueError check.

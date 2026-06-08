@@ -166,6 +166,166 @@ def normalize_brightdata_job(job: dict) -> dict:
         "contacts": contacts
     }
 
+async def _scrape_linkedin_jobs_mock(
+    query: str,
+    location: str,
+    log: callable
+) -> list:
+    """Generate mock LinkedIn job search listings."""
+    await log("Initializing Bright Data Mock API...", "info")
+    await asyncio.sleep(0.5)
+    await log("Connecting to mock proxy node...", "info")
+    await asyncio.sleep(0.5)
+    await log("Sending mock search request...", "warning")
+    await asyncio.sleep(0.5)
+    await log("Scraped 15 raw mock listings from simulated LinkedIn API", "info")
+    
+    return [
+        {
+            "job_title": f"Senior {query}",
+            "company_name": "ScaleLabs Inc.",
+            "company_size": "750",
+            "url": "https://linkedin.com/jobs/mock-991",
+            "date_posted": "2026-06-07",
+            "job_location": location,
+            "job_summary": f"We are seeking a senior practitioner in {query} to lead our automation pipelines and delivery patterns. The ideal candidate will work remote or hybrid.",
+            "job_seniority_level": "senior",
+            "salary": "$145k - $175k",
+            "is_remote": True,
+            "job_poster": {
+                "name": "Sarah Jenkins",
+                "title": "Recruiting Director",
+                "url": "https://linkedin.com/in/sarah-jenkins-mocked"
+            }
+        },
+        {
+            "job_title": f"Lead {query} Developer",
+            "company_name": "BrightFlow Co.",
+            "company_size": "150",
+            "url": "https://linkedin.com/jobs/mock-992",
+            "date_posted": "2026-06-07",
+            "job_location": location,
+            "job_summary": f"Lead development and QA integrations for our data processing streams. High proficiency in {query} required.",
+            "job_seniority_level": "senior",
+            "is_hybrid": True,
+            "salary": "$160k - $190k"
+        },
+        {
+            "job_title": f"Junior {query} Assistant",
+            "company_name": "WebStart LLC",
+            "company_size": "25",
+            "url": "https://linkedin.com/jobs/mock-993",
+            "date_posted": "2026-06-07",
+            "job_location": "San Francisco, CA",
+            "job_summary": f"Help our engineering team with entry level tasks regarding {query}. Work in PST timezone only.",
+            "job_seniority_level": "junior",
+            "salary": "$70k - $90k"
+        }
+    ]
+
+async def _scrape_linkedin_jobs_real(
+    query: str,
+    location: str,
+    countries: list,
+    time_range: str,
+    api_key: str,
+    scraper_id: str,
+    log: callable
+) -> list:
+    """Trigger and poll the Bright Data LinkedIn scraper API to retrieve job listings."""
+    await log(f"Initializing Bright Data scraping engine for query: '{query}' in '{location}'", "info")
+    
+    trigger_url = "https://api.brightdata.com/datasets/v3/trigger"
+    params = {
+        "dataset_id": scraper_id,
+        "include_errors": "true",
+        "type": "discover_new",
+        "discover_by": "keyword"
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = []
+    for country in countries:
+        item = {
+            "keyword": query,
+            "location": location,
+            "country": country.upper()
+        }
+        if time_range and time_range.lower() not in ["any", "anytime"]:
+            time_range_mapping = {
+                "past 24 hours": "Past 24 hours",
+                "past week": "Past week",
+                "past month": "Past month"
+            }
+            normalized_key = time_range.lower().replace("_", " ")
+            item["time_range"] = time_range_mapping.get(normalized_key, time_range)
+        payload.append(item)
+
+    await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(trigger_url, params=params, headers=headers, json=payload)
+            if response.status_code != 200:
+                raise Exception(f"Failed to trigger scraper: HTTP {response.status_code} - {response.text}")
+            
+            trigger_data = response.json()
+            snapshot_id = trigger_data.get("snapshot_id")
+            if not snapshot_id:
+                raise Exception(f"No snapshot_id returned in trigger response: {trigger_data}")
+            
+            await log(f"Bright Data scraping job triggered: {snapshot_id}", "warning")
+
+            # Polling loop
+            progress_url = f"https://api.brightdata.com/datasets/v3/progress/{snapshot_id}"
+            max_polls = 120  # 120 * 5s = 10 minutes maximum
+            polls = 0
+            while True:
+                polls += 1
+                if polls > max_polls:
+                    raise Exception("Bright Data scraping job timed out after 10 minutes.")
+
+                await asyncio.sleep(5.0)
+                progress_resp = await client.get(progress_url, headers=headers)
+                if progress_resp.status_code != 200:
+                    raise Exception(f"Failed to check scraper progress: HTTP {progress_resp.status_code} - {progress_resp.text}")
+                
+                progress_data = progress_resp.json()
+                status = progress_data.get("status")
+                await log(f"Scraper status: {status}", "info")
+                
+                if status == "ready":
+                    break
+                elif status == "failed":
+                    raise Exception("Bright Data scraper job reported failure.")
+            
+            # Fetch results
+            snapshot_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
+            snapshot_resp = await client.get(snapshot_url, headers=headers)
+            if snapshot_resp.status_code != 200:
+                raise Exception(f"Failed to fetch snapshot results: HTTP {snapshot_resp.status_code}")
+            
+            try:
+                raw_jobs = snapshot_resp.json()
+            except json.JSONDecodeError:
+                raw_jobs = []
+                for line in snapshot_resp.text.splitlines():
+                    line = line.strip()
+                    if line:
+                        try:
+                            raw_jobs.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+            if not isinstance(raw_jobs, list):
+                raw_jobs = [raw_jobs]
+            await log(f"Retrieved {len(raw_jobs)} raw results from Bright Data.", "info")
+            return raw_jobs
+
+        except Exception as e:
+            await log(f"Bright Data API Error: {str(e)}.", "error")
+            raise e
+
 async def scrape_linkedin_jobs(
     query: str, 
     location: str, 
@@ -188,6 +348,12 @@ async def scrape_linkedin_jobs(
             else:
                 log_func(msg, level)
 
+    mock_scraper = force_mock or os.getenv("MOCK_SCRAPER", "false").lower() == "true"
+    api_key = os.getenv("BRIGHTDATA_API_KEY")
+
+    if not mock_scraper and not api_key:
+        raise ValueError("BRIGHTDATA_API_KEY environment variable is missing. Please configure it in your .env file or enable mock mode.")
+
     # Convert settings filters to lists of lowercase strings
     if remote_types and isinstance(remote_types, str):
         remote_types = [t.strip().lower() for t in remote_types.split(",") if t.strip()]
@@ -208,173 +374,27 @@ async def scrape_linkedin_jobs(
     countries = countries or ["us"]
     time_range = time_range or "any"
 
-    mock_scraper = force_mock or os.getenv("MOCK_SCRAPER", "false").lower() == "true"
-    api_key = os.getenv("BRIGHTDATA_API_KEY")
-    scraper_id = os.getenv("BRIGHTDATA_JOB_SCRAPER_ID", "gd_lpfll7v5hcqtkxl6l")
-
-    if mock_scraper or not api_key:
-        await log("Initializing Bright Data Mock API...", "info")
-        await asyncio.sleep(0.5)
-        await log("Connecting to mock proxy node...", "info")
-        await asyncio.sleep(0.5)
-        await log("Sending mock search request...", "warning")
-        await asyncio.sleep(0.5)
-        await log("Scraped 15 raw mock listings from simulated LinkedIn API", "info")
-        
-        # Simulated raw items returning from Bright Data
-        raw_mock_jobs = [
-            {
-                "job_title": f"Senior {query}",
-                "company_name": "ScaleLabs Inc.",
-                "company_size": "750",
-                "url": "https://linkedin.com/jobs/mock-991",
-                "date_posted": "2026-06-07",
-                "job_location": location,
-                "job_summary": f"We are seeking a senior practitioner in {query} to lead our automation pipelines and delivery patterns. The ideal candidate will work remote or hybrid.",
-                "job_seniority_level": "senior",
-                "salary": "$145k - $175k",
-                "is_remote": True,
-                "job_poster": {
-                    "name": "Sarah Jenkins",
-                    "title": "Recruiting Director",
-                    "url": "https://linkedin.com/in/sarah-jenkins-mocked"
-                }
-            },
-            {
-                "job_title": f"Lead {query} Developer",
-                "company_name": "BrightFlow Co.",
-                "company_size": "150",
-                "url": "https://linkedin.com/jobs/mock-992",
-                "date_posted": "2026-06-07",
-                "job_location": location,
-                "job_summary": f"Lead development and QA integrations for our data processing streams. High proficiency in {query} required.",
-                "job_seniority_level": "senior",
-                "is_hybrid": True,
-                "salary": "$160k - $190k"
-            },
-            {
-                "job_title": f"Junior {query} Assistant",
-                "company_name": "WebStart LLC",
-                "company_size": "25",
-                "url": "https://linkedin.com/jobs/mock-993",
-                "date_posted": "2026-06-07",
-                "job_location": "San Francisco, CA", # Non-eastern location for timezone checks
-                "job_summary": f"Help our engineering team with entry level tasks regarding {query}. Work in PST timezone only.",
-                "job_seniority_level": "junior",
-                "salary": "$70k - $90k"
-            }
-        ]
+    if mock_scraper:
+        raw_jobs = await _scrape_linkedin_jobs_mock(query, location, log)
     else:
-        await log(f"Initializing Bright Data scraping engine for query: '{query}' in '{location}'", "info")
-        
-        trigger_url = "https://api.brightdata.com/datasets/v3/trigger"
-        params = {
-            "dataset_id": scraper_id,
-            "include_errors": "true",
-            "type": "discover_new",
-            "discover_by": "keyword"
-        }
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = []
-        for country in countries:
-            item = {
-                "keyword": query,
-                "location": location,
-                "country": country.upper()
-            }
-            if time_range and time_range.lower() not in ["any", "anytime"]:
-                time_range_mapping = {
-                    "past 24 hours": "Past 24 hours",
-                    "past week": "Past week",
-                    "past month": "Past month"
-                }
-                normalized_key = time_range.lower().replace("_", " ")
-                item["time_range"] = time_range_mapping.get(normalized_key, time_range)
-            payload.append(item)
-
-        await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                response = await client.post(trigger_url, params=params, headers=headers, json=payload)
-                if response.status_code != 200:
-                    raise Exception(f"Failed to trigger scraper: HTTP {response.status_code} - {response.text}")
-                
-                trigger_data = response.json()
-                snapshot_id = trigger_data.get("snapshot_id")
-                if not snapshot_id:
-                    raise Exception(f"No snapshot_id returned in trigger response: {trigger_data}")
-                
-                await log(f"Bright Data scraping job triggered: {snapshot_id}", "warning")
-
-                # Polling loop
-                progress_url = f"https://api.brightdata.com/datasets/v3/progress/{snapshot_id}"
-                max_polls = 120  # 120 * 5s = 10 minutes maximum
-                polls = 0
-                while True:
-                    polls += 1
-                    if polls > max_polls:
-                        raise Exception("Bright Data scraping job timed out after 10 minutes.")
-
-                    await asyncio.sleep(5.0)
-                    progress_resp = await client.get(progress_url, headers=headers)
-                    if progress_resp.status_code != 200:
-                        raise Exception(f"Failed to check scraper progress: HTTP {progress_resp.status_code} - {progress_resp.text}")
-                    
-                    progress_data = progress_resp.json()
-                    status = progress_data.get("status")
-                    await log(f"Scraper status: {status}", "info")
-                    
-                    if status == "ready":
-                        break
-                    elif status == "failed":
-                        raise Exception("Bright Data scraper job reported failure.")
-                
-                # Fetch results
-                snapshot_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
-                snapshot_resp = await client.get(snapshot_url, headers=headers)
-                if snapshot_resp.status_code != 200:
-                    raise Exception(f"Failed to fetch snapshot results: HTTP {snapshot_resp.status_code}")
-                
-                try:
-                    raw_mock_jobs = snapshot_resp.json()
-                except json.JSONDecodeError:
-                    raw_mock_jobs = []
-                    for line in snapshot_resp.text.splitlines():
-                        line = line.strip()
-                        if line:
-                            try:
-                                raw_mock_jobs.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass
-                if not isinstance(raw_mock_jobs, list):
-                    raw_mock_jobs = [raw_mock_jobs]
-                await log(f"Retrieved {len(raw_mock_jobs)} raw results from Bright Data.", "info")
-
-            except Exception as e:
-                await log(f"Bright Data API Error: {str(e)}. Falling back to local simulation.", "warning")
-                # Fallback to simulation by forcing the mock scraper
-                return await scrape_linkedin_jobs(
-                    query=query,
-                    location=location,
-                    remote_types=remote_types,
-                    seniorities=seniorities,
-                    company_sizes=company_sizes,
-                    countries=countries,
-                    time_range=time_range,
-                    log_func=log_func,
-                    force_mock=True
-                )
+        scraper_id = os.getenv("BRIGHTDATA_JOB_SCRAPER_ID", "gd_lpfll7v5hcqtkxl6l")
+        raw_jobs = await _scrape_linkedin_jobs_real(
+            query=query,
+            location=location,
+            countries=countries,
+            time_range=time_range,
+            api_key=api_key,
+            scraper_id=scraper_id,
+            log=log
+        )
 
     # Post-filtering phase
-    await log(f"Processing and filtering {len(raw_mock_jobs)} raw results...", "info")
+    await log(f"Processing and filtering {len(raw_jobs)} raw results...", "info")
     
     keywords = get_keywords_for_position(query)
     filtered_jobs = []
 
-    for raw_job in raw_mock_jobs:
+    for raw_job in raw_jobs:
         normalized = normalize_brightdata_job(raw_job)
         
         # 1. Title/Keyword filter

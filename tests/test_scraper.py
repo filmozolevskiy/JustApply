@@ -48,6 +48,32 @@ async def test_scraper_mock_yields():
     assert jobs[0]["remoteType"] == "remote"
     assert jobs[0]["seniority"] == "senior"
 
+@pytest.mark.asyncio
+async def test_scraper_missing_api_key_raises_value_error(monkeypatch):
+    # Set MOCK_SCRAPER to false
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    # Ensure BRIGHTDATA_API_KEY is not in environment
+    monkeypatch.delenv("BRIGHTDATA_API_KEY", raising=False)
+    
+    with pytest.raises(ValueError) as excinfo:
+        await scrape_linkedin_jobs(
+            query="QA Engineer",
+            location="New York",
+        )
+    assert "BRIGHTDATA_API_KEY" in str(excinfo.value)
+
+@pytest.mark.asyncio
+async def test_scraper_unset_mock_scraper_and_missing_api_key_raises_value_error(monkeypatch):
+    monkeypatch.delenv("MOCK_SCRAPER", raising=False)
+    monkeypatch.delenv("BRIGHTDATA_API_KEY", raising=False)
+    
+    with pytest.raises(ValueError) as excinfo:
+        await scrape_linkedin_jobs(
+            query="QA Engineer",
+            location="New York",
+        )
+    assert "BRIGHTDATA_API_KEY" in str(excinfo.value)
+
 def test_company_size_matching():
     assert match_company_size("1-50", ["small"]) is True
     assert match_company_size("100-500", ["medium"]) is True
@@ -147,35 +173,4 @@ def test_api_logs_replay_reconnection():
     finally:
         # Clean up
         active_tasks.pop(task_id, None)
-
-
-@pytest.mark.asyncio
-async def test_scraper_fallback_on_api_error(monkeypatch):
-    # Temporarily set API key to force real scraper path
-    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
-    monkeypatch.setenv("MOCK_SCRAPER", "false")
-    
-    # Mock httpx.AsyncClient.post to raise an exception, simulating API error
-    import httpx
-    
-    async def mock_post(*args, **kwargs):
-        raise httpx.RequestError("Mocked Bright Data API failure")
-        
-    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
-    
-    # Run scraper, it should hit the exception, log it, and safely fall back to mock data
-    jobs = await scrape_linkedin_jobs(
-        query="QA Engineer",
-        location="New York",
-        remote_types="remote",
-        seniorities="senior",
-        company_sizes="large",
-        log_func=print,
-        force_mock=False
-    )
-    
-    # Verify we successfully got the fallback mock job
-    assert len(jobs) == 1
-    assert jobs[0]["company"] == "ScaleLabs Inc."
-
 

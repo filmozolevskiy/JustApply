@@ -17,8 +17,8 @@ An LLM-based component that compares job descriptions with candidate resumes to 
 _Avoid_: Resume filter, CV checker
 
 **LinkedIn Scraper API**:
-A hybrid web scraping integration using third-party APIs (Bright Data for job listings and Apify for company employee details) to fetch data without requiring personal LinkedIn credentials or cookies.
-_Avoid_: Local scraper, browser automation, LinkedIn MCP server
+A hybrid web scraping integration using third-party APIs (Bright Data for job listings and Apify for company employee details) to fetch data without requiring personal LinkedIn credentials or cookies. It operates in a fail-fast manner with trigger rate-limiting to protect API credentials and credits from run-away loops.
+_Avoid_: Local scraper, browser automation, LinkedIn MCP server, silent mock fallbacks
 
 **Russian Speaker**:
 A company employee identified (via Gemini name/headline classification) as likely having a Russian or CIS cultural background. Targeted for referral outreach because shared cultural background increases referral likelihood — not limited to HR or recruiting roles.
