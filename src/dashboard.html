@@ -303,6 +303,17 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    }
+
+    .terminal-console.shrunk {
+      height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-color: transparent;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
     }
 
     .terminal-line {
@@ -937,7 +948,10 @@
       <div class="glass-panel" id="kb-logs-panel" style="margin-bottom: 16px; padding: 16px 24px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h3 style="margin: 0; border: none; padding: 0; font-size: 1.1rem; color: var(--text-primary);"><i class="fa-solid fa-terminal"></i> Task Logs</h3>
-          <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="clearLogs()">Clear</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="clearLogs()">Clear</button>
+            <button class="btn btn-secondary" id="toggle-logs-btn" style="padding: 4px 8px; font-size: 0.75rem;" onclick="toggleLogsHeight()"><i class="fa-solid fa-chevron-up"></i> Collapse</button>
+          </div>
         </div>
         <div class="terminal-console" id="kb-logs-console">
           <div class="terminal-line"><span class="terminal-time">13:10:00</span><span class="terminal-text">System initialized. Ready to trigger.</span></div>
@@ -1740,6 +1754,7 @@
       if (kbLogsPanel) {
         kbLogsPanel.style.display = 'block';
       }
+      expandLogsConsole();
 
       let logMsg = `Initiating async scraper task. Query: "${query}", Location: "${location}", Countries: [${countries.toUpperCase()}], Time: ${time_range}, Engine: ${platform}`;
       let activeFilters = [];
@@ -1854,6 +1869,7 @@
       if (kbLogsPanel) {
         kbLogsPanel.style.display = 'block';
       }
+      expandLogsConsole();
 
       // Simulate locally
       let steps = [
@@ -1977,6 +1993,41 @@
           consoleEl.innerHTML = '<div class="terminal-line"><span class="terminal-time">' + new Date().toTimeString().split(' ')[0] + '</span><span class="terminal-text">Console cleared. Ready.</span></div>';
         }
       });
+    }
+
+    function toggleLogsHeight() {
+      const consoleEl = document.getElementById('kb-logs-console');
+      const btn = document.getElementById('toggle-logs-btn');
+      if (consoleEl && btn) {
+        const isShrunk = consoleEl.classList.toggle('shrunk');
+        if (isShrunk) {
+          btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Expand';
+          localStorage.setItem('logsConsoleShrunk', 'true');
+        } else {
+          btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
+          localStorage.setItem('logsConsoleShrunk', 'false');
+        }
+      }
+    }
+
+    function expandLogsConsole() {
+      const consoleEl = document.getElementById('kb-logs-console');
+      const btn = document.getElementById('toggle-logs-btn');
+      if (consoleEl && consoleEl.classList.contains('shrunk') && btn) {
+        consoleEl.classList.remove('shrunk');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
+        localStorage.setItem('logsConsoleShrunk', 'false');
+      }
+    }
+
+    function initLogsConsoleState() {
+      const isShrunk = localStorage.getItem('logsConsoleShrunk') === 'true';
+      const consoleEl = document.getElementById('kb-logs-console');
+      const btn = document.getElementById('toggle-logs-btn');
+      if (consoleEl && btn && isShrunk) {
+        consoleEl.classList.add('shrunk');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Expand';
+      }
     }
 
     // --- DETAILED DRAWER (Kanban & Table Details) ---
@@ -2299,6 +2350,7 @@
       if (kbLogsPanel) {
         kbLogsPanel.style.display = 'block';
       }
+      expandLogsConsole();
 
       const btnTop = document.getElementById('kb-scrape-btn-top');
       const btnPanel = document.getElementById('kb-scrape-btn-panel');
@@ -2362,6 +2414,7 @@
 
     // Initialize
     initBoardControls();
+    initLogsConsoleState();
     loadResumes();
     loadJobs().then(() => {
       restoreActiveScrapeTask();
