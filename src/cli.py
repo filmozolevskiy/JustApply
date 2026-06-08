@@ -16,6 +16,9 @@ from src.core.matcher import load_resume, evaluate_job
 from src.core.outreach import source_contacts
 
 
+LOCK_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".last_trigger")
+
+
 async def run_search(
     position: str,
     sites: list = None,
@@ -23,6 +26,30 @@ async def run_search(
     allowed_remote_types: list = None
 ) -> list:
     """Search for jobs using Bright Data scraper, evaluate via LLM, save to SQLite."""
+    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
+    is_real = (not mock_eval) or (not is_mock_scraper)
+    if is_real:
+        import time
+        current_time = time.time()
+        if os.path.exists(LOCK_FILE_PATH):
+            try:
+                with open(LOCK_FILE_PATH, "r") as f:
+                    content = f.read().strip()
+                    if content:
+                        last_time = float(content)
+                        elapsed = current_time - last_time
+                        if elapsed < 60:
+                            print(f"Warning: Rate limit active. Please wait {int(60 - elapsed)} seconds.", file=sys.stderr)
+                            sys.exit(1)
+            except (ValueError, OSError):
+                pass
+        
+        try:
+            with open(LOCK_FILE_PATH, "w") as f:
+                f.write(str(current_time))
+        except OSError:
+            pass
+
     print(f"Starting search pipeline for position: {position}")
 
     def log_sync(msg: str, level: str = "info"):

@@ -6,4 +6,6 @@
 - Implemented fail-fast error handling for Bright Data scraper triggering in _scrape_linkedin_jobs_real(), raising errors immediately without automatic retry or recursive mock fallback.
 - Added finite retry loops (up to 3 attempts) with exponential backoff for subsequent polling and download checks.
 - Wrote integration tests verifying the immediate error propagation and the retry-with-backoff loop behaviour.
-
+- Implemented a 60-second rate-limiter guard on trigger requests across the FastAPI server (/api/search and /api/scrape endpoints) and CLI (run_search in src/cli.py) to prevent rapid consecutive credit-consuming runs.
+- Enforced rate-limiting only for real runs (where mock_eval or MOCK_SCRAPER is false).
+- Created a test suite tests/test_rate_limiter.py to verify 60-second rate-limiting and bypass logic on both CLI and HTTP server interfaces.

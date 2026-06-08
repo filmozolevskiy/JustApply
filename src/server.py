@@ -23,6 +23,9 @@ RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "resumes")
 # In-memory storage for active scraping sessions
 active_tasks = {}
 
+# Global variable to track the last trigger time for rate-limiting (in seconds)
+last_trigger_time = None
+
 
 @app.get("/api/health")
 async def health_check():
@@ -344,6 +347,21 @@ async def run_scraping_task(task_id: str):
 
 @app.post("/api/search")
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
+    global last_trigger_time
+    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
+    is_real = (not request.mock_eval) or (not is_mock_scraper)
+    if is_real:
+        import time
+        current_time = time.time()
+        if last_trigger_time is not None:
+            elapsed = current_time - last_trigger_time
+            if elapsed < 60:
+                return JSONResponse(
+                    status_code=429,
+                    content={"message": "Too many requests. Please wait 60 seconds between trigger requests."}
+                )
+        last_trigger_time = current_time
+
     task_id = str(uuid.uuid4())
     state = TaskState(request.model_dump())
     active_tasks[task_id] = state
@@ -366,6 +384,21 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
+    global last_trigger_time
+    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
+    is_real = (not mock_eval) or (not is_mock_scraper)
+    if is_real:
+        import time
+        current_time = time.time()
+        if last_trigger_time is not None:
+            elapsed = current_time - last_trigger_time
+            if elapsed < 60:
+                return JSONResponse(
+                    status_code=429,
+                    content={"message": "Too many requests. Please wait 60 seconds between trigger requests."}
+                )
+        last_trigger_time = current_time
+
     task_id = str(uuid.uuid4())
     params = {
         "query": query,

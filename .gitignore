@@ -28,3 +28,5 @@ bin/
 job_tracker.db
 uvicorn.log
 
+# CLI lock file
+.last_trigger
