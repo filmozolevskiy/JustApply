@@ -16,3 +16,12 @@
   - Added a new mock recruiter contractor job to seed database and frontend mock data for direct verification
   - Updated unit tests in test_database.py and test_dashboard_jobs.py to verify recruiter status/salary fields on seed jobs
 
+- Reconnected Scrape Task Logs on Page Refresh (#10):
+  - Stored the active background search task_id in localStorage when starting a job scrape run
+  - Implemented client-side initialization logic to check for active task_id on page reload
+  - Automatically restored the loading spinner state and display status of the log console panel
+  - Connected the EventSource to /api/logs/{task_id} to replay past logs and continue streaming new logs
+  - Cleared the task_id from localStorage upon task completion or failure
+  - Added automated integration tests verifying the SSE log replay reconnection behavior
+
+

@@ -106,3 +106,44 @@ def test_api_search_and_sse_logs():
     # The mock returns 2-3 jobs depending on filtering. In search_payload we passed "any" for all filters,
     # so we should get multiple matching jobs.
     assert len(db_jobs) > 6
+
+
+def test_api_logs_replay_reconnection():
+    # Create a task state manually in active_tasks
+    task_id = "test-reconnect-task-id"
+    from src.server import active_tasks, TaskState
+    
+    state = TaskState({"query": "test"})
+    # Manually append some logs
+    state.logs = [
+        {"level": "info", "message": "Log message 1"},
+        {"level": "warning", "message": "Log message 2"}
+    ]
+    # Set status to completed so event generator completes immediately
+    state.status = "completed"
+    # Put None in queue so the stream loop exits immediately
+    state.queue.put_nowait(None)
+    
+    active_tasks[task_id] = state
+    
+    try:
+        # Retrieve logs using SSE endpoint
+        with client.stream("GET", f"/api/logs/{task_id}") as stream_resp:
+            assert stream_resp.status_code == 200
+            
+            events = []
+            for line in stream_resp.iter_lines():
+                if line.startswith("data:"):
+                    data_json = json.loads(line[5:])
+                    events.append(data_json)
+                    
+        # Verify the logs are replayed
+        assert len(events) == 4  # log 1, log 2, result, done
+        assert events[0] == {"type": "log", "level": "info", "message": "Log message 1"}
+        assert events[1] == {"type": "log", "level": "warning", "message": "Log message 2"}
+        assert events[2]["type"] == "result"
+        assert events[3] == {"type": "done"}
+    finally:
+        # Clean up
+        active_tasks.pop(task_id, None)
+
