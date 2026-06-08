@@ -973,6 +973,16 @@
               <option value="large">Large (500+)</option>
             </select>
           </div>
+
+          <!-- Recruiter Filter -->
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="board-filter-recruiter" style="font-size: 0.8rem; color: var(--text-muted);">Recruiter:</label>
+            <select id="board-filter-recruiter" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+              <option value="all">Show All</option>
+              <option value="exclude" selected>Hide Recruiters</option>
+              <option value="only">Recruiters Only</option>
+            </select>
+          </div>
         </div>
         
         <!-- Sorting -->
@@ -1286,6 +1296,7 @@
 
       const remoteFilter = document.getElementById('board-filter-remote')?.value || 'all';
       const sizeFilter = document.getElementById('board-filter-size')?.value || 'all';
+      const recruiterFilter = document.getElementById('board-filter-recruiter')?.value || 'all';
       const sortBy = document.getElementById('board-sort-by')?.value || 'match_desc';
 
       // 1. Filter jobs
@@ -1301,6 +1312,16 @@
         if (sizeFilter !== 'all') {
           const sizeCat = getCompanySizeCategory(job.size);
           if (sizeCat !== sizeFilter) {
+            return false;
+          }
+        }
+
+        if (recruiterFilter === 'exclude') {
+          if (job.isRecruiter) {
+            return false;
+          }
+        } else if (recruiterFilter === 'only') {
+          if (!job.isRecruiter) {
             return false;
           }
         }
@@ -1413,10 +1434,12 @@
     function updateBoardFiltersAndSort() {
       const remoteFilter = document.getElementById('board-filter-remote')?.value || 'all';
       const sizeFilter = document.getElementById('board-filter-size')?.value || 'all';
+      const recruiterFilter = document.getElementById('board-filter-recruiter')?.value || 'all';
       const sortBy = document.getElementById('board-sort-by')?.value || 'match_desc';
 
       localStorage.setItem('boardFilterRemote', remoteFilter);
       localStorage.setItem('boardFilterSize', sizeFilter);
+      localStorage.setItem('boardFilterRecruiter', recruiterFilter);
       localStorage.setItem('boardSortBy', sortBy);
 
       renderActiveVariant();
@@ -1425,14 +1448,17 @@
     function initBoardControls() {
       const remoteFilter = localStorage.getItem('boardFilterRemote') || 'all';
       const sizeFilter = localStorage.getItem('boardFilterSize') || 'all';
+      const recruiterFilter = localStorage.getItem('boardFilterRecruiter') || 'exclude';
       const sortBy = localStorage.getItem('boardSortBy') || 'match_desc';
 
       const remoteEl = document.getElementById('board-filter-remote');
       const sizeEl = document.getElementById('board-filter-size');
+      const recruiterEl = document.getElementById('board-filter-recruiter');
       const sortEl = document.getElementById('board-sort-by');
 
       if (remoteEl) remoteEl.value = remoteFilter;
       if (sizeEl) sizeEl.value = sizeFilter;
+      if (recruiterEl) recruiterEl.value = recruiterFilter;
       if (sortEl) sortEl.value = sortBy;
     }
 
