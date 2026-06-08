@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import inspect
+import re
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -9,6 +10,23 @@ load_dotenv()
 
 RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
 MODEL_NAME = "gemini-2.5-flash"
+
+RECRUITING_AGENCY_PATTERNS = [
+    r'\bhr\s+solutions\b', r'\bstaffing\b', r'\brecruiting\b', r'\bplacement\b',
+    r'\btalent\s+solutions\b', r'\bheadhunter\b', r'\bhuman\s+resources\b',
+    r'\brecruiters\b', r'\bpartners\b', r'\bassociates\b', r'\bagency\b',
+    r'\bjobspy\b', r'\bworkland\b', r'\br2\s+global\b', r'\bdelan\b',
+    r'\bfuze\s+hr\b', r'\brandstad\b', r'\brobert\s+half\b', r'\bteksystems\b',
+    r'\baerotek\b', r'\bkforce\b', r'\bignite\b', r'\bquantum\b', r'\bprocom\b'
+]
+
+
+def check_recruiter_by_name(company_name: str) -> bool:
+    if not company_name:
+        return False
+    name_lower = company_name.lower()
+    combined = re.compile('|'.join(RECRUITING_AGENCY_PATTERNS), re.IGNORECASE)
+    return bool(combined.search(name_lower))
 
 
 def load_resume(name: str) -> str:
@@ -46,7 +64,9 @@ Respond with a JSON object (no markdown, no extra text) in this exact format:
   "gaps": ["<gap 1>", "<gap 2>"],
   "shouldProceed": <true|false>,
   "remoteType": "<remote|hybrid|in_office>",
-  "summary": "<concise 2-3 sentence summary of the job listing, including key tech stack/responsibilities>"
+  "summary": "<concise 2-3 sentence summary of the job listing, including key tech stack/responsibilities>",
+  "isRecruiter": <true|false>,
+  "salary": "<extracted salary string or empty string>"
 }}
 
 Rules:
@@ -59,13 +79,17 @@ Rules:
 - If Candidate's Allowed Remote Preferences is not "any":
   * Check if the determined "remoteType" is one of the allowed remote preferences (e.g., if preferences are "remote" and the job is "hybrid" or "in_office", it is a mismatch).
   * If there is a mismatch: you MUST set "shouldProceed" to false, add the mismatch discrepancy to the "gaps" list (e.g., "Job is hybrid/in-office, but candidate prefers remote-only"), and lower the "matchScore" to be below 75 (typically between 30 and 60 depending on other factors).
+- Identify if the listing company is a recruiting/staffing/headhunting agency rather than the direct hiring employer (e.g. Randstad, Fuze HR, Teksystems, Robert Half, or if the description uses third-person phrasing like "Our client...", "A leading firm is seeking...", etc.).
+  * If the job is posted by a recruiting/staffing firm: set "isRecruiter" to true. In this case, you MUST set "shouldProceed" to false, add "Posted by a recruiting agency/staffing firm" to the "gaps" list, and apply a penalty to "matchScore" by subtracting 15 points (or capping it at a maximum of 70).
+  * If it is a direct employer, set "isRecruiter" to false.
+- Extract any salary/compensation details from the description (e.g., "$120,000 - $140,000" or "$75/hour"). Return it formatted cleanly under the "salary" key. If not mentioned in the description, return an empty string.
 """
 
 
 async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_remote_types: list = None) -> dict:
     """
     Evaluate a job against a resume using the Gemini API.
-    Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, summary.
+    Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, summary, isRecruiter, salary.
     Implements exponential backoff on rate limit (429) errors.
     Returns {} if no API key is configured or on unrecoverable error.
     """
@@ -77,6 +101,9 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_re
                 log_func(msg, level)
 
     api_key = os.getenv("GEMINI_API_KEY")
+    company_name = job.get("company", "")
+    local_is_recruiter = check_recruiter_by_name(company_name)
+
     if not api_key:
         await log("GEMINI_API_KEY not set, skipping evaluation.", "warning")
         return {}
@@ -87,7 +114,7 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_re
     prompt = _build_prompt(
         resume_content,
         job.get("title", ""),
-        job.get("company", ""),
+        company_name,
         job.get("description", ""),
         allowed_remote_types
     )
@@ -104,7 +131,25 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_re
                 if lines and lines[-1].startswith("```"):
                     lines = lines[:-1]
                 text = "\n".join(lines).strip()
-            return json.loads(text)
+            
+            result = json.loads(text)
+            
+            # Post-process with local recruiter check to be 100% reliable
+            if local_is_recruiter or result.get("isRecruiter"):
+                result["isRecruiter"] = True
+                result["shouldProceed"] = False
+                # Apply penalty if score is too high
+                if result.get("matchScore", 0) >= 75:
+                    result["matchScore"] = min(70, result["matchScore"] - 15)
+                elif result.get("matchScore", 0) > 0:
+                    result["matchScore"] = max(0, result["matchScore"] - 15)
+                result["matchType"] = "no-match"
+                
+                gaps = result.setdefault("gaps", [])
+                if "Posted by a recruiting agency/staffing firm" not in gaps:
+                    gaps.append("Posted by a recruiting agency/staffing firm")
+                    
+            return result
         except Exception as e:
             err_str = str(e)
             is_rate_limit = "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower()
@@ -117,3 +162,4 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_re
                 return {}
 
     return {}
+

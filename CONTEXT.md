@@ -40,3 +40,8 @@ _Avoid_: Sheets UI, Command Center
 A client-side UI component on the Kanban Dashboard allowing the user to filter job listings by remote type and company size, and sort them by match score or novelty in real-time.
 _Avoid_: DB filters, scraper filters, query controls
 
+**Recruiting Company**:
+A job posting publisher classified (via LLM matching or local company keyword lists) as a staffing or recruitment agency rather than the direct hiring employer. Job cards from recruiting companies display a dedicated badge on the Kanban Dashboard and are automatically discouraged by applying a compatibility score penalty.
+_Avoid_: Headhunter posting, agency recruiter
+
+

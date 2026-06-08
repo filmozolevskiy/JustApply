@@ -298,6 +298,16 @@ async def run_scraping_task(task_id: str):
                 job.setdefault("shouldProceed", True)
                 job.setdefault("strengths", ["Good technical background"])
                 job.setdefault("gaps", ["Review job requirements carefully"])
+                
+                from src.core.matcher import check_recruiter_by_name
+                if check_recruiter_by_name(company):
+                    job["isRecruiter"] = True
+                    job["shouldProceed"] = False
+                    job["matchScore"] = 70
+                    job["matchType"] = "no-match"
+                    job["gaps"].append("Posted by a recruiting agency/staffing firm")
+                else:
+                    job["isRecruiter"] = False
             elif resume_content:
                 await log_callback(f"Evaluating '{job['title']}' at {job['company']}...", "info")
                 evaluation = await evaluate_job(job, resume_content, log_callback, allowed_remote_types)
@@ -311,6 +321,9 @@ async def run_scraping_task(task_id: str):
                         job["remoteType"] = evaluation["remoteType"]
                     if "summary" in evaluation:
                         job["description"] = evaluation["summary"]
+                    job["isRecruiter"] = evaluation.get("isRecruiter", False)
+                    if evaluation.get("salary"):
+                        job["salary"] = evaluation["salary"]
 
             db_id = add_job(job)
             if db_id is not None:

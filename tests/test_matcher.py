@@ -185,3 +185,43 @@ def test_build_prompt_formatting():
         allowed_remote_types=["any", "remote"]
     )
     assert "Candidate's Allowed Remote Preferences: any" in prompt_any_list
+
+
+def test_recruiter_company_detection_local():
+    from src.core.matcher import check_recruiter_by_name
+    assert check_recruiter_by_name("Fuze HR Solutions") is True
+    assert check_recruiter_by_name("Randstad Canada") is True
+    assert check_recruiter_by_name("Google Inc.") is False
+    assert check_recruiter_by_name("Air Canada") is False
+
+
+@pytest.mark.asyncio
+async def test_evaluate_job_applies_recruiter_override():
+    from src.core.matcher import evaluate_job
+    from unittest.mock import patch, MagicMock, AsyncMock
+
+    recruiter_job = {
+        "title": "QA Analyst",
+        "company": "Fuze HR Solutions",
+        "description": "Our client is looking for a QA analyst...",
+        "salary": ""
+    }
+
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel") as mock_model_cls:
+        mock_model = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = '{"matchScore": 90, "matchType": "match", "strengths": ["Python"], "gaps": [], "shouldProceed": true, "remoteType": "remote", "summary": "QA Analyst job", "isRecruiter": false, "salary": "$110k"}'
+        mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+        mock_model_cls.return_value = mock_model
+
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            result = await evaluate_job(recruiter_job, "resume content")
+            
+            assert result["isRecruiter"] is True
+            assert result["shouldProceed"] is False
+            assert result["matchScore"] == 70
+            assert result["matchType"] == "no-match"
+            assert "Posted by a recruiting agency/staffing firm" in result["gaps"]
+            assert result["salary"] == "$110k"
+

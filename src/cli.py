@@ -68,6 +68,13 @@ async def run_search(
             job.setdefault("shouldProceed", False)
             job.setdefault("strengths", [])
             job.setdefault("gaps", [])
+            
+            from src.core.matcher import check_recruiter_by_name
+            if check_recruiter_by_name(company):
+                job["isRecruiter"] = True
+                job["gaps"].append("Posted by a recruiting agency/staffing firm")
+            else:
+                job["isRecruiter"] = False
         else:
             evaluation = await evaluate_job(job, resume_content, allowed_remote_types=allowed_remote_types)
             if evaluation:
@@ -80,6 +87,9 @@ async def run_search(
                     job["remoteType"] = evaluation["remoteType"]
                 if "summary" in evaluation:
                     job["description"] = evaluation["summary"]
+                job["isRecruiter"] = evaluation.get("isRecruiter", False)
+                if evaluation.get("salary"):
+                    job["salary"] = evaluation["salary"]
 
         job_id = database.add_job(job)
         if job_id is not None:

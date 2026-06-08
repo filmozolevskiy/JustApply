@@ -38,10 +38,19 @@ def init_db(db_path=None):
             gaps TEXT,
             contacts TEXT,
             outreachMessage TEXT,
-            comment TEXT
+            comment TEXT,
+            isRecruiter INTEGER DEFAULT 0
         )
     """)
     conn.commit()
+
+    # Migration: Add isRecruiter column to existing database if missing
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN isRecruiter INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        # Column already exists
+        pass
 
     # Check if table is empty, if so, seed it
     cursor.execute("SELECT COUNT(*) FROM jobs")
@@ -241,6 +250,7 @@ def get_jobs(db_path=None):
                 job[field] = []
         # Convert shouldProceed back to boolean
         job["shouldProceed"] = bool(job["shouldProceed"])
+        job["isRecruiter"] = bool(job.get("isRecruiter", 0))
         jobs.append(job)
     conn.close()
     return jobs
@@ -401,9 +411,9 @@ def add_job(job, db_path=None):
         INSERT INTO jobs (
             title, company, size, link, date, location, remoteType, seniority, salary,
             description, matchScore, matchType, shouldProceed, status, resumeUsed,
-            strengths, gaps, contacts, outreachMessage, comment
+            strengths, gaps, contacts, outreachMessage, comment, isRecruiter
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         title,
@@ -425,7 +435,8 @@ def add_job(job, db_path=None):
         json.dumps(job.get("gaps") or []),
         json.dumps(job.get("contacts") or []),
         job.get("outreachMessage") or "",
-        job.get("comment") or job.get("Comment") or ""
+        job.get("comment") or job.get("Comment") or "",
+        1 if job.get("isRecruiter") else 0
     ))
     new_id = cursor.lastrowid
     conn.commit()

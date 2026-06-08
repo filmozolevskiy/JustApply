@@ -1334,12 +1334,14 @@
                 <span class="match-pill ${matchClass}">${job.matchScore}%</span>
               </div>
             </div>
-            <div class="kanban-card-company">
-              <i class="fa-regular fa-building"></i> ${job.company}
+            <div class="kanban-card-company" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+              <span><i class="fa-regular fa-building"></i> ${job.company}</span>
+              ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(244, 63, 94, 0.15); color:#f43f5e; border:1px solid rgba(244, 63, 94, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
             </div>
-            <div class="kanban-card-meta">
+            <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
               <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
               <span style="text-transform:capitalize;">${job.remoteType}</span>
+              ${job.salary ? `<span style="color:#10b981; font-weight:500; font-size:0.75rem;"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</span>` : ''}
             </div>
             ${job.comment ? `
               <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -1949,6 +1951,13 @@
           </div>
           <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
         </div>
+
+        ${job.isRecruiter ? `
+          <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.85rem; color: #f43f5e; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span><strong>Recruiting / Staffing Agency Warning:</strong> This job posting was published by a recruitment or staffing agency, not directly by the employer. The match score has been penalized by 15 points.</span>
+          </div>
+        ` : ''}
 
         <div style="display:flex; flex-direction:column; gap:14px;">
           <div>
