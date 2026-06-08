@@ -28,7 +28,7 @@ def test_get_jobs_endpoint():
     response = client.get("/api/jobs")
     assert response.status_code == 200
     jobs = response.json()
-    assert len(jobs) == 6
+    assert len(jobs) == 7
     job1 = next(j for j in jobs if j["id"] == 1)
     assert job1["title"] == "Senior QA Automation Engineer"
     assert job1["company"] == "TechCorp"
@@ -36,6 +36,14 @@ def test_get_jobs_endpoint():
     assert job1["shouldProceed"] is True
     assert isinstance(job1["strengths"], list)
     assert isinstance(job1["contacts"], list)
+
+    job7 = next(j for j in jobs if j["id"] == 7)
+    assert job7["title"] == "QA Automation Contractor"
+    assert job7["company"] == "Fuze HR Solutions"
+    assert job7["isRecruiter"] is True
+    assert job7["shouldProceed"] is False
+    assert job7["salary"] == "$70 - $80 / hr"
+    assert "Posted by a recruiting agency/staffing firm" in job7["gaps"]
 
 
 def test_put_job_status_endpoint():

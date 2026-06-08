@@ -1231,6 +1231,30 @@
         ],
         outreachMessage: "Hi Tariq,\n\nCongratulations on expanding your engineering team. As a QA Lead who has previously built testing infrastructures for early stage startups, I would love to help AppStart structure its automation strategy.\n\nBest,\nCandidate",
         comment: "Tariq is active on LinkedIn posting engineering updates."
+      },
+      {
+        id: 7,
+        title: "QA Automation Contractor",
+        company: "Fuze HR Solutions",
+        size: "50-200",
+        link: "https://linkedin.com/jobs/129",
+        date: "2026-06-07",
+        location: "Toronto, ON",
+        remoteType: "hybrid",
+        seniority: "mid",
+        salary: "$70 - $80 / hr",
+        description: "Our client, a leading financial institution, is seeking a QA Automation Contractor to join their digital banking testing team. You will write automated test scripts in Python and execute regressions.",
+        matchScore: 65,
+        matchType: "no-match",
+        shouldProceed: false,
+        status: "sourced",
+        resumeUsed: "qa.md",
+        strengths: ["Python scripting background", "Experience with QA regression testing"],
+        gaps: ["Posted by a recruiting agency/staffing firm"],
+        contacts: [],
+        outreachMessage: "",
+        comment: "Recruiter company. 15-point penalty applied.",
+        isRecruiter: true
       }
     ];
 
@@ -1336,12 +1360,14 @@
             </div>
             <div class="kanban-card-company" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
               <span><i class="fa-regular fa-building"></i> ${job.company}</span>
-              ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(244, 63, 94, 0.15); color:#f43f5e; border:1px solid rgba(244, 63, 94, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
+              ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
             </div>
             <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
               <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
-              <span style="text-transform:capitalize;">${job.remoteType}</span>
-              ${job.salary ? `<span style="color:#10b981; font-weight:500; font-size:0.75rem;"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</span>` : ''}
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span style="text-transform:capitalize;">${job.remoteType}</span>
+                ${job.salary ? `&bull; <span style="color:#10b981; font-weight:500; font-size:0.75rem;"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</span>` : ''}
+              </span>
             </div>
             ${job.comment ? `
               <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -1938,6 +1964,12 @@
       if (job.matchScore >= 85) matchClass = 'match-high';
       else if (job.matchScore >= 70) matchClass = 'match-mid';
 
+      // Ensure "Posted by a recruiting agency/staffing firm" is in gaps if job is a recruiter listing
+      let displayGaps = [...(job.gaps || [])];
+      if (job.isRecruiter && !displayGaps.some(g => g.toLowerCase().includes("recruiting agency") || g.toLowerCase().includes("staffing firm"))) {
+        displayGaps.push("Posted by a recruiting agency/staffing firm");
+      }
+
       body.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
           <div>
@@ -1953,8 +1985,8 @@
         </div>
 
         ${job.isRecruiter ? `
-          <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.85rem; color: #f43f5e; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+          <div style="background: linear-gradient(90deg, rgba(244, 63, 94, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.85rem; color: #f43f5e; display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b; font-size:1.15rem; flex-shrink:0;"></i>
             <span><strong>Recruiting / Staffing Agency Warning:</strong> This job posting was published by a recruitment or staffing agency, not directly by the employer. The match score has been penalized by 15 points.</span>
           </div>
         ` : ''}
@@ -1985,7 +2017,7 @@
             <div class="match-factor-box" style="padding:10px;">
               <div class="factor-title gaps" style="font-size:0.75rem;"><i class="fa-solid fa-circle-xmark"></i> Gaps</div>
               <ul class="factor-list" style="font-size:0.75rem;">
-                ${job.gaps.map(g => `<li><i class="fa-solid fa-xmark" style="color:var(--accent-rose)"></i> ${g}</li>`).join('')}
+                ${displayGaps.map(g => `<li><i class="fa-solid fa-xmark" style="color:var(--accent-rose)"></i> ${g}</li>`).join('')}
               </ul>
             </div>
           </div>

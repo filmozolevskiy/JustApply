@@ -211,19 +211,44 @@ def init_db(db_path=None):
                 ]),
                 "outreachMessage": "Hi Tariq,\n\nCongratulations on expanding your engineering team. As a QA Lead who has previously built testing infrastructures for early stage startups, I would love to help AppStart structure its automation strategy.\n\nBest,\nCandidate",
                 "comment": "Tariq is active on LinkedIn posting engineering updates."
+            },
+            {
+                "id": 7,
+                "title": "QA Automation Contractor",
+                "company": "Fuze HR Solutions",
+                "size": "50-200",
+                "link": "https://linkedin.com/jobs/129",
+                "date": "2026-06-07",
+                "location": "Toronto, ON",
+                "remoteType": "hybrid",
+                "seniority": "mid",
+                "salary": "$70 - $80 / hr",
+                "description": "Our client, a leading financial institution, is seeking a QA Automation Contractor to join their digital banking testing team. You will write automated test scripts in Python and execute regressions.",
+                "matchScore": 65,
+                "matchType": "no-match",
+                "shouldProceed": 0,
+                "status": "sourced",
+                "resumeUsed": "qa.md",
+                "strengths": json.dumps(["Python scripting background", "Experience with QA regression testing"]),
+                "gaps": json.dumps(["Posted by a recruiting agency/staffing firm"]),
+                "contacts": json.dumps([]),
+                "outreachMessage": "",
+                "comment": "Recruiter company. 15-point penalty applied.",
+                "isRecruiter": 1
             }
         ]
         
         for job in seed_data:
+            job.setdefault("isRecruiter", 0)
             cursor.execute("""
                 INSERT INTO jobs (
                     id, title, company, size, link, date, location, remoteType, seniority, salary,
                     description, matchScore, matchType, shouldProceed, status, resumeUsed,
-                    strengths, gaps, contacts, outreachMessage, comment
+                    strengths, gaps, contacts, outreachMessage, comment, isRecruiter
                 ) VALUES (
                     :id, :title, :company, :size, :link, :date, :location, :remoteType, :seniority, :salary,
                     :description, :matchScore, :matchType, :shouldProceed, :status, :resumeUsed,
-                    :strengths, :gaps, :contacts, :outreachMessage, :comment
+                    :strengths, :gaps, :contacts, :outreachMessage, :comment, :isRecruiter
                 )
             """, job)
         conn.commit()

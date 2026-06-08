@@ -16,9 +16,9 @@ def test_database_lifecycle(tmp_path):
     init_db(db_str)
     assert test_db.exists()
     
-    # Check default seeded jobs (should be 6)
+    # Check default seeded jobs (should be 7)
     jobs = get_jobs(db_str)
-    assert len(jobs) == 6
+    assert len(jobs) == 7
     
     # Verify first job data structure
     first_job = next(j for j in jobs if j["id"] == 1)
@@ -50,10 +50,10 @@ def test_database_lifecycle(tmp_path):
     }
     new_id = add_job(new_job_data, db_str)
     assert new_id is not None
-    assert new_id > 6
+    assert new_id > 7
     
     jobs_after_add = get_jobs(db_str)
-    assert len(jobs_after_add) == 7
+    assert len(jobs_after_add) == 8
     added_job = next(j for j in jobs_after_add if j["id"] == new_id)
     assert added_job["title"] == "Staff Engineer"
     assert added_job["company"] == "Google"

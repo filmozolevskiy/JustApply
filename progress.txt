@@ -7,3 +7,12 @@
   - Applied 15-point matchScore penalty (capping at 70), set shouldProceed = False, and added agency notice to gaps for recruiting company listings
   - Updated server.py and cli.py to parse, log, and write isRecruiter and salary details to database
   - Created unit tests verifying classification, overrides, and penalization logic
+
+- Implemented UI Badges for Recruiter Warning and Extracted Salaries (#13):
+  - Updated job cards in dashboard.html to show a red 'Recruiter' badge when isRecruiter is true
+  - Grouped and displayed the extracted salary text next to remote policies on the job cards
+  - Updated the job details drawer to display a prominent gradient amber/rose warning banner explaining the match score penalty when isRecruiter is true
+  - Guaranteed the details drawer lists 'Posted by a recruiting agency/staffing firm' under Gaps
+  - Added a new mock recruiter contractor job to seed database and frontend mock data for direct verification
+  - Updated unit tests in test_database.py and test_dashboard_jobs.py to verify recruiter status/salary fields on seed jobs
+
