@@ -51,8 +51,9 @@ async def test_scraper_mock_yields():
 def test_company_size_matching():
     assert match_company_size("1-50", ["small"]) is True
     assert match_company_size("100-500", ["medium"]) is True
-    assert match_company_size("1000+", ["large"]) is True
-    assert match_company_size("2500", ["large"]) is True
+    assert match_company_size("1,000+", ["large"]) is True
+    assert match_company_size("10,000+", ["large"]) is True
+    assert match_company_size("2,500", ["large"]) is True
     assert match_company_size("10-50", ["medium"]) is False
 
 def test_matches_position_keywords():

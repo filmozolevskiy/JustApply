@@ -1392,7 +1392,8 @@
       if (!sizeStr) return 'unknown';
       const sizeLower = sizeStr.toLowerCase().trim();
       
-      const numbers = sizeStr.match(/\d+/g);
+      const cleanStr = sizeStr.replace(/,/g, '');
+      const numbers = cleanStr.match(/\d+/g);
       if (numbers) {
         const maxVal = Math.max(...numbers.map(Number));
         if (maxVal <= 50) return 'small';
@@ -2252,12 +2253,15 @@
           if (data && data.length > 0) {
             masterJobs = data;
             addLogLine(`Loaded ${data.length} jobs dynamically from /api/jobs`, 'success');
-            renderActiveVariant();
-            startPollingEnrichingJobs();
+          } else {
+            addLogLine("Backend returned empty job list. Board is empty.", 'info');
           }
+          renderActiveVariant();
+          startPollingEnrichingJobs();
         })
         .catch(err => {
           addLogLine("Could not fetch jobs from backend. Using static fallback database.", 'info');
+          renderActiveVariant();
         });
     }
 

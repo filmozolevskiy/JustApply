@@ -86,7 +86,7 @@ def match_company_size(job_size_str: str, allowed_sizes: list) -> bool:
         return True
     
     # Extract numbers from size string (e.g., "100-500" -> [100, 500], "5000+" -> [5000])
-    numbers = [int(n) for n in re.findall(r'\d+', job_size_str)]
+    numbers = [int(n) for n in re.findall(r'\d+', job_size_str.replace(",", ""))]
     if not numbers:
         # Check for text indications
         size_lower = job_size_str.lower()

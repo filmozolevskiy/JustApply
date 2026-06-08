@@ -24,4 +24,9 @@
   - Cleared the task_id from localStorage upon task completion or failure
   - Added automated integration tests verifying the SSE log replay reconnection behavior
 
-
+- Implemented Client-Side Board Filtering & Sorting (#11):
+  - Configured Remote Type, Company Size, and Sorting dropdowns to immediately filter and sort cards client-side
+  - Restored saved filter and sort values from localStorage on page refresh and applied them during initial card rendering
+  - Fixed company size matching bug for formatted numbers with commas (e.g. "1,000+", "10,000") in both frontend JS and backend Python
+  - Updated python unit tests in test_scraper.py to verify matching of company sizes with commas
+  - Ensured board rendering is triggered on load even when backend database is empty or fails to load, gracefully falling back to static database
