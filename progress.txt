@@ -1,0 +1,9 @@
+# Ralph Loop Progress Log
+
+- Implemented Recruiting Company Guard & Salary Extraction (Backend) (#12):
+  - Added isRecruiter column to SQLite jobs table schema with migration on startup
+  - Modified Gemini matcher prompt to output isRecruiter and salary fields in structured JSON response
+  - Implemented check_recruiter_by_name local regex check to override/complement LLM results
+  - Applied 15-point matchScore penalty (capping at 70), set shouldProceed = False, and added agency notice to gaps for recruiting company listings
+  - Updated server.py and cli.py to parse, log, and write isRecruiter and salary details to database
+  - Created unit tests verifying classification, overrides, and penalization logic
