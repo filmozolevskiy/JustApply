@@ -174,3 +174,248 @@ def test_api_logs_replay_reconnection():
         # Clean up
         active_tasks.pop(task_id, None)
 
+
+@pytest.mark.asyncio
+async def test_scraper_trigger_fails_immediately(monkeypatch):
+    from unittest.mock import patch, MagicMock, AsyncMock
+    # Configure environment so we enter the real path
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+    
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.text = "Internal Server Error"
+    
+    # We patch httpx.AsyncClient.post to return mock_response
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response) as mock_post:
+        with pytest.raises(Exception) as excinfo:
+            await scrape_linkedin_jobs(
+                query="QA Engineer",
+                location="New York",
+                log_func=print
+            )
+        # Verify the exception message contains "Failed to trigger scraper"
+        assert "Failed to trigger scraper" in str(excinfo.value)
+        # Verify post was called once
+        assert mock_post.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
+    from unittest.mock import patch, MagicMock, AsyncMock
+    # Configure environment
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+    
+    # Mock post (trigger) response
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_123"})
+    
+    # Mock progress check failures and then success
+    mock_progress_fail = MagicMock()
+    mock_progress_fail.status_code = 500
+    mock_progress_fail.text = "Transient progress error"
+    
+    mock_progress_success = MagicMock()
+    mock_progress_success.status_code = 200
+    mock_progress_success.json = MagicMock(return_value={"status": "ready"})
+    
+    # Mock snapshot results response
+    mock_snapshot_resp = MagicMock()
+    mock_snapshot_resp.status_code = 200
+    mock_snapshot_resp.json = MagicMock(return_value=[{
+        "job_title": "Senior QA Engineer",
+        "company_name": "ScaleLabs Inc.",
+        "company_size": "750",
+        "url": "https://linkedin.com/jobs/mock-991",
+        "date_posted": "2026-06-07",
+        "job_location": "New York, NY",
+        "job_summary": "We are seeking a senior practitioner...",
+        "job_seniority_level": "senior",
+        "is_remote": True
+    }])
+    
+    get_calls = []
+    async def mock_get(url, **kwargs):
+        get_calls.append(url)
+        if "progress" in url:
+            if len([u for u in get_calls if "progress" in u]) == 1:
+                # First progress check fails
+                return mock_progress_fail
+            else:
+                # Subsequent progress check succeeds
+                return mock_progress_success
+        elif "snapshot" in url:
+            return mock_snapshot_resp
+        raise Exception(f"Unexpected GET URL: {url}")
+        
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get) as mock_get_patched, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+         
+        jobs = await scrape_linkedin_jobs(
+            query="QA Engineer",
+            location="New York",
+            log_func=print
+        )
+        
+        # Verify we got the jobs
+        assert len(jobs) == 1
+        assert jobs[0]["company"] == "ScaleLabs Inc."
+        
+        # Verify get was called 3 times: 2 for progress, 1 for snapshot
+        assert len(get_calls) == 3
+        # Verify sleep was called for backoff and for polling wait.
+        assert mock_sleep.call_count >= 2
+
+
+@pytest.mark.asyncio
+async def test_scraper_polling_fails_persistently(monkeypatch):
+    from unittest.mock import patch, MagicMock, AsyncMock
+    # Configure environment
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+    
+    # Mock post (trigger) response
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_123"})
+    
+    # Mock progress check failures
+    mock_progress_fail = MagicMock()
+    mock_progress_fail.status_code = 500
+    mock_progress_fail.text = "Persistent progress error"
+    
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_progress_fail) as mock_get_patched, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+         
+        with pytest.raises(Exception) as excinfo:
+            await scrape_linkedin_jobs(
+                query="QA Engineer",
+                location="New York",
+                log_func=print
+            )
+            
+        assert "Failed to check scraper progress after 3 attempts" in str(excinfo.value)
+        # Verify get (polling progress) was called 3 times
+        assert mock_get_patched.call_count == 3
+        # Verify sleep was called for backoff retries and polling waits
+        assert mock_sleep.call_count >= 3
+
+
+@pytest.mark.asyncio
+async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
+    from unittest.mock import patch, MagicMock, AsyncMock
+    # Configure environment
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+    
+    # Mock post (trigger) response
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_123"})
+    
+    # Mock progress check success (ready immediately)
+    mock_progress_success = MagicMock()
+    mock_progress_success.status_code = 200
+    mock_progress_success.json = MagicMock(return_value={"status": "ready"})
+    
+    # Mock snapshot results: first fails, second succeeds
+    mock_snapshot_fail = MagicMock()
+    mock_snapshot_fail.status_code = 500
+    mock_snapshot_fail.text = "Transient snapshot error"
+    
+    mock_snapshot_success = MagicMock()
+    mock_snapshot_success.status_code = 200
+    mock_snapshot_success.json = MagicMock(return_value=[{
+        "job_title": "Senior QA Engineer",
+        "company_name": "ScaleLabs Inc.",
+        "company_size": "750",
+        "url": "https://linkedin.com/jobs/mock-991",
+        "date_posted": "2026-06-07",
+        "job_location": "New York, NY",
+        "job_summary": "We are seeking a senior practitioner...",
+        "job_seniority_level": "senior",
+        "is_remote": True
+    }])
+    
+    get_calls = []
+    async def mock_get(url, **kwargs):
+        get_calls.append(url)
+        if "progress" in url:
+            return mock_progress_success
+        elif "snapshot" in url:
+            if len([u for u in get_calls if "snapshot" in u]) == 1:
+                return mock_snapshot_fail
+            else:
+                return mock_snapshot_success
+        raise Exception(f"Unexpected GET URL: {url}")
+        
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get) as mock_get_patched, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+         
+        jobs = await scrape_linkedin_jobs(
+            query="QA Engineer",
+            location="New York",
+            log_func=print
+        )
+        
+        assert len(jobs) == 1
+        assert jobs[0]["company"] == "ScaleLabs Inc."
+        
+        # Verify get was called 3 times: 1 for progress, 2 for snapshot
+        assert len(get_calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
+    from unittest.mock import patch, MagicMock, AsyncMock
+    # Configure environment
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+    
+    # Mock post (trigger) response
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_123"})
+    
+    # Mock progress check success (ready immediately)
+    mock_progress_success = MagicMock()
+    mock_progress_success.status_code = 200
+    mock_progress_success.json = MagicMock(return_value={"status": "ready"})
+    
+    # Mock snapshot results: persistent failure
+    mock_snapshot_fail = MagicMock()
+    mock_snapshot_fail.status_code = 500
+    mock_snapshot_fail.text = "Persistent snapshot error"
+    
+    get_calls = []
+    async def mock_get(url, **kwargs):
+        get_calls.append(url)
+        if "progress" in url:
+            return mock_progress_success
+        elif "snapshot" in url:
+            return mock_snapshot_fail
+        raise Exception(f"Unexpected GET URL: {url}")
+        
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get) as mock_get_patched, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+         
+        with pytest.raises(Exception) as excinfo:
+            await scrape_linkedin_jobs(
+                query="QA Engineer",
+                location="New York",
+                log_func=print
+            )
+            
+        assert "Failed to fetch snapshot results after 3 attempts" in str(excinfo.value)
+        # Verify get was called 4 times: 1 for progress, 3 for snapshot
+        assert len(get_calls) == 4
+
+
+
+

@@ -287,9 +287,22 @@ async def _scrape_linkedin_jobs_real(
                     raise Exception("Bright Data scraping job timed out after 10 minutes.")
 
                 await asyncio.sleep(5.0)
-                progress_resp = await client.get(progress_url, headers=headers)
-                if progress_resp.status_code != 200:
-                    raise Exception(f"Failed to check scraper progress: HTTP {progress_resp.status_code} - {progress_resp.text}")
+                
+                # Check scraper progress with up to 3 retries and exponential backoff
+                progress_resp = None
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        progress_resp = await client.get(progress_url, headers=headers)
+                        if progress_resp.status_code != 200:
+                            raise Exception(f"HTTP {progress_resp.status_code} - {progress_resp.text}")
+                        break
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            raise Exception(f"Failed to check scraper progress after {max_retries} attempts: {str(e)}")
+                        wait_time = 2.0 ** attempt
+                        await log(f"Error checking progress (attempt {attempt + 1}/{max_retries}): {str(e)}. Retrying in {wait_time:.0f}s...", "warning")
+                        await asyncio.sleep(wait_time)
                 
                 progress_data = progress_resp.json()
                 status = progress_data.get("status")
@@ -302,9 +315,20 @@ async def _scrape_linkedin_jobs_real(
             
             # Fetch results
             snapshot_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
-            snapshot_resp = await client.get(snapshot_url, headers=headers)
-            if snapshot_resp.status_code != 200:
-                raise Exception(f"Failed to fetch snapshot results: HTTP {snapshot_resp.status_code}")
+            snapshot_resp = None
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    snapshot_resp = await client.get(snapshot_url, headers=headers)
+                    if snapshot_resp.status_code != 200:
+                        raise Exception(f"HTTP {snapshot_resp.status_code}")
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise Exception(f"Failed to fetch snapshot results after {max_retries} attempts: {str(e)}")
+                    wait_time = 2.0 ** attempt
+                    await log(f"Error fetching snapshot results (attempt {attempt + 1}/{max_retries}): {str(e)}. Retrying in {wait_time:.0f}s...", "warning")
+                    await asyncio.sleep(wait_time)
             
             try:
                 raw_jobs = snapshot_resp.json()

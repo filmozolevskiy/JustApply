@@ -3,3 +3,7 @@
 - Refactored scrape_linkedin_jobs in src/core/scraper.py into private helper functions _scrape_linkedin_jobs_mock and _scrape_linkedin_jobs_real.
 - Added upfront configuration validation to raise a ValueError immediately when running in production mode (MOCK_SCRAPER false/unset) without a configured BRIGHTDATA_API_KEY.
 - Implemented unit tests verifying that missing credentials trigger the ValueError check.
+- Implemented fail-fast error handling for Bright Data scraper triggering in _scrape_linkedin_jobs_real(), raising errors immediately without automatic retry or recursive mock fallback.
+- Added finite retry loops (up to 3 attempts) with exponential backoff for subsequent polling and download checks.
+- Wrote integration tests verifying the immediate error propagation and the retry-with-backoff loop behaviour.
+
