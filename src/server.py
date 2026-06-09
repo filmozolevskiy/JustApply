@@ -7,6 +7,7 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import FileResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
+from .schemas import Job
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -47,7 +48,7 @@ async def get_resumes():
     return resumes
 
 
-@app.get("/api/jobs")
+@app.get("/api/jobs", response_model=list[Job])
 async def get_all_jobs():
     return get_jobs()
 
@@ -56,7 +57,7 @@ class StatusUpdate(BaseModel):
     status: str
 
 
-@app.put("/api/jobs/{job_id}/status")
+@app.put("/api/jobs/{job_id}/status", response_model=Job)
 async def update_status(job_id: int, update: StatusUpdate):
     updated = update_job_status(job_id, update.status)
     if not updated:
@@ -68,7 +69,7 @@ class CommentUpdate(BaseModel):
     comment: str
 
 
-@app.put("/api/jobs/{job_id}/comment")
+@app.put("/api/jobs/{job_id}/comment", response_model=Job)
 async def update_comment(job_id: int, update: CommentUpdate):
     updated = update_job_comment(job_id, update.comment)
     if not updated:
@@ -80,7 +81,7 @@ class ContactUpdate(BaseModel):
     contacted: bool
 
 
-@app.put("/api/jobs/{job_id}/contacts/{contact_idx}")
+@app.put("/api/jobs/{job_id}/contacts/{contact_idx}", response_model=Job)
 async def update_contact(job_id: int, contact_idx: int, update: ContactUpdate):
     updated = update_contact_status(job_id, contact_idx, update.contacted)
     if updated is None:
