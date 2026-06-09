@@ -14,9 +14,7 @@ from . import database
 from src.core.scraper import scrape_linkedin_jobs
 from src.core.matcher import load_resume, evaluate_job
 from src.core.outreach import source_contacts
-
-
-LOCK_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".last_trigger")
+from src.rate_limiter import scrape_limiter, RateLimitError
 
 
 async def run_search(
@@ -29,26 +27,11 @@ async def run_search(
     is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
     is_real = (not mock_eval) or (not is_mock_scraper)
     if is_real:
-        import time
-        current_time = time.time()
-        if os.path.exists(LOCK_FILE_PATH):
-            try:
-                with open(LOCK_FILE_PATH, "r") as f:
-                    content = f.read().strip()
-                    if content:
-                        last_time = float(content)
-                        elapsed = current_time - last_time
-                        if elapsed < 60:
-                            print(f"Warning: Rate limit active. Please wait {int(60 - elapsed)} seconds.", file=sys.stderr)
-                            sys.exit(1)
-            except (ValueError, OSError):
-                pass
-        
         try:
-            with open(LOCK_FILE_PATH, "w") as f:
-                f.write(str(current_time))
-        except OSError:
-            pass
+            scrape_limiter.acquire()
+        except RateLimitError as e:
+            print(f"Warning: Rate limit active. Please wait {e.wait_seconds} seconds.", file=sys.stderr)
+            sys.exit(1)
 
     print(f"Starting search pipeline for position: {position}")
 

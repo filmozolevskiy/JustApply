@@ -10,7 +10,8 @@ from pydantic import BaseModel
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .database import init_db, get_jobs, update_job_status, add_job, update_job_comment, update_contact_status, job_exists, get_db_connection
+from .database import init_db, get_jobs, get_job, update_job_status, add_job, update_job_comment, update_contact_status, job_exists, get_db_connection
+from .rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
 init_db()
@@ -22,9 +23,6 @@ RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "resumes")
 
 # In-memory storage for active scraping sessions
 active_tasks = {}
-
-# Global variable to track the last trigger time for rate-limiting (in seconds)
-last_trigger_time = None
 
 
 @app.get("/api/health")
@@ -116,46 +114,19 @@ INSTRUCTIONS:
 """
 
 
-async def run_enrichment_task(job_id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
-        return
-    job = dict(row)
-    conn.close()
-
-    for field in ["strengths", "gaps", "contacts"]:
-        if job.get(field):
-            try:
-                job[field] = json.loads(job[field])
-            except Exception:
-                job[field] = []
-        else:
-            job[field] = []
-
-    from src.core.outreach import source_contacts
-    contacts = await source_contacts(job)
-
-    outreach_message = ""
-    primary_contact = contacts[0] if contacts else None
-    contact_name = primary_contact.get("name") if primary_contact else "Hiring Manager"
-    is_russian = bool(primary_contact.get("russian_speaker")) if primary_contact else False
-
-    resume_name = job.get("resumeUsed") or "qa.md"
-    resume_content = ""
+def _load_resume_content(resume_name: str) -> str:
+    from src.core.matcher import load_resume
     try:
-        from src.core.matcher import load_resume
-        resume_content = load_resume(resume_name)
+        return load_resume(resume_name)
     except Exception:
-        try:
-            from src.core.matcher import load_resume
-            resume_content = load_resume("qa.md")
-        except Exception:
-            pass
+        pass
+    try:
+        return load_resume("qa.md")
+    except Exception:
+        return ""
 
+
+async def _generate_outreach_message(job: dict, contact_name: str, is_russian: bool, resume_content: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key and resume_content:
         try:
@@ -168,23 +139,49 @@ async def run_enrichment_task(job_id: int):
                 job.get("company", ""),
                 job.get("description", ""),
                 contact_name,
-                is_russian
+                is_russian,
             )
             response = await model.generate_content_async(prompt)
-            outreach_message = response.text.strip()
+            return response.text.strip()
         except Exception:
             pass
 
-    if not outreach_message:
-        profile_name = "QA Automator" if resume_name == "qa.md" else ("Delivery Manager" if resume_name == "project_manager.md" else "BI Analyst")
-        greeting = f"Добрый день, {contact_name}!\n\n" if is_russian else f"Hello {contact_name},\n\n"
-        outreach_message = f"{greeting}I recently saw your post for the {job.get('title', '')} role at {job.get('company', '')}. Based on my matched skills in {resume_name} ({profile_name}), I believe my background aligning developer suites and testing cycles matches your goals.\n\nLet me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
+    resume_name = job.get("resumeUsed") or "qa.md"
+    profile_name = (
+        "QA Automator" if resume_name == "qa.md"
+        else "Delivery Manager" if resume_name == "project_manager.md"
+        else "BI Analyst"
+    )
+    greeting = f"Добрый день, {contact_name}!\n\n" if is_russian else f"Hello {contact_name},\n\n"
+    return (
+        f"{greeting}I recently saw your post for the {job.get('title', '')} role at "
+        f"{job.get('company', '')}. Based on my matched skills in {resume_name} ({profile_name}), "
+        f"I believe my background aligning developer suites and testing cycles matches your goals.\n\n"
+        f"Let me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
+    )
+
+
+async def run_enrichment_task(job_id: int):
+    job = get_job(job_id)
+    if not job:
+        return
+
+    from src.core.outreach import source_contacts
+    contacts = await source_contacts(job)
+
+    primary_contact = contacts[0] if contacts else None
+    contact_name = primary_contact.get("name") if primary_contact else "Hiring Manager"
+    is_russian = bool(primary_contact.get("russian_speaker")) if primary_contact else False
+
+    resume_name = job.get("resumeUsed") or "qa.md"
+    resume_content = _load_resume_content(resume_name)
+    outreach_message = await _generate_outreach_message(job, contact_name, is_russian, resume_content)
 
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
         "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'enriched' WHERE id = ?",
-        (json.dumps(contacts), outreach_message, job_id)
+        (json.dumps(contacts), outreach_message, job_id),
     )
     conn.commit()
     conn.close()
@@ -347,20 +344,16 @@ async def run_scraping_task(task_id: str):
 
 @app.post("/api/search")
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
-    global last_trigger_time
     is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
     is_real = (not request.mock_eval) or (not is_mock_scraper)
     if is_real:
-        import time
-        current_time = time.time()
-        if last_trigger_time is not None:
-            elapsed = current_time - last_trigger_time
-            if elapsed < 60:
-                return JSONResponse(
-                    status_code=429,
-                    content={"message": "Too many requests. Please wait 60 seconds between trigger requests."}
-                )
-        last_trigger_time = current_time
+        try:
+            scrape_limiter.acquire()
+        except RateLimitError as e:
+            return JSONResponse(
+                status_code=429,
+                content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
+            )
 
     task_id = str(uuid.uuid4())
     state = TaskState(request.model_dump())
@@ -384,20 +377,16 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
-    global last_trigger_time
     is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
     is_real = (not mock_eval) or (not is_mock_scraper)
     if is_real:
-        import time
-        current_time = time.time()
-        if last_trigger_time is not None:
-            elapsed = current_time - last_trigger_time
-            if elapsed < 60:
-                return JSONResponse(
-                    status_code=429,
-                    content={"message": "Too many requests. Please wait 60 seconds between trigger requests."}
-                )
-        last_trigger_time = current_time
+        try:
+            scrape_limiter.acquire()
+        except RateLimitError as e:
+            return JSONResponse(
+                status_code=429,
+                content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
+            )
 
     task_id = str(uuid.uuid4())
     params = {

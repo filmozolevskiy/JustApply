@@ -6,7 +6,7 @@ import pytest
 # Add root directory to path to import database
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.database import init_db, get_jobs, update_job_status, add_job
+from src.database import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES
 
 def test_database_lifecycle(tmp_path):
     test_db = tmp_path / "test_job_tracker.db"
@@ -100,6 +100,41 @@ def test_update_job_comment_nonexistent(tmp_path):
     from src.database import update_job_comment
     res = update_job_comment(999, "No comment", db_str)
     assert res is None
+
+
+def test_update_job_status_invalid_status(tmp_path):
+    test_db = tmp_path / "test_job_tracker.db"
+    db_str = str(test_db)
+    init_db(db_str)
+
+    with pytest.raises(ValueError, match="Invalid status"):
+        update_job_status(1, "banana", db_str)
+
+    # Job status must be unchanged
+    jobs = get_jobs(db_str)
+    job1 = next(j for j in jobs if j["id"] == 1)
+    assert job1["status"] == "sourced"
+
+
+def test_get_jobs_json_roundtrip(tmp_path):
+    test_db = tmp_path / "test_job_tracker.db"
+    db_str = str(test_db)
+    init_db(db_str)
+
+    new_id = add_job({
+        "title": "ML Engineer",
+        "company": "Acme",
+        "strengths": ["Python", "PyTorch"],
+        "gaps": ["No MLOps experience"],
+        "contacts": [{"name": "Bob", "url": "https://linkedin.com/in/bob", "contacted": False}],
+    }, db_str)
+
+    jobs = get_jobs(db_str)
+    added = next(j for j in jobs if j["id"] == new_id)
+    assert added["strengths"] == ["Python", "PyTorch"]
+    assert added["gaps"] == ["No MLOps experience"]
+    assert isinstance(added["contacts"], list)
+    assert added["contacts"][0]["name"] == "Bob"
 
 
 def test_job_exists(tmp_path):

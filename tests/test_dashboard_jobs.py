@@ -1,6 +1,7 @@
 import os
 import sys
 import pytest
+from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -112,3 +113,87 @@ def test_post_job_enrich_nonexistent():
     response = client.post("/api/jobs/999/enrich")
     assert response.status_code == 404
     assert response.json() == {"message": "Job not found"}
+
+
+# --- _load_resume_content ---
+
+def test_load_resume_content_returns_empty_when_all_fail():
+    from src.server import _load_resume_content
+    with patch("src.core.matcher.load_resume", side_effect=FileNotFoundError("not found")):
+        assert _load_resume_content("missing.md") == ""
+
+
+def test_load_resume_content_falls_back_to_qa_on_primary_fail():
+    from src.server import _load_resume_content
+
+    def mock_load(name):
+        if name == "qa.md":
+            return "qa fallback content"
+        raise FileNotFoundError(f"{name} not found")
+
+    with patch("src.core.matcher.load_resume", side_effect=mock_load):
+        assert _load_resume_content("custom_resume.md") == "qa fallback content"
+
+
+# --- _generate_outreach_message ---
+
+@pytest.mark.asyncio
+async def test_generate_outreach_message_template_no_api_key():
+    from src.server import _generate_outreach_message
+    job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md", "description": ""}
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        msg = await _generate_outreach_message(job, "Alice", False, "resume text")
+    assert "QA Lead" in msg
+    assert "Acme" in msg
+    assert "Hello Alice" in msg
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_message_russian_greeting():
+    from src.server import _generate_outreach_message
+    job = {"title": "Dev", "company": "Corp", "resumeUsed": "qa.md", "description": ""}
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        msg = await _generate_outreach_message(job, "Ivan", True, "")
+    assert "Добрый день" in msg
+    assert "Ivan" in msg
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_message_uses_gemini_when_available(monkeypatch):
+    from src.server import _generate_outreach_message
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "  AI-generated outreach  "
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        msg = await _generate_outreach_message(
+            {"title": "QA", "company": "Co", "resumeUsed": "qa.md", "description": ""},
+            "Bob", False, "resume text",
+        )
+    assert msg == "AI-generated outreach"
+
+
+# --- run_enrichment_task integration ---
+
+@pytest.mark.asyncio
+async def test_run_enrichment_task_writes_enriched_results(setup_test_db):
+    from src.server import run_enrichment_task
+    mock_contacts = [{"name": "Test Contact", "url": "https://linkedin.com/in/test", "contacted": False, "russian_speaker": False}]
+    with patch("src.core.outreach.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
+         patch("src.server._load_resume_content", return_value=""), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        await run_enrichment_task(1)
+    job = database.get_job(1)
+    assert job["status"] == "enriched"
+    assert len(job["contacts"]) == 1
+    assert job["contacts"][0]["name"] == "Test Contact"
+    assert job["outreachMessage"] != ""
+
+
+@pytest.mark.asyncio
+async def test_run_enrichment_task_noop_for_missing_job():
+    from src.server import run_enrichment_task
+    # Should return without raising for a non-existent job ID
+    await run_enrichment_task(99999)
