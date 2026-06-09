@@ -13,7 +13,7 @@ from src.server import app
 from fastapi.testclient import TestClient
 
 import src.core.outreach as outreach_module
-from src.core.outreach import source_contacts, _normalize_apify_employee
+from src.core.outreach import source_contacts, _normalize_apify_employee, _run_apify_actor, ApifyTimeoutError
 
 client = TestClient(app)
 
@@ -180,6 +180,42 @@ def test_contact_toggle_does_not_downgrade_status(setup_test_db):
 def test_contact_toggle_returns_404_for_missing_job():
     response = client.put("/api/jobs/99999/contacts/0", json={"contacted": True})
     assert response.status_code == 404
+
+
+# --- Apify polling timeout ---
+
+@pytest.mark.asyncio
+async def test_run_apify_actor_raises_apify_timeout_error():
+    """Polling loop raises ApifyTimeoutError when timeout_seconds is exceeded."""
+    mock_post = MagicMock()
+    mock_post.status_code = 201
+    mock_post.json.return_value = {"data": {"id": "run-abc123"}}
+
+    mock_status = MagicMock()
+    mock_status.status_code = 200
+    mock_status.json.return_value = {"data": {"status": "RUNNING"}}
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post.return_value = mock_post
+    mock_client.get.return_value = mock_status
+
+    with patch("httpx.AsyncClient", return_value=mock_client), \
+         patch.dict(os.environ, {"APIFY_API_TOKEN": "fake-token"}), \
+         patch("asyncio.sleep", new=AsyncMock()), \
+         patch("time.monotonic", side_effect=[0.0, 1.0, 301.0]):
+        with pytest.raises(ApifyTimeoutError):
+            await _run_apify_actor("TestCorp", timeout_seconds=300.0)
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_returns_empty_on_apify_timeout():
+    """source_contacts returns [] when _run_apify_actor raises ApifyTimeoutError."""
+    job = {"title": "QA Engineer", "company": "TestCorp", "contacts": []}
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(side_effect=ApifyTimeoutError("timed out"))):
+        result = await source_contacts(job)
+    assert result == []
 
 
 def test_contact_toggle_returns_404_for_missing_contact_idx(setup_test_db):

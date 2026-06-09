@@ -1,8 +1,13 @@
 import os
+import time
 import httpx
 import asyncio
 import inspect
 from dotenv import load_dotenv
+
+
+class ApifyTimeoutError(Exception):
+    pass
 
 APIFY_API_BASE = "https://api.apify.com/v2"
 ACTOR_ID = "harvestapi~linkedin-company-employees"
@@ -11,7 +16,7 @@ RUSSIAN_LANGUAGES = {"russian", "ukrainian", "belarusian"}
 HR_TITLE_KEYWORDS = ["recruit", "hr ", "human resource", "talent acquisition", "people ops", "hiring manager", "talent ti", "acquisition de talents"]
 
 
-async def _run_apify_actor(company: str, log_func=None) -> list:
+async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float = 300.0, poll_interval: float = 5.0) -> list:
     """Fetch up to CONTACT_SAMPLE_SIZE employees for a company via Apify."""
 
     async def log(msg, level="info"):
@@ -49,8 +54,13 @@ async def _run_apify_actor(company: str, log_func=None) -> list:
         await log(f"Apify run started: {run_id}", "info")
 
         status_url = f"{APIFY_API_BASE}/actor-runs/{run_id}"
+        start_time = time.monotonic()
         while True:
-            await asyncio.sleep(5.0)
+            if time.monotonic() - start_time >= timeout_seconds:
+                raise ApifyTimeoutError(
+                    f"Apify run {run_id} did not complete within {timeout_seconds}s"
+                )
+            await asyncio.sleep(poll_interval)
             status_resp = await client.get(status_url, params=params)
             if status_resp.status_code != 200:
                 await log(f"Apify status check error: HTTP {status_resp.status_code}", "warning")
@@ -124,7 +134,11 @@ async def source_contacts(job: dict, log_func=None) -> list:
         return []
 
     await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
-    items = await _run_apify_actor(company, log_func=log_func)
+    try:
+        items = await _run_apify_actor(company, log_func=log_func)
+    except ApifyTimeoutError as e:
+        await log(f"Apify polling timed out: {e}", "error")
+        return []
     if not items:
         return []
 
