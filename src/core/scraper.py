@@ -239,7 +239,6 @@ async def _scrape_linkedin_jobs_real(
     params = {
         "dataset_id": scraper_id,
         "include_errors": "true",
-        "type": "discover_new",
         "discover_by": "keyword"
     }
     headers = {
@@ -265,16 +264,17 @@ async def _scrape_linkedin_jobs_real(
 
     await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
     async with httpx.AsyncClient(timeout=30.0) as client:
+        snapshot_id = None
         try:
             response = await client.post(trigger_url, params=params, headers=headers, json=payload)
             if response.status_code != 200:
                 raise Exception(f"Failed to trigger scraper: HTTP {response.status_code} - {response.text}")
-            
+
             trigger_data = response.json()
             snapshot_id = trigger_data.get("snapshot_id")
             if not snapshot_id:
                 raise Exception(f"No snapshot_id returned in trigger response: {trigger_data}")
-            
+
             await log(f"Bright Data scraping job triggered: {snapshot_id}", "warning")
 
             # Polling loop
@@ -347,6 +347,15 @@ async def _scrape_linkedin_jobs_real(
             return raw_jobs
 
         except Exception as e:
+            if snapshot_id:
+                try:
+                    await client.post(
+                        f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}/cancel",
+                        headers=headers
+                    )
+                    await log(f"Canceled Bright Data snapshot {snapshot_id} after error.", "warning")
+                except Exception:
+                    pass
             await log(f"Bright Data API Error: {str(e)}.", "error")
             raise e
 
