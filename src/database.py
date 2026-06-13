@@ -7,7 +7,8 @@ VALID_STATUSES = frozenset({
     "contacted", "applied", "interviewing", "rejected",
 })
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "job_tracker.db")
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(_PROJECT_ROOT, "data", "job_tracker.db")
 
 def get_db_connection(db_path=None):
     if db_path is None:
@@ -227,6 +228,7 @@ def _seed_db(cursor):
 def init_db(db_path=None):
     if db_path is None:
         db_path = DB_PATH
+    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("""

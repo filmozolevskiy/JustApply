@@ -31,5 +31,6 @@ class RateLimiter:
             pass
 
 
-LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".last_trigger")
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCK_FILE = os.path.join(_PROJECT_ROOT, "data", ".last_trigger")
 scrape_limiter = RateLimiter(LOCK_FILE)

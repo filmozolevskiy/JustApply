@@ -1,0 +1,9 @@
+# Ralph Loop Progress Log
+
+## Iteration 1 — Issue #19: Set up data/ directory and migrate runtime artifacts
+
+- Updated `src/database.py`: `DB_PATH` now resolves to `<project_root>/data/job_tracker.db`; `init_db()` auto-creates the `data/` directory via `os.makedirs(..., exist_ok=True)`.
+- Updated `src/rate_limiter.py`: `LOCK_FILE` now resolves to `<project_root>/data/.last_trigger`.
+- Updated `.gitignore`: replaced individual `*.db`, `job_tracker.db`, and `.last_trigger` entries with a single `data/` entry.
+- Deleted stale database files: `src/job_tracker.db` and `job_hunter.db`.
+- All 89 tests pass (including `tests/test_database.py` and `tests/test_rate_limiter.py`).

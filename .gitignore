@@ -23,10 +23,6 @@ bin/
 # macOS
 .DS_Store
 
-# Databases
-*.db
-job_tracker.db
+# Runtime artifacts
+data/
 uvicorn.log
-
-# CLI lock file
-.last_trigger
