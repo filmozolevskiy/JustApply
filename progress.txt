@@ -1,5 +1,18 @@
 # Ralph Loop Progress Log
 
+## Iteration 6 — Issue #29: Outreach Settings UI panel
+
+Added an Outreach Settings panel to `src/web/dashboard.html`, visually distinct from the existing Board Controls panel.
+
+Changes in `src/web/dashboard.html`:
+- Added CSS for `.toggle-switch` / `.toggle-slider` (pill-style checkbox toggle with cyan accent when checked).
+- Added the Outreach Settings panel HTML between Board Controls and the Kanban lanes. Uses `id="outreach-settings-panel"` with a cyan-tinted border to distinguish it from Board Controls. Contains two labeled toggles: `id="toggle-russian-speakers"` and `id="toggle-recruiters"`.
+- Added `async function loadOutreachSettings()` — fetches `GET /api/settings/outreach` on page load and sets both toggle states.
+- Added `async function saveOutreachSettings(key, value)` — reads current toggle state, merges the changed key, and sends `PUT /api/settings/outreach` immediately on any toggle change.
+- Called `loadOutreachSettings()` in the initialization block alongside `initBoardControls()`.
+
+All 5 existing tests in `tests/test_dashboard_outreach_settings.py` now pass (API round-trip tests were already passing; HTML structure test was the failing one). Full suite: 109 tests pass, no regressions.
+
 ## Iteration 5 — Issue #28: source_contacts refactor + enrichment pipeline wiring
 
 Replaced the hardcoded `RUSSIAN_LANGUAGES` / `HR_TITLE_KEYWORDS` filtering in `source_contacts` with a call to `classify_contacts`.

@@ -482,6 +482,43 @@
       border: 1px solid var(--border-color);
     }
 
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 22px;
+      transition: background var(--transition-fast);
+      border: 1px solid var(--border-color);
+    }
+    .toggle-slider::before {
+      content: "";
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: transform var(--transition-fast), background var(--transition-fast);
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: rgba(6,182,212,0.25);
+      border-color: var(--accent-cyan);
+    }
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(18px);
+      background: var(--accent-cyan);
+    }
+
     .kanban-column {
       display: flex;
       flex-direction: column;
@@ -1010,6 +1047,28 @@
             <option value="novelty_asc">Novelty: Oldest First</option>
           </select>
         </div>
+      </div>
+
+      <!-- Outreach Settings -->
+      <div class="glass-panel" id="outreach-settings-panel" style="padding: 12px 20px; display: flex; align-items: center; gap: 24px; margin-bottom: 16px; background: rgba(6, 182, 212, 0.04); border-color: rgba(6, 182, 212, 0.2); flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-bullhorn" style="color: var(--accent-cyan); font-size: 0.9rem;"></i>
+          <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Outreach Settings:</span>
+        </div>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
+        </label>
       </div>
 
       <!-- Kanban lanes -->
@@ -2412,10 +2471,36 @@
       };
     }
 
+    async function loadOutreachSettings() {
+      try {
+        const resp = await fetch('/api/settings/outreach');
+        if (!resp.ok) return;
+        const s = await resp.json();
+        document.getElementById('toggle-russian-speakers').checked = !!s.target_russian_speakers;
+        document.getElementById('toggle-recruiters').checked = !!s.target_recruiters;
+      } catch (e) { console.error('Failed to load outreach settings', e); }
+    }
+
+    async function saveOutreachSettings(key, value) {
+      try {
+        const current = {
+          target_russian_speakers: document.getElementById('toggle-russian-speakers').checked,
+          target_recruiters: document.getElementById('toggle-recruiters').checked,
+        };
+        current[key] = value;
+        await fetch('/api/settings/outreach', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(current),
+        });
+      } catch (e) { console.error('Failed to save outreach setting', e); }
+    }
+
     // Initialize
     initBoardControls();
     initLogsConsoleState();
     loadResumes();
+    loadOutreachSettings();
     loadJobs().then(() => {
       restoreActiveScrapeTask();
     });
