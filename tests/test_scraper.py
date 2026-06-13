@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from src import database
-import src.server as server_module
-from src.server import app
+import src.web.server as server_module
+from src.web.server import app
 from src.core.scraper import (
     scrape_linkedin_jobs, 
     normalize_brightdata_job, 
@@ -138,7 +138,7 @@ def test_api_search_and_sse_logs():
 def test_api_logs_replay_reconnection():
     # Create a task state manually in active_tasks
     task_id = "test-reconnect-task-id"
-    from src.server import active_tasks, TaskState
+    from src.web.server import active_tasks, TaskState
     
     state = TaskState({"query": "test"})
     # Manually append some logs

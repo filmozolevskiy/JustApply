@@ -7,3 +7,14 @@
 - Updated `.gitignore`: replaced individual `*.db`, `job_tracker.db`, and `.last_trigger` entries with a single `data/` entry.
 - Deleted stale database files: `src/job_tracker.db` and `job_hunter.db`.
 - All 89 tests pass (including `tests/test_database.py` and `tests/test_rate_limiter.py`).
+
+## Iteration 2 — Issue #20: Extract src/web/ subfolder
+
+- Created `src/web/` with `__init__.py`.
+- Moved `src/server.py` → `src/web/server.py`: updated all relative imports from `.` to `..` (schemas, database, rate_limiter, pipelines).
+- Moved `src/dashboard.html` → `src/web/dashboard.html`.
+- Moved `src/run_dashboard.py` → `src/web/run_dashboard.py`: updated server reference to `"src.web.server:app"`; added uvicorn log config writing to `data/uvicorn.log` resolved from project root via `__file__`.
+- Deleted `src/server.py`, `src/run_dashboard.py`, `src/dashboard.html`.
+- Updated all test imports: `src.server` → `src.web.server` across `test_dashboard_jobs.py`, `test_dashboard_resumes.py`, `test_scraper.py`, `test_outreach.py`, `test_rate_limiter.py`.
+- Updated patch targets: `src.server.run_enrichment_task` → `src.web.server.run_enrichment_task`; `src.server.run_scraping_task` → `src.web.server.run_scraping_task`.
+- All 89 tests pass.

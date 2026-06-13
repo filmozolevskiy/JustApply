@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from src.server import app
+from src.web.server import app
 from src.cli import run_search
 import src.rate_limiter as rate_limiter_module
 from src.rate_limiter import RateLimiter, RateLimitError
@@ -49,7 +49,7 @@ class TestRateLimiter:
 @pytest.mark.asyncio
 async def test_server_search_rate_limit(monkeypatch):
     monkeypatch.setenv("MOCK_SCRAPER", "false")
-    with patch("src.server.run_scraping_task"), patch("time.time") as mock_time:
+    with patch("src.web.server.run_scraping_task"), patch("time.time") as mock_time:
         payload = {
             "query": "QA Engineer", "location": "Remote",
             "platform": "brightdata_linkedin", "active_resume": "qa.md",
@@ -71,7 +71,7 @@ async def test_server_search_rate_limit(monkeypatch):
 @pytest.mark.asyncio
 async def test_server_scrape_rate_limit(monkeypatch):
     monkeypatch.setenv("MOCK_SCRAPER", "false")
-    with patch("src.server.run_scraping_task"), patch("time.time") as mock_time:
+    with patch("src.web.server.run_scraping_task"), patch("time.time") as mock_time:
         mock_time.return_value = 1000.0
         assert client.post("/api/scrape?mock_eval=false").status_code == 200
 
@@ -86,7 +86,7 @@ async def test_server_scrape_rate_limit(monkeypatch):
 @pytest.mark.asyncio
 async def test_mock_mode_bypasses_rate_limit(monkeypatch):
     monkeypatch.setenv("MOCK_SCRAPER", "true")
-    with patch("src.server.run_scraping_task"), patch("time.time") as mock_time:
+    with patch("src.web.server.run_scraping_task"), patch("time.time") as mock_time:
         payload = {
             "query": "QA", "location": "Remote", "platform": "brightdata_linkedin",
             "active_resume": "qa.md", "mock_eval": True, "remote_type": "any",
@@ -127,7 +127,7 @@ async def test_cli_and_server_share_state(monkeypatch):
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
          patch("src.pipelines.database.add_job"), \
-         patch("src.server.run_scraping_task"), \
+         patch("src.web.server.run_scraping_task"), \
          patch("time.time") as mock_time:
 
         mock_time.return_value = 1000.0

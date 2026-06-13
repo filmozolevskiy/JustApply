@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src import database
-import src.server as server_module
-from src.server import app
+import src.web.server as server_module
+from src.web.server import app
 
 client = TestClient(app)
 
@@ -96,7 +96,7 @@ def test_put_job_comment_nonexistent():
 def test_post_job_enrich_endpoint():
     from unittest.mock import patch
     
-    with patch("src.server.run_enrichment_task") as mock_enrich_task:
+    with patch("src.web.server.run_enrichment_task") as mock_enrich_task:
         response = client.post("/api/jobs/1/enrich")
         assert response.status_code == 200
         assert response.json() == {"status": "enriching", "job_id": 1}
@@ -119,7 +119,7 @@ def test_post_job_enrich_nonexistent():
 
 @pytest.mark.asyncio
 async def test_run_enrichment_task_writes_enriched_results(setup_test_db):
-    from src.server import run_enrichment_task
+    from src.web.server import run_enrichment_task
     mock_contacts = [{"name": "Test Contact", "url": "https://linkedin.com/in/test", "contacted": False, "russian_speaker": False}]
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
          patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello")), \
@@ -134,6 +134,6 @@ async def test_run_enrichment_task_writes_enriched_results(setup_test_db):
 
 @pytest.mark.asyncio
 async def test_run_enrichment_task_noop_for_missing_job():
-    from src.server import run_enrichment_task
+    from src.web.server import run_enrichment_task
     # Should return without raising for a non-existent job ID
     await run_enrichment_task(99999)

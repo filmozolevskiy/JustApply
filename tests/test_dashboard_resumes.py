@@ -5,8 +5,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
-import src.server as server_module
-from src.server import app
+import src.web.server as server_module
+from src.web.server import app
 
 client = TestClient(app)
 

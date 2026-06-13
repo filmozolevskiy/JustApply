@@ -7,12 +7,12 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import FileResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
-from .schemas import Job
+from ..schemas import Job
 
 # Add project root to path so database module is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment
-from .rate_limiter import scrape_limiter, RateLimitError
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from ..database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment
+from ..rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
 init_db()
@@ -20,7 +20,7 @@ init_db()
 app = FastAPI(title="Job Hunter Dashboard")
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
-RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "resumes")
+RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
 
 # In-memory storage for active scraping sessions
 active_tasks = {}
@@ -93,7 +93,7 @@ async def run_enrichment_task(job_id: int):
     if not job:
         return
 
-    from .pipelines import run_enrichment_pipeline
+    from ..pipelines import run_enrichment_pipeline
     await run_enrichment_pipeline(job)
 
 
@@ -151,7 +151,7 @@ async def run_scraping_task(task_id: str):
         await state.queue.put(event)
 
     try:
-        from .pipelines import run_search_pipeline
+        from ..pipelines import run_search_pipeline
 
         remote_types_str = params.get("remote_type", "any")
         if isinstance(remote_types_str, str):
