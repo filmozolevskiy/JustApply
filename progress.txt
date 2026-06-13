@@ -1,5 +1,13 @@
 # Ralph Loop Progress Log
 
+## Iteration 7 — Issue #29 follow-up: HTML structure tests for Outreach Settings UI
+
+Issue #29 was already implemented and closed in Iteration 6. This iteration adds 2 TDD tests to `tests/test_dashboard_outreach_settings.py` to formally verify the HTML structure:
+- `test_dashboard_html_contains_outreach_settings_panel` — asserts both toggle IDs, panel heading, and both JS functions are present in dashboard.html
+- `test_dashboard_html_outreach_panel_is_separate_from_board_controls` — asserts "Outreach Settings" and "Board Controls" appear at different positions in the file
+
+Full suite: 109 tests pass, no regressions.
+
 ## Iteration 6 — Issue #29: Outreach Settings UI panel
 
 Added an Outreach Settings panel to `src/web/dashboard.html`, visually distinct from the existing Board Controls panel.
