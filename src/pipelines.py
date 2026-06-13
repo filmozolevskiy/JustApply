@@ -4,7 +4,7 @@ import inspect
 from . import database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
-from .core.outreach import source_contacts, load_resume_for_outreach, generate_outreach_message
+from .core.outreach import source_contacts, generate_outreach_for_job
 
 
 async def run_search_pipeline(
@@ -131,13 +131,7 @@ async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
     else:
         await log("No contacts found.", "warning")
 
-    primary_contact = contacts[0] if contacts else None
-    contact_name = primary_contact.get("name") if primary_contact else "Hiring Manager"
-    is_russian = bool(primary_contact.get("russian_speaker")) if primary_contact else False
-
-    resume_name = job.get("resumeUsed") or "qa.md"
-    resume_content = load_resume_for_outreach(resume_name)
-    outreach_message = await generate_outreach_message(job, contact_name, is_russian, resume_content)
+    outreach_message = await generate_outreach_for_job(job, contacts)
 
     enriched = database.enrich_job(job_id, contacts, outreach_message)
     if enriched:

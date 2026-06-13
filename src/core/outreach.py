@@ -1,3 +1,5 @@
+"""Contact Sample sourcing and Outreach Generator for referral messages."""
+
 import os
 import time
 import httpx
@@ -245,3 +247,13 @@ async def generate_outreach_message(
         f"I believe my background aligning developer suites and testing cycles matches your goals.\n\n"
         f"Let me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
     )
+
+
+async def generate_outreach_for_job(job: dict, contacts: list) -> str:
+    """Outreach Generator: load resume profile and draft message for the primary contact."""
+    primary = contacts[0] if contacts else None
+    contact_name = primary.get("name") if primary else "Hiring Manager"
+    is_russian = bool(primary.get("russian_speaker")) if primary else False
+    resume_name = job.get("resumeUsed") or "qa.md"
+    resume_content = load_resume_for_outreach(resume_name)
+    return await generate_outreach_message(job, contact_name, is_russian, resume_content)

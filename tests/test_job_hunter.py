@@ -174,8 +174,7 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
     enriched = {**job, "status": "enriched", "contacts": mock_contacts, "outreachMessage": "Hello Jane"}
 
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
-         patch("src.pipelines.load_resume_for_outreach", return_value="resume"), \
-         patch("src.pipelines.generate_outreach_message", new=AsyncMock(return_value="Hello Jane")), \
+         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello Jane")), \
          patch("src.pipelines.database.enrich_job", return_value=enriched) as mock_save:
 
         result = await run_enrichment_pipeline(job)

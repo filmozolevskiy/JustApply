@@ -229,3 +229,84 @@ def test_contact_toggle_returns_404_for_missing_contact_idx(setup_test_db):
 
     response = client.put(f"/api/jobs/{job_id}/contacts/5", json={"contacted": True})
     assert response.status_code == 404
+
+
+# --- Outreach Generator ---
+
+def test_load_resume_for_outreach_returns_empty_when_all_fail():
+    from src.core.outreach import load_resume_for_outreach
+    with patch("src.core.matcher.load_resume", side_effect=FileNotFoundError("not found")):
+        assert load_resume_for_outreach("missing.md") == ""
+
+
+def test_load_resume_for_outreach_falls_back_to_qa_on_primary_fail():
+    from src.core.outreach import load_resume_for_outreach
+
+    def mock_load(name):
+        if name == "qa.md":
+            return "qa fallback content"
+        raise FileNotFoundError(f"{name} not found")
+
+    with patch("src.core.matcher.load_resume", side_effect=mock_load):
+        assert load_resume_for_outreach("custom_resume.md") == "qa fallback content"
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_message_template_no_api_key():
+    from src.core.outreach import generate_outreach_message
+    job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md", "description": ""}
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        msg = await generate_outreach_message(job, "Alice", False, "resume text")
+    assert "QA Lead" in msg
+    assert "Acme" in msg
+    assert "Hello Alice" in msg
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_message_russian_greeting():
+    from src.core.outreach import generate_outreach_message
+    job = {"title": "Dev", "company": "Corp", "resumeUsed": "qa.md", "description": ""}
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        msg = await generate_outreach_message(job, "Ivan", True, "")
+    assert "Добрый день" in msg
+    assert "Ivan" in msg
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_message_uses_gemini_when_available(monkeypatch):
+    from src.core.outreach import generate_outreach_message
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "  AI-generated outreach  "
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        msg = await generate_outreach_message(
+            {"title": "QA", "company": "Co", "resumeUsed": "qa.md", "description": ""},
+            "Bob", False, "resume text",
+        )
+    assert msg == "AI-generated outreach"
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_for_job_uses_primary_contact():
+    from src.core.outreach import generate_outreach_for_job
+    job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md", "description": ""}
+    contacts = [
+        {"name": "Ivan", "russian_speaker": True},
+        {"name": "Jane", "russian_speaker": False},
+    ]
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        msg = await generate_outreach_for_job(job, contacts)
+    assert "Добрый день" in msg
+    assert "Ivan" in msg
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_for_job_defaults_to_hiring_manager_when_no_contacts():
+    from src.core.outreach import generate_outreach_for_job
+    job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md", "description": ""}
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+        msg = await generate_outreach_for_job(job, [])
+    assert "Hello Hiring Manager" in msg
