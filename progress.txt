@@ -1,5 +1,26 @@
 # Ralph Loop Progress Log
 
+## Iteration 4 — Issue #27: Audience-specific outreach message templates
+
+Replaced the single `build_outreach_prompt` function with two audience-specific template builders in `src/core/outreach.py`:
+- `build_russian_speaker_prompt` — English greeting, includes referral program ask and offer to share CV
+- `build_recruiter_prompt` — English greeting, direct connect/share-CV ask, no referral mention
+
+Updated `generate_outreach_message` to accept an `is_recruiter: bool = False` parameter and select the correct prompt builder (recruiter takes priority over russian_speaker when both are True). Removed all Cyrillic text from the fallback template (no more `Добрый день`).
+
+Updated `generate_outreach_for_job` to read `is_recruiter` from the primary contact and pass it through to `generate_outreach_message`.
+
+Updated 2 existing tests that asserted Cyrillic in output. Added 7 new tests (TDD red→green):
+- `test_build_russian_speaker_prompt_contains_referral_and_english_greeting`
+- `test_build_recruiter_prompt_no_referral_direct_connect`
+- `test_generate_outreach_message_fallback_no_cyrillic_for_russian_speaker`
+- `test_generate_outreach_message_gemini_uses_recruiter_prompt_when_is_recruiter`
+- `test_generate_outreach_message_gemini_uses_russian_speaker_prompt_when_is_russian`
+- `test_generate_outreach_message_recruiter_priority_over_russian_speaker`
+- `test_generate_outreach_for_job_passes_is_recruiter_flag`
+
+Full suite: 108 tests pass, no regressions.
+
 ## Iteration 1 — Issue #24: Contact schema + Apify normalization extension
 
 Added `is_recruiter: bool = False` to the `Contact` model in `src/schemas.py`.

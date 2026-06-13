@@ -259,20 +259,15 @@ def load_resume_for_outreach(resume_name: str) -> str:
         return ""
 
 
-def build_outreach_prompt(
+def build_russian_speaker_prompt(
     resume: str,
     job_title: str,
     company: str,
+    job_link: str,
     description: str,
     contact_name: str,
-    is_russian: bool,
 ) -> str:
-    greeting_instruction = (
-        "Greet the person in Russian (e.g. 'Добрый день, [Name]!') since their profile indicates they speak Russian."
-        if is_russian
-        else "Greet the person in English (e.g. 'Hello [Name],')."
-    )
-    return f"""You are a helpful assistant writing a professional outreach and referral request message on LinkedIn.
+    return f"""You are a helpful assistant writing a professional LinkedIn outreach message from a job candidate.
 
 CANDIDATE RESUME:
 {resume}
@@ -280,18 +275,51 @@ CANDIDATE RESUME:
 JOB DETAILS:
 Title: {job_title}
 Company: {company}
+Posting: {job_link}
 Description/Summary: {description}
 
 RECIPIENT:
 Name: {contact_name}
 
 INSTRUCTIONS:
-1. {greeting_instruction}
+1. Greet the person in English (e.g. 'Hello {contact_name},').
 2. Keep the message concise (100-150 words), professional, and polite.
-3. Reference the job title and company.
-4. Highlight 1 or 2 matching strengths from the candidate's resume that are highly relevant to this job description.
-5. End with a polite request to discuss further.
-6. Do not include any placeholder text (like [Date], [Hiring Manager], etc.). Output the final draft directly. No markdown formatting, just the raw text of the message.
+3. Mention the job title, company name, and include the job posting link.
+4. Highlight 1-2 matching strengths from the resume relevant to the job description, as bullet points.
+5. End with a referral program ask — ask if they'd be willing to refer you, and offer to share your CV.
+6. Do not include any placeholder text. Output the final draft directly. No markdown formatting, just the raw text of the message.
+"""
+
+
+def build_recruiter_prompt(
+    resume: str,
+    job_title: str,
+    company: str,
+    job_link: str,
+    description: str,
+    contact_name: str,
+) -> str:
+    return f"""You are a helpful assistant writing a professional LinkedIn outreach message from a job candidate to a recruiter or HR professional.
+
+CANDIDATE RESUME:
+{resume}
+
+JOB DETAILS:
+Title: {job_title}
+Company: {company}
+Posting: {job_link}
+Description/Summary: {description}
+
+RECIPIENT:
+Name: {contact_name}
+
+INSTRUCTIONS:
+1. Greet the person in English (e.g. 'Hello {contact_name},').
+2. Keep the message concise (100-150 words), professional, and polite.
+3. Mention the job title, company name, and include the job posting link.
+4. Highlight 1-2 matching strengths from the resume relevant to the job description, as bullet points.
+5. End with a direct invitation to connect and an offer to share your CV. Do not ask for introductions to third parties.
+6. Do not include any placeholder text. Output the final draft directly. No markdown formatting, just the raw text of the message.
 """
 
 
@@ -300,6 +328,7 @@ async def generate_outreach_message(
     contact_name: str,
     is_russian: bool,
     resume_content: str,
+    is_recruiter: bool = False,
 ) -> str:
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key and resume_content:
@@ -307,14 +336,25 @@ async def generate_outreach_message(
             import google.generativeai as genai
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-2.5-flash")
-            prompt = build_outreach_prompt(
-                resume_content,
-                job.get("title", ""),
-                job.get("company", ""),
-                job.get("description", ""),
-                contact_name,
-                is_russian,
-            )
+            job_link = job.get("link", "")
+            if is_recruiter:
+                prompt = build_recruiter_prompt(
+                    resume_content,
+                    job.get("title", ""),
+                    job.get("company", ""),
+                    job_link,
+                    job.get("description", ""),
+                    contact_name,
+                )
+            else:
+                prompt = build_russian_speaker_prompt(
+                    resume_content,
+                    job.get("title", ""),
+                    job.get("company", ""),
+                    job_link,
+                    job.get("description", ""),
+                    contact_name,
+                )
             response = await model.generate_content_async(prompt)
             return response.text.strip()
         except Exception:
@@ -326,9 +366,9 @@ async def generate_outreach_message(
         else "Delivery Manager" if resume_name == "project_manager.md"
         else "BI Analyst"
     )
-    greeting = f"Добрый день, {contact_name}!\n\n" if is_russian else f"Hello {contact_name},\n\n"
     return (
-        f"{greeting}I recently saw your post for the {job.get('title', '')} role at "
+        f"Hello {contact_name},\n\n"
+        f"I recently saw your post for the {job.get('title', '')} role at "
         f"{job.get('company', '')}. Based on my matched skills in {resume_name} ({profile_name}), "
         f"I believe my background aligning developer suites and testing cycles matches your goals.\n\n"
         f"Let me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
@@ -340,6 +380,7 @@ async def generate_outreach_for_job(job: dict, contacts: list) -> str:
     primary = contacts[0] if contacts else None
     contact_name = primary.get("name") if primary else "Hiring Manager"
     is_russian = bool(primary.get("russian_speaker")) if primary else False
+    is_recruiter = bool(primary.get("is_recruiter")) if primary else False
     resume_name = job.get("resumeUsed") or "qa.md"
     resume_content = load_resume_for_outreach(resume_name)
-    return await generate_outreach_message(job, contact_name, is_russian, resume_content)
+    return await generate_outreach_message(job, contact_name, is_russian, resume_content, is_recruiter=is_recruiter)
