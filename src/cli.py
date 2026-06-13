@@ -11,10 +11,9 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from . import database
-from src.core.scraper import scrape_linkedin_jobs
-from src.core.matcher import load_resume, evaluate_job
-from src.core.outreach import source_contacts
-from src.rate_limiter import scrape_limiter, RateLimitError
+from .core.outreach import source_contacts
+from .pipelines import run_search_pipeline
+from .rate_limiter import scrape_limiter, RateLimitError
 
 
 async def run_search(
@@ -33,79 +32,21 @@ async def run_search(
             print(f"Warning: Rate limit active. Please wait {e.wait_seconds} seconds.", file=sys.stderr)
             sys.exit(1)
 
-    print(f"Starting search pipeline for position: {position}")
-
-    def log_sync(msg: str, level: str = "info"):
-        print(f"[{level.upper()}] {msg}", file=sys.stderr)
-
-    jobs = await scrape_linkedin_jobs(
-        query=position,
-        location="Remote",
-        remote_types=allowed_remote_types,
-        log_func=log_sync,
-    )
-    print(f"Found {len(jobs)} matching jobs.")
-
     resume_name = position.lower().replace("/", "_").replace(" ", "_")
     if not resume_name.endswith(".md"):
         resume_name += ".md"
 
-    resume_content = None
-    if not mock_eval:
-        try:
-            resume_content = load_resume(resume_name)
-        except FileNotFoundError:
-            try:
-                resume_content = load_resume("qa.md")
-            except FileNotFoundError:
-                print("Warning: No resume found. Skipping LLM evaluation.", file=sys.stderr)
+    def log_sync(msg: str, level: str = "info"):
+        print(f"[{level.upper()}] {msg}", file=sys.stderr)
 
-    database.init_db()
-    saved = []
-    for job in jobs:
-        title = job.get("title") or ""
-        company = job.get("company") or ""
-        link = job.get("link") or ""
-        if database.job_exists(title, company, link):
-            print(f"Skipping duplicate job: '{title}' at '{company}'", file=sys.stderr)
-            continue
-
-        job["resumeUsed"] = resume_name
-
-        if mock_eval or resume_content is None:
-            job.setdefault("matchScore", 0)
-            job.setdefault("matchType", "")
-            job.setdefault("shouldProceed", False)
-            job.setdefault("strengths", [])
-            job.setdefault("gaps", [])
-            
-            from src.core.matcher import check_recruiter_by_name
-            if check_recruiter_by_name(company):
-                job["isRecruiter"] = True
-                job["gaps"].append("Posted by a recruiting agency/staffing firm")
-            else:
-                job["isRecruiter"] = False
-        else:
-            evaluation = await evaluate_job(job, resume_content, allowed_remote_types=allowed_remote_types)
-            if evaluation:
-                job["matchScore"] = evaluation.get("matchScore", 0)
-                job["matchType"] = evaluation.get("matchType", "")
-                job["shouldProceed"] = evaluation.get("shouldProceed", False)
-                job["strengths"] = evaluation.get("strengths", [])
-                job["gaps"] = evaluation.get("gaps", [])
-                if "remoteType" in evaluation:
-                    job["remoteType"] = evaluation["remoteType"]
-                if "summary" in evaluation:
-                    job["description"] = evaluation["summary"]
-                job["isRecruiter"] = evaluation.get("isRecruiter", False)
-                if evaluation.get("salary"):
-                    job["salary"] = evaluation["salary"]
-
-        job_id = database.add_job(job)
-        if job_id is not None:
-            job["id"] = job_id
-            saved.append(job)
-            print(f"Saved: {job.get('title')} at {job.get('company')} (id={job_id})")
+    saved = await run_search_pipeline(
+        query=position,
+        location="Remote",
+        active_resume=resume_name,
+        mock_eval=mock_eval,
+        allowed_remote_types=allowed_remote_types,
+        log_func=log_sync,
+    )
 
     print(f"Search complete. {len(saved)} jobs saved to database.")
     return saved

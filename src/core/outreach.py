@@ -16,6 +16,7 @@ RUSSIAN_LANGUAGES = {"russian", "ukrainian", "belarusian"}
 HR_TITLE_KEYWORDS = ["recruit", "hr ", "human resource", "talent acquisition", "people ops", "hiring manager", "talent ti", "acquisition de talents"]
 
 
+
 async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float = 300.0, poll_interval: float = 5.0) -> list:
     """Fetch up to CONTACT_SAMPLE_SIZE employees for a company via Apify."""
 

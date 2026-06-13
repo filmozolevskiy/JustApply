@@ -101,9 +101,10 @@ async def test_mock_mode_bypasses_rate_limit(monkeypatch):
 @pytest.mark.asyncio
 async def test_cli_rate_limit(monkeypatch):
     monkeypatch.setenv("MOCK_SCRAPER", "false")
-    with patch("src.cli.scrape_linkedin_jobs", return_value=[]), \
-         patch("src.cli.database.init_db"), \
-         patch("src.cli.database.add_job"), \
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[]), \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job"), \
          patch("time.time") as mock_time:
 
         mock_time.return_value = 1000.0
@@ -122,9 +123,10 @@ async def test_cli_rate_limit(monkeypatch):
 async def test_cli_and_server_share_state(monkeypatch):
     """CLI trigger is visible to server — bypass via process switch is impossible."""
     monkeypatch.setenv("MOCK_SCRAPER", "false")
-    with patch("src.cli.scrape_linkedin_jobs", return_value=[]), \
-         patch("src.cli.database.init_db"), \
-         patch("src.cli.database.add_job"), \
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[]), \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job"), \
          patch("src.server.run_scraping_task"), \
          patch("time.time") as mock_time:
 

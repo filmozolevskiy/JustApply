@@ -27,10 +27,11 @@ async def test_run_search_calls_scraper_and_saves_to_db():
         }
     ]
 
-    with patch("src.cli.scrape_linkedin_jobs", return_value=mock_jobs) as mock_scrape, \
-         patch("src.cli.database.init_db") as mock_init, \
-         patch("src.cli.os.path.exists", return_value=False), \
-         patch("src.cli.database.add_job", return_value=1) as mock_add:
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=mock_jobs) as mock_scrape, \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job", return_value=1) as mock_add, \
+         patch("src.cli.scrape_limiter.acquire"):
 
         results = await run_search("QA", mock_eval=True)
 
@@ -69,12 +70,13 @@ async def test_run_search_calls_evaluate_when_not_mock():
         "summary": "This is a concise summary of the QA Lead role."
     }
 
-    with patch("src.cli.scrape_linkedin_jobs", return_value=mock_jobs), \
-         patch("src.cli.load_resume", return_value="# Resume content"), \
-         patch("src.cli.evaluate_job", return_value=mock_evaluation) as mock_eval, \
-         patch("src.cli.database.init_db"), \
-         patch("src.cli.os.path.exists", return_value=False), \
-         patch("src.cli.database.add_job", return_value=42):
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=mock_jobs), \
+         patch("src.pipelines.load_resume", return_value="# Resume content"), \
+         patch("src.pipelines.evaluate_job", return_value=mock_evaluation) as mock_eval, \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job", return_value=42), \
+         patch("src.cli.scrape_limiter.acquire"):
 
         results = await run_search("QA", mock_eval=False)
 

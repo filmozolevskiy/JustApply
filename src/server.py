@@ -11,7 +11,7 @@ from .schemas import Job
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .database import init_db, get_jobs, get_job, update_job_status, add_job, update_job_comment, update_contact_status, job_exists, get_db_connection
+from .database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_db_connection
 from .rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -88,7 +88,6 @@ async def update_contact(job_id: int, contact_idx: int, update: ContactUpdate):
         return JSONResponse(status_code=404, content={"message": "Job or contact not found"})
     return updated
 
-
 def build_outreach_prompt(resume: str, job_title: str, company: str, description: str, contact_name: str, is_russian: bool) -> str:
     greeting_instruction = "Greet the person in Russian (e.g. 'Добрый день, [Name]!') since their profile indicates they speak Russian." if is_russian else "Greet the person in English (e.g. 'Hello [Name],')."
     
@@ -113,18 +112,6 @@ INSTRUCTIONS:
 5. End with a polite request to discuss further.
 6. Do not include any placeholder text (like [Date], [Hiring Manager], etc.). Output the final draft directly. No markdown formatting, just the raw text of the message.
 """
-
-
-def _load_resume_content(resume_name: str) -> str:
-    from src.core.matcher import load_resume
-    try:
-        return load_resume(resume_name)
-    except Exception:
-        pass
-    try:
-        return load_resume("qa.md")
-    except Exception:
-        return ""
 
 
 async def _generate_outreach_message(job: dict, contact_name: str, is_russian: bool, resume_content: str) -> str:
@@ -160,6 +147,19 @@ async def _generate_outreach_message(job: dict, contact_name: str, is_russian: b
         f"I believe my background aligning developer suites and testing cycles matches your goals.\n\n"
         f"Let me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
     )
+
+
+def _load_resume_content(resume_name: str) -> str:
+    from src.core.matcher import load_resume
+    try:
+        return load_resume(resume_name)
+    except Exception:
+        pass
+    try:
+        return load_resume("qa.md")
+    except Exception:
+        return ""
+
 
 
 async def run_enrichment_task(job_id: int):
@@ -249,10 +249,8 @@ async def run_scraping_task(task_id: str):
         await state.queue.put(event)
 
     try:
-        from src.core.scraper import scrape_linkedin_jobs
-        from src.core.matcher import load_resume, evaluate_job
+        from .pipelines import run_search_pipeline
 
-        # Parse remote_type into a list of allowed types
         remote_types_str = params.get("remote_type", "any")
         if isinstance(remote_types_str, str):
             allowed_remote_types = [t.strip().lower() for t in remote_types_str.split(",") if t.strip()]
@@ -261,77 +259,19 @@ async def run_scraping_task(task_id: str):
         else:
             allowed_remote_types = ["any"]
 
-        jobs = await scrape_linkedin_jobs(
+        state.jobs = await run_search_pipeline(
             query=params["query"],
             location=params["location"],
-            remote_types=allowed_remote_types,
-            seniorities=params["seniority"],
-            company_sizes=params["company_size"],
+            active_resume=params["active_resume"],
+            mock_eval=params.get("mock_eval", True),
+            allowed_remote_types=allowed_remote_types,
+            seniorities=params.get("seniority", "any"),
+            company_sizes=params.get("company_size", "any"),
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
             log_func=log_callback,
         )
 
-        active_resume = params["active_resume"]
-        mock_eval = params.get("mock_eval", True)
-        resume_content = None
-        if not mock_eval:
-            try:
-                resume_content = load_resume(active_resume)
-                await log_callback(f"Loaded resume profile: {active_resume}", "info")
-            except FileNotFoundError:
-                await log_callback(f"Resume not found: {active_resume}. Skipping evaluation.", "warning")
-
-        saved_jobs = []
-        for job in jobs:
-            title = job.get("title") or ""
-            company = job.get("company") or ""
-            link = job.get("link") or ""
-            if job_exists(title, company, link):
-                await log_callback(f"Skipping duplicate job: '{title}' at '{company}'", "info")
-                continue
-
-            job["resumeUsed"] = active_resume
-
-            if mock_eval:
-                job.setdefault("matchScore", 85)
-                job.setdefault("matchType", "match")
-                job.setdefault("shouldProceed", True)
-                job.setdefault("strengths", ["Good technical background"])
-                job.setdefault("gaps", ["Review job requirements carefully"])
-                
-                from src.core.matcher import check_recruiter_by_name
-                if check_recruiter_by_name(company):
-                    job["isRecruiter"] = True
-                    job["shouldProceed"] = False
-                    job["matchScore"] = 70
-                    job["matchType"] = "no-match"
-                    job["gaps"].append("Posted by a recruiting agency/staffing firm")
-                else:
-                    job["isRecruiter"] = False
-            elif resume_content:
-                await log_callback(f"Evaluating '{job['title']}' at {job['company']}...", "info")
-                evaluation = await evaluate_job(job, resume_content, log_callback, allowed_remote_types)
-                if evaluation:
-                    job["matchScore"] = evaluation.get("matchScore", 0)
-                    job["matchType"] = evaluation.get("matchType", "")
-                    job["shouldProceed"] = evaluation.get("shouldProceed", False)
-                    job["strengths"] = evaluation.get("strengths", [])
-                    job["gaps"] = evaluation.get("gaps", [])
-                    if "remoteType" in evaluation:
-                        job["remoteType"] = evaluation["remoteType"]
-                    if "summary" in evaluation:
-                        job["description"] = evaluation["summary"]
-                    job["isRecruiter"] = evaluation.get("isRecruiter", False)
-                    if evaluation.get("salary"):
-                        job["salary"] = evaluation["salary"]
-
-            db_id = add_job(job)
-            if db_id is not None:
-                job["id"] = db_id
-                saved_jobs.append(job)
-
-        state.jobs = saved_jobs
         state.status = "completed"
         await log_callback("Jobs database sync completed successfully.", "success")
 
