@@ -21,16 +21,24 @@ A hybrid web scraping integration using third-party APIs (Bright Data for job li
 _Avoid_: Local scraper, browser automation, LinkedIn MCP server, silent mock fallbacks
 
 **Russian Speaker**:
-A company employee identified (via Gemini name/headline classification) as likely having a Russian or CIS cultural background. Targeted for referral outreach because shared cultural background increases referral likelihood — not limited to HR or recruiting roles.
+A company employee classified by the LLM (using name, headline, languages, current position, and location) as likely having a Russian or CIS cultural background. Targeted for referral outreach because shared cultural background increases referral likelihood — not limited to HR or recruiting roles.
 _Avoid_: Russian HR contact, Russian recruiter, language filter
 
 **Contact Sample**:
-Up to 100 LinkedIn employee profiles fetched from a target company via Apify, used as the pool for Russian Speaker classification. If no Russian speakers are found in the sample, the top 3 HR/recruiter profiles from the same sample serve as the fallback outreach targets.
+Up to 100 LinkedIn employee profiles fetched from a target company via Apify, passed as a batch to the LLM for Outreach Audience classification. Up to 5 contacts per Outreach Audience type are selected from the classified results.
 _Avoid_: Employee list, full company scrape
 
+**Outreach Audience**:
+The classification assigned to a contact by the LLM: Russian Speaker, Recruiter, or both. Determines which message template is used. When a contact qualifies as both, the Recruiter template takes priority.
+_Avoid_: Contact type, outreach category, audience filter
+
 **Outreach Generator**:
-An LLM-based component that creates customized cover letters and referral request messages tailored to a specific job listing and the candidate's resume.
+An LLM-based component that creates personalized outreach messages using one of two audience-specific templates: a referral request (for Russian Speakers) or a direct introduction (for Recruiters). Both templates share the same structure — short, bullet-pointed strengths, and a link to the job posting — but differ in call to action.
 _Avoid_: Letter generator, email writer
+
+**Outreach Settings**:
+A global configuration panel in the Kanban Dashboard for toggling which Outreach Audience types to target during enrichment (Russian Speakers, Recruiters, or both). Applies to all enrichments — not per-job.
+_Avoid_: Outreach filters, enrichment config, audience popup
 
 **Kanban Dashboard**:
 A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Enriching`, `Enriched`, `Contacted`, `Interviewing`, `Rejected`).
