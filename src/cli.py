@@ -11,8 +11,7 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from . import database
-from .core.outreach import source_contacts
-from .pipelines import run_search_pipeline
+from .pipelines import run_search_pipeline, run_enrichment_pipeline
 from .rate_limiter import scrape_limiter, RateLimitError
 
 
@@ -53,7 +52,7 @@ async def run_search(
 
 
 async def run_promote() -> list:
-    """Source outreach contacts for jobs that are ready to proceed."""
+    """Enrich jobs ready for outreach: source contacts and generate messages."""
     print("Starting promote pipeline...")
     database.init_db()
 
@@ -64,15 +63,14 @@ async def run_promote() -> list:
     ]
     print(f"Found {len(to_promote)} jobs ready for outreach.")
 
+    def log_sync(msg: str, level: str = "info"):
+        print(f"  [{level.upper()}] {msg}", file=sys.stderr)
+
     promoted = []
     for job in to_promote:
-        print(f"Sourcing contacts for '{job['title']}' at '{job['company']}'...")
-        contacts = await source_contacts(job)
-        if contacts:
-            print(f"  Found {len(contacts)} contact(s). First: {contacts[0].get('name')}")
-        else:
-            print("  No contacts found.")
-        promoted.append(job)
+        print(f"Enriching '{job['title']}' at '{job['company']}'...")
+        enriched = await run_enrichment_pipeline(job, log_func=log_sync)
+        promoted.append(enriched if enriched else job)
 
     print(f"Promote complete. Processed {len(promoted)} jobs.")
     return promoted

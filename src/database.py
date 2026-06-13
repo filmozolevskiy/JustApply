@@ -366,6 +366,27 @@ def get_job(job_id, db_path=None):
     return _parse_job_row(row)
 
 
+def enrich_job(job_id, contacts, outreach_message, db_path=None):
+    """Persist contacts, outreach message, and set status to enriched."""
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute(
+        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'enriched' WHERE id = ?",
+        (json.dumps(contacts), outreach_message, job_id),
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return _parse_job_row(row) if row else None
+
+
 def job_exists(title, company, link=None, db_path=None):
     if db_path is None:
         db_path = DB_PATH

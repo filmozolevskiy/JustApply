@@ -4,6 +4,7 @@ import inspect
 from . import database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
+from .core.outreach import source_contacts, load_resume_for_outreach, generate_outreach_message
 
 
 async def run_search_pipeline(
@@ -103,3 +104,42 @@ async def run_search_pipeline(
 
     await log(f"Pipeline complete. {len(saved)} jobs saved.")
     return saved
+
+
+async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
+    """Source contacts, generate outreach message, and persist enriched job."""
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    job_id = job.get("id")
+    if not job_id:
+        return None
+
+    title = job.get("title") or ""
+    company = job.get("company") or ""
+    await log(f"Enriching '{title}' at '{company}'...")
+
+    contacts = await source_contacts(job, log_func=log_func)
+    if contacts:
+        await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
+    else:
+        await log("No contacts found.", "warning")
+
+    primary_contact = contacts[0] if contacts else None
+    contact_name = primary_contact.get("name") if primary_contact else "Hiring Manager"
+    is_russian = bool(primary_contact.get("russian_speaker")) if primary_contact else False
+
+    resume_name = job.get("resumeUsed") or "qa.md"
+    resume_content = load_resume_for_outreach(resume_name)
+    outreach_message = await generate_outreach_message(job, contact_name, is_russian, resume_content)
+
+    enriched = database.enrich_job(job_id, contacts, outreach_message)
+    if enriched:
+        await log(f"Enrichment complete for job id={job_id}.", "success")
+    return enriched

@@ -157,3 +157,91 @@ async def source_contacts(job: dict, log_func=None) -> list:
     ]
     await log(f"Found {len(hr_contacts)} HR/recruiter contact(s).", "info")
     return hr_contacts[:10]
+
+
+def load_resume_for_outreach(resume_name: str) -> str:
+    from .matcher import load_resume
+    try:
+        return load_resume(resume_name)
+    except Exception:
+        pass
+    try:
+        return load_resume("qa.md")
+    except Exception:
+        return ""
+
+
+def build_outreach_prompt(
+    resume: str,
+    job_title: str,
+    company: str,
+    description: str,
+    contact_name: str,
+    is_russian: bool,
+) -> str:
+    greeting_instruction = (
+        "Greet the person in Russian (e.g. 'Добрый день, [Name]!') since their profile indicates they speak Russian."
+        if is_russian
+        else "Greet the person in English (e.g. 'Hello [Name],')."
+    )
+    return f"""You are a helpful assistant writing a professional outreach and referral request message on LinkedIn.
+
+CANDIDATE RESUME:
+{resume}
+
+JOB DETAILS:
+Title: {job_title}
+Company: {company}
+Description/Summary: {description}
+
+RECIPIENT:
+Name: {contact_name}
+
+INSTRUCTIONS:
+1. {greeting_instruction}
+2. Keep the message concise (100-150 words), professional, and polite.
+3. Reference the job title and company.
+4. Highlight 1 or 2 matching strengths from the candidate's resume that are highly relevant to this job description.
+5. End with a polite request to discuss further.
+6. Do not include any placeholder text (like [Date], [Hiring Manager], etc.). Output the final draft directly. No markdown formatting, just the raw text of the message.
+"""
+
+
+async def generate_outreach_message(
+    job: dict,
+    contact_name: str,
+    is_russian: bool,
+    resume_content: str,
+) -> str:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key and resume_content:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            prompt = build_outreach_prompt(
+                resume_content,
+                job.get("title", ""),
+                job.get("company", ""),
+                job.get("description", ""),
+                contact_name,
+                is_russian,
+            )
+            response = await model.generate_content_async(prompt)
+            return response.text.strip()
+        except Exception:
+            pass
+
+    resume_name = job.get("resumeUsed") or "qa.md"
+    profile_name = (
+        "QA Automator" if resume_name == "qa.md"
+        else "Delivery Manager" if resume_name == "project_manager.md"
+        else "BI Analyst"
+    )
+    greeting = f"Добрый день, {contact_name}!\n\n" if is_russian else f"Hello {contact_name},\n\n"
+    return (
+        f"{greeting}I recently saw your post for the {job.get('title', '')} role at "
+        f"{job.get('company', '')}. Based on my matched skills in {resume_name} ({profile_name}), "
+        f"I believe my background aligning developer suites and testing cycles matches your goals.\n\n"
+        f"Let me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
+    )

@@ -117,17 +117,19 @@ async def test_run_promote_reads_sourced_jobs_and_sources_contacts():
     ]
 
     mock_contacts = [{"name": "Jane Recruiter", "title": "Recruiter", "url": "https://linkedin.com/in/jane"}]
+    enriched_job = {**seeded_jobs[0], "status": "enriched", "contacts": mock_contacts}
 
     with patch("src.cli.database.init_db"), \
          patch("src.cli.database.get_jobs", return_value=seeded_jobs), \
-         patch("src.cli.source_contacts", return_value=mock_contacts) as mock_source:
+         patch("src.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
 
         results = await run_promote()
 
         # Only job 1 qualifies (shouldProceed=True and status=sourced)
-        assert mock_source.call_count == 1
+        assert mock_enrich.call_count == 1
         assert len(results) == 1
         assert results[0]["company"] == "Docker"
+        assert results[0]["status"] == "enriched"
 
 
 @pytest.mark.asyncio
@@ -143,11 +145,41 @@ async def test_run_promote_handles_no_contacts_gracefully():
         }
     ]
 
+    enriched_job = {**seeded_jobs[0], "status": "enriched", "contacts": []}
+
     with patch("src.cli.database.init_db"), \
          patch("src.cli.database.get_jobs", return_value=seeded_jobs), \
-         patch("src.cli.source_contacts", return_value=[]):
+         patch("src.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)):
 
         results = await run_promote()
 
         # Job is still included even with no contacts
         assert len(results) == 1
+        assert results[0]["status"] == "enriched"
+
+
+@pytest.mark.asyncio
+async def test_run_enrichment_pipeline_sources_contacts_and_persists():
+    from src.pipelines import run_enrichment_pipeline
+
+    job = {
+        "id": 10,
+        "title": "QA Engineer",
+        "company": "Docker",
+        "resumeUsed": "qa.md",
+        "description": "Build test automation.",
+        "contacts": [],
+    }
+    mock_contacts = [{"name": "Jane", "title": "Recruiter", "url": "https://linkedin.com/in/jane", "contacted": False, "russian_speaker": False}]
+    enriched = {**job, "status": "enriched", "contacts": mock_contacts, "outreachMessage": "Hello Jane"}
+
+    with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
+         patch("src.pipelines.load_resume_for_outreach", return_value="resume"), \
+         patch("src.pipelines.generate_outreach_message", new=AsyncMock(return_value="Hello Jane")), \
+         patch("src.pipelines.database.enrich_job", return_value=enriched) as mock_save:
+
+        result = await run_enrichment_pipeline(job)
+
+        assert result["status"] == "enriched"
+        assert result["contacts"] == mock_contacts
+        mock_save.assert_called_once_with(10, mock_contacts, "Hello Jane")

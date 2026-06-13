@@ -11,7 +11,7 @@ from .schemas import Job
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_db_connection
+from .database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status
 from .rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -88,118 +88,20 @@ async def update_contact(job_id: int, contact_idx: int, update: ContactUpdate):
         return JSONResponse(status_code=404, content={"message": "Job or contact not found"})
     return updated
 
-def build_outreach_prompt(resume: str, job_title: str, company: str, description: str, contact_name: str, is_russian: bool) -> str:
-    greeting_instruction = "Greet the person in Russian (e.g. 'Добрый день, [Name]!') since their profile indicates they speak Russian." if is_russian else "Greet the person in English (e.g. 'Hello [Name],')."
-    
-    return f"""You are a helpful assistant writing a professional outreach and referral request message on LinkedIn.
-
-CANDIDATE RESUME:
-{resume}
-
-JOB DETAILS:
-Title: {job_title}
-Company: {company}
-Description/Summary: {description}
-
-RECIPIENT:
-Name: {contact_name}
-
-INSTRUCTIONS:
-1. {greeting_instruction}
-2. Keep the message concise (100-150 words), professional, and polite.
-3. Reference the job title and company.
-4. Highlight 1 or 2 matching strengths from the candidate's resume that are highly relevant to this job description.
-5. End with a polite request to discuss further.
-6. Do not include any placeholder text (like [Date], [Hiring Manager], etc.). Output the final draft directly. No markdown formatting, just the raw text of the message.
-"""
-
-
-async def _generate_outreach_message(job: dict, contact_name: str, is_russian: bool, resume_content: str) -> str:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if api_key and resume_content:
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            prompt = build_outreach_prompt(
-                resume_content,
-                job.get("title", ""),
-                job.get("company", ""),
-                job.get("description", ""),
-                contact_name,
-                is_russian,
-            )
-            response = await model.generate_content_async(prompt)
-            return response.text.strip()
-        except Exception:
-            pass
-
-    resume_name = job.get("resumeUsed") or "qa.md"
-    profile_name = (
-        "QA Automator" if resume_name == "qa.md"
-        else "Delivery Manager" if resume_name == "project_manager.md"
-        else "BI Analyst"
-    )
-    greeting = f"Добрый день, {contact_name}!\n\n" if is_russian else f"Hello {contact_name},\n\n"
-    return (
-        f"{greeting}I recently saw your post for the {job.get('title', '')} role at "
-        f"{job.get('company', '')}. Based on my matched skills in {resume_name} ({profile_name}), "
-        f"I believe my background aligning developer suites and testing cycles matches your goals.\n\n"
-        f"Let me know if we can schedule a quick discussion!\n\nBest,\nCandidate"
-    )
-
-
-def _load_resume_content(resume_name: str) -> str:
-    from src.core.matcher import load_resume
-    try:
-        return load_resume(resume_name)
-    except Exception:
-        pass
-    try:
-        return load_resume("qa.md")
-    except Exception:
-        return ""
-
-
-
 async def run_enrichment_task(job_id: int):
     job = get_job(job_id)
     if not job:
         return
 
-    from src.core.outreach import source_contacts
-    contacts = await source_contacts(job)
-
-    primary_contact = contacts[0] if contacts else None
-    contact_name = primary_contact.get("name") if primary_contact else "Hiring Manager"
-    is_russian = bool(primary_contact.get("russian_speaker")) if primary_contact else False
-
-    resume_name = job.get("resumeUsed") or "qa.md"
-    resume_content = _load_resume_content(resume_name)
-    outreach_message = await _generate_outreach_message(job, contact_name, is_russian, resume_content)
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'enriched' WHERE id = ?",
-        (json.dumps(contacts), outreach_message, job_id),
-    )
-    conn.commit()
-    conn.close()
+    from .pipelines import run_enrichment_pipeline
+    await run_enrichment_pipeline(job)
 
 
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-    if not cursor.fetchone():
-        conn.close()
+    updated = update_job_status(job_id, "enriching")
+    if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
-    
-    cursor.execute("UPDATE jobs SET status = 'enriching' WHERE id = ?", (job_id,))
-    conn.commit()
-    conn.close()
 
     background_tasks.add_task(run_enrichment_task, job_id)
     return {"status": "enriching", "job_id": job_id}
