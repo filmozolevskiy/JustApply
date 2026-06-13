@@ -1,38 +1,13 @@
 # Ralph Loop Progress Log
 
-## Iteration 1 — Issue #19: Set up data/ directory and migrate runtime artifacts
+## Iteration 1 — Issue #24: Contact schema + Apify normalization extension
 
-- Updated `src/database.py`: `DB_PATH` now resolves to `<project_root>/data/job_tracker.db`; `init_db()` auto-creates the `data/` directory via `os.makedirs(..., exist_ok=True)`.
-- Updated `src/rate_limiter.py`: `LOCK_FILE` now resolves to `<project_root>/data/.last_trigger`.
-- Updated `.gitignore`: replaced individual `*.db`, `job_tracker.db`, and `.last_trigger` entries with a single `data/` entry.
-- Deleted stale database files: `src/job_tracker.db` and `job_hunter.db`.
-- All 89 tests pass (including `tests/test_database.py` and `tests/test_rate_limiter.py`).
+Added `is_recruiter: bool = False` to the `Contact` model in `src/schemas.py`.
 
-## Iteration 2 — Issue #20: Extract src/web/ subfolder
+Extended `_normalize_apify_employee` in `src/core/outreach.py` to extract two new fields from raw Apify profiles: `currentPosition` and `location` (defaulting to `""` when absent). Also initialises `is_recruiter: False` on every normalized contact.
 
-- Created `src/web/` with `__init__.py`.
-- Moved `src/server.py` → `src/web/server.py`: updated all relative imports from `.` to `..` (schemas, database, rate_limiter, pipelines).
-- Moved `src/dashboard.html` → `src/web/dashboard.html`.
-- Moved `src/run_dashboard.py` → `src/web/run_dashboard.py`: updated server reference to `"src.web.server:app"`; added uvicorn log config writing to `data/uvicorn.log` resolved from project root via `__file__`.
-- Deleted `src/server.py`, `src/run_dashboard.py`, `src/dashboard.html`.
-- Updated all test imports: `src.server` → `src.web.server` across `test_dashboard_jobs.py`, `test_dashboard_resumes.py`, `test_scraper.py`, `test_outreach.py`, `test_rate_limiter.py`.
-- Updated patch targets: `src.server.run_enrichment_task` → `src.web.server.run_enrichment_task`; `src.server.run_scraping_task` → `src.web.server.run_scraping_task`.
-- All 89 tests pass.
+Added 4 new tests (TDD red→green):
+- `test_schemas.py`: `test_contact_schema_has_is_recruiter_field`
+- `test_outreach.py`: `test_normalize_extracts_current_position_and_location`, `test_normalize_handles_missing_current_position_and_location`, `test_contact_new_fields_persist_through_db_roundtrip`
 
-## Iteration 3 — Issue #21: Extract src/cli/ and replace job_hunter.py with __main__.py
-
-- Created `src/cli/` package with `__init__.py`, `cli.py`, and `__main__.py`.
-- Moved `src/cli.py` → `src/cli/cli.py`: updated relative imports from `.` to `..` (`from .. import database`, `from ..pipelines import ...`, `from ..rate_limiter import ...`); removed the `sys.path.insert` hack that was only needed for direct file execution.
-- Created `src/cli/__init__.py`: re-exports `run_search`, `run_promote`, `main`, `database`, `scrape_limiter`, `run_enrichment_pipeline` from `.cli` to preserve backward-compatible import paths (`from src.cli import ...`).
-- Created `src/cli/__main__.py`: `from .cli import main; main()` — enables `python3 -m src.cli`.
-- Deleted `src/cli.py` and root-level `job_hunter.py`.
-- Updated two patch targets in `tests/test_job_hunter.py` from `src.cli.run_enrichment_pipeline` → `src.cli.cli.run_enrichment_pipeline` (the package `__init__` re-export doesn't intercept calls made inside `cli.py`'s own namespace).
-- `python3 -m src.cli --help` exits 0. All 89 tests pass.
-
-## Iteration 4 — Issue #22: Update documentation to reflect restructured layout
-
-- Updated `CLAUDE.md` CLI commands: replaced `python3 job_hunter.py --search/--promote` with `python3 -m src.cli --search/--promote`; replaced `python3 -m src.run_dashboard` with `python3 -m src.web.run_dashboard`.
-- Updated `CLAUDE.md` project structure diagram: removed `job_hunter.py`; replaced flat `src/` entries with `src/cli/`, `src/web/`, `src/core/` subfolders; added `data/` directory entry.
-- Updated `CONTEXT.md` Job Tracker Database definition: changed path from `src/` to `data/`.
-- Confirmed no remaining references to `job_hunter.py`, `src/server.py`, `src/cli.py`, or `src/run_dashboard` in either doc.
-- All 89 tests pass.
+All 93 tests pass. No regressions.

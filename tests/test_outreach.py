@@ -138,6 +138,58 @@ def test_normalize_handles_empty_item():
     assert result["russian_speaker"] is False
 
 
+def test_normalize_extracts_current_position_and_location():
+    item = {
+        "firstName": "Ivan", "lastName": "Petrov",
+        "headline": "Backend Dev", "linkedinUrl": "https://linkedin.com/in/ivan",
+        "languages": [],
+        "currentPosition": "Senior Engineer at TechCorp",
+        "location": "Montreal, QC",
+    }
+    result = _normalize_apify_employee(item)
+    assert result["currentPosition"] == "Senior Engineer at TechCorp"
+    assert result["location"] == "Montreal, QC"
+
+
+def test_normalize_handles_missing_current_position_and_location():
+    item = {
+        "firstName": "Jane", "lastName": "Smith",
+        "headline": "HR", "linkedinUrl": "https://linkedin.com/in/jane",
+        "languages": [],
+    }
+    result = _normalize_apify_employee(item)
+    assert result["currentPosition"] == ""
+    assert result["location"] == ""
+
+
+# --- DB round-trip ---
+
+def test_contact_new_fields_persist_through_db_roundtrip(setup_test_db):
+    db_path = setup_test_db
+    contacts = [
+        {
+            "name": "Alice", "title": "HR Manager",
+            "url": "https://linkedin.com/in/alice",
+            "contacted": False, "russian_speaker": False,
+            "is_recruiter": True,
+            "currentPosition": "HR Manager at Acme",
+            "location": "Toronto, ON",
+        }
+    ]
+    job_id = database.add_job({
+        "title": "QA Engineer",
+        "company": "Acme",
+        "status": "sourced",
+        "contacts": contacts,
+    }, db_path=db_path)
+
+    job = database.get_job(job_id, db_path=db_path)
+    contact = job["contacts"][0]
+    assert contact["is_recruiter"] is True
+    assert contact["currentPosition"] == "HR Manager at Acme"
+    assert contact["location"] == "Toronto, ON"
+
+
 # --- API: PUT /api/jobs/{id}/contacts/{idx} ---
 
 def test_contact_toggle_updates_db_and_promotes_status(setup_test_db):

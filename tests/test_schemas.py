@@ -41,6 +41,14 @@ def test_contact_schema_empty():
     assert c.contacted is False
 
 
+def test_contact_schema_has_is_recruiter_field():
+    from src.schemas import Contact
+    c = Contact()
+    assert c.is_recruiter is False
+    c2 = Contact(is_recruiter=True)
+    assert c2.is_recruiter is True
+
+
 # --- Job schema ---
 
 def test_job_schema_from_get_job_output(db):

@@ -17,6 +17,7 @@ class Contact(BaseModel):
     linkedin: str = ""
     contacted: bool = False
     russian_speaker: bool = False
+    is_recruiter: bool = False
 
 
 class Job(BaseModel):

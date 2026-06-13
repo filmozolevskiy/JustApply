@@ -106,6 +106,9 @@ def _normalize_apify_employee(item: dict) -> dict:
         "url": item.get("linkedinUrl") or item.get("linkedInUrl") or item.get("profileUrl") or item.get("url") or "",
         "contacted": False,
         "russian_speaker": is_russian_speaker,
+        "is_recruiter": False,
+        "currentPosition": item.get("currentPosition") or "",
+        "location": item.get("location") or "",
     }
 
 
