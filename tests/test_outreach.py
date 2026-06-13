@@ -14,7 +14,8 @@ from src.web.server import app
 from fastapi.testclient import TestClient
 
 import src.core.outreach as outreach_module
-from src.core.outreach import source_contacts, _normalize_apify_employee, _run_apify_actor, ApifyTimeoutError
+from src.core.outreach import source_contacts, _normalize_apify_employee, _run_apify_actor, ApifyTimeoutError, classify_contacts
+from src.schemas import OutreachSettings
 
 client = TestClient(app)
 
@@ -363,3 +364,118 @@ async def test_generate_outreach_for_job_defaults_to_hiring_manager_when_no_cont
     with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         msg = await generate_outreach_for_job(job, [])
     assert "Hello Hiring Manager" in msg
+
+
+# --- classify_contacts ---
+
+@pytest.mark.asyncio
+async def test_classify_contacts_assigns_russian_speaker_flag(monkeypatch):
+    from src.core.outreach import classify_contacts
+    from src.schemas import OutreachSettings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    items = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
+    settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = '[{"index": 0, "russian_speaker": true, "is_recruiter": false}]'
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        result = await classify_contacts(items, settings)
+
+    assert len(result) == 1
+    assert result[0]["russian_speaker"] is True
+    assert result[0]["is_recruiter"] is False
+
+
+@pytest.mark.asyncio
+async def test_classify_contacts_assigns_recruiter_flag(monkeypatch):
+    from src.core.outreach import classify_contacts
+    from src.schemas import OutreachSettings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    items = [{"firstName": "Jane", "lastName": "HR", "headline": "HR Manager", "linkedinUrl": ""}]
+    settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = '[{"index": 0, "russian_speaker": false, "is_recruiter": true}]'
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        result = await classify_contacts(items, settings)
+
+    assert len(result) == 1
+    assert result[0]["is_recruiter"] is True
+    assert result[0]["russian_speaker"] is False
+
+
+@pytest.mark.asyncio
+async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
+    from src.core.outreach import classify_contacts
+    from src.schemas import OutreachSettings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    items = [{"firstName": "Olga", "lastName": "Rec", "headline": "Talent Acquisition", "linkedinUrl": ""}]
+    settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = '[{"index": 0, "russian_speaker": true, "is_recruiter": true}]'
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        result = await classify_contacts(items, settings)
+
+    assert len(result) == 1
+    assert result[0]["russian_speaker"] is True
+    assert result[0]["is_recruiter"] is True
+
+
+@pytest.mark.asyncio
+async def test_classify_contacts_caps_at_five_per_group(monkeypatch):
+    from src.core.outreach import classify_contacts
+    from src.schemas import OutreachSettings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    items = [{"firstName": f"Ivan{i}", "lastName": "P", "headline": "Dev", "linkedinUrl": ""} for i in range(7)]
+    settings = OutreachSettings(target_russian_speakers=True, target_recruiters=False)
+
+    llm_response = json.dumps([{"index": i, "russian_speaker": True, "is_recruiter": False} for i in range(7)])
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = llm_response
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        result = await classify_contacts(items, settings)
+
+    assert sum(1 for c in result if c["russian_speaker"]) == 5
+
+
+@pytest.mark.asyncio
+async def test_classify_contacts_returns_empty_when_llm_returns_no_matches(monkeypatch):
+    from src.core.outreach import classify_contacts
+    from src.schemas import OutreachSettings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    items = [{"firstName": "Bob", "lastName": "Smith", "headline": "Engineer", "linkedinUrl": ""}]
+    settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "[]"
+    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
+
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+        result = await classify_contacts(items, settings)
+
+    assert result == []

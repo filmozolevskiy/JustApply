@@ -25,3 +25,20 @@ Updated `src/db/__init__.py` to export the two new functions.
 Added `GET /api/settings/outreach` and `PUT /api/settings/outreach` endpoints to `src/web/server.py`.
 
 All 3 new tests pass (TDD red→green). Full suite: 96 tests pass, no regressions.
+
+## Iteration 3 — Issue #26: Batch LLM contact classification (classify_contacts)
+
+Added `classify_contacts(items, settings)` async function to `src/core/outreach.py`.
+
+The function sends a single batch Gemini prompt with all raw Apify profiles formatted as numbered entries. Gemini returns a JSON array of classified contacts with `russian_speaker` and `is_recruiter` flags. Results are capped at 5 per audience type. Contacts matching neither type are excluded. Settings (`OutreachSettings`) control which audience types are included in the output.
+
+Added `import json` to `src/core/outreach.py`.
+
+Added 5 new tests (TDD red→green) to `tests/test_outreach.py`:
+- `test_classify_contacts_assigns_russian_speaker_flag`
+- `test_classify_contacts_assigns_recruiter_flag`
+- `test_classify_contacts_handles_dual_classified_contact`
+- `test_classify_contacts_caps_at_five_per_group`
+- `test_classify_contacts_returns_empty_when_llm_returns_no_matches`
+
+Full suite: 101 tests pass, no regressions.
