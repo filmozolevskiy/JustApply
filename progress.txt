@@ -1,5 +1,26 @@
 # Ralph Loop Progress Log
 
+## Iteration 5 — Issue #28: source_contacts refactor + enrichment pipeline wiring
+
+Replaced the hardcoded `RUSSIAN_LANGUAGES` / `HR_TITLE_KEYWORDS` filtering in `source_contacts` with a call to `classify_contacts`.
+
+Changes in `src/core/outreach.py`:
+- Deleted `RUSSIAN_LANGUAGES` and `HR_TITLE_KEYWORDS` constants.
+- Updated `_normalize_apify_employee` to always set `russian_speaker: False` (LLM classification owns this now).
+- Updated `source_contacts` to accept `settings: OutreachSettings = None` and call `classify_contacts(items, settings)` instead of manual field/keyword filtering.
+
+Changes in `src/pipelines.py`:
+- Imported `OutreachSettings` from `..schemas`.
+- `run_enrichment_pipeline` now calls `database.get_outreach_settings()`, wraps the result in `OutreachSettings(...)`, and passes it as `settings=` to `source_contacts`.
+
+Tests updated in `tests/test_outreach.py`:
+- Removed 4 tests for the old language/keyword-based behavior.
+- Added 2 new tests (`test_source_contacts_delegates_to_classify_contacts_with_settings`, `test_source_contacts_uses_default_settings_when_none_provided`) that mock `_run_apify_actor` + `classify_contacts` and assert toggle behaviour.
+
+Existing tests in `tests/test_job_hunter.py` (added in this iteration) cover `run_enrichment_pipeline` settings wiring.
+
+Full suite: 107 tests pass, no regressions.
+
 ## Iteration 4 — Issue #27: Audience-specific outreach message templates
 
 Replaced the single `build_outreach_prompt` function with two audience-specific template builders in `src/core/outreach.py`:
