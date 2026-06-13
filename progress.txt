@@ -28,3 +28,11 @@
 - Deleted `src/cli.py` and root-level `job_hunter.py`.
 - Updated two patch targets in `tests/test_job_hunter.py` from `src.cli.run_enrichment_pipeline` → `src.cli.cli.run_enrichment_pipeline` (the package `__init__` re-export doesn't intercept calls made inside `cli.py`'s own namespace).
 - `python3 -m src.cli --help` exits 0. All 89 tests pass.
+
+## Iteration 4 — Issue #22: Update documentation to reflect restructured layout
+
+- Updated `CLAUDE.md` CLI commands: replaced `python3 job_hunter.py --search/--promote` with `python3 -m src.cli --search/--promote`; replaced `python3 -m src.run_dashboard` with `python3 -m src.web.run_dashboard`.
+- Updated `CLAUDE.md` project structure diagram: removed `job_hunter.py`; replaced flat `src/` entries with `src/cli/`, `src/web/`, `src/core/` subfolders; added `data/` directory entry.
+- Updated `CONTEXT.md` Job Tracker Database definition: changed path from `src/` to `data/`.
+- Confirmed no remaining references to `job_hunter.py`, `src/server.py`, `src/cli.py`, or `src/run_dashboard` in either doc.
+- All 89 tests pass.
