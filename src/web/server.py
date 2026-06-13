@@ -7,11 +7,11 @@ from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import FileResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
-from ..schemas import Job
+from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment, get_outreach_settings, save_outreach_settings
 from ..rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -46,6 +46,16 @@ async def get_resumes():
             except Exception:
                 pass
     return resumes
+
+
+@app.get("/api/settings/outreach", response_model=OutreachSettings)
+async def get_settings_outreach():
+    return get_outreach_settings()
+
+
+@app.put("/api/settings/outreach", response_model=OutreachSettings)
+async def put_settings_outreach(settings: OutreachSettings):
+    return save_outreach_settings(settings.target_russian_speakers, settings.target_recruiters)
 
 
 @app.get("/api/jobs", response_model=list[Job])

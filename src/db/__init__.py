@@ -1,4 +1,5 @@
 from .connection import DB_PATH, get_db_connection, init_db
+from .settings import get_outreach_settings, save_outreach_settings
 from .jobs import (
     VALID_STATUSES,
     get_jobs,

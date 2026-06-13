@@ -55,6 +55,15 @@ def init_db(db_path=None):
     except sqlite3.OperationalError:
         pass
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS outreach_settings (
+            id INTEGER PRIMARY KEY,
+            target_russian_speakers INTEGER NOT NULL DEFAULT 1,
+            target_recruiters INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    conn.commit()
+
     cursor.execute("SELECT COUNT(*) FROM jobs")
     count = cursor.fetchone()[0]
     if count == 0:

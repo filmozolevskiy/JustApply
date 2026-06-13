@@ -11,3 +11,17 @@ Added 4 new tests (TDD red→green):
 - `test_outreach.py`: `test_normalize_extracts_current_position_and_location`, `test_normalize_handles_missing_current_position_and_location`, `test_contact_new_fields_persist_through_db_roundtrip`
 
 All 93 tests pass. No regressions.
+
+## Iteration 2 — Issue #25: Outreach Settings model + API
+
+Added `OutreachSettings` Pydantic model to `src/schemas.py` with `target_russian_speakers: bool = True` and `target_recruiters: bool = True`.
+
+Created `src/db/settings.py` with `get_outreach_settings` and `save_outreach_settings` functions using SQLite upsert (ON CONFLICT DO UPDATE).
+
+Updated `src/db/connection.py` to create the `outreach_settings` table in `init_db`.
+
+Updated `src/db/__init__.py` to export the two new functions.
+
+Added `GET /api/settings/outreach` and `PUT /api/settings/outreach` endpoints to `src/web/server.py`.
+
+All 3 new tests pass (TDD red→green). Full suite: 96 tests pass, no regressions.

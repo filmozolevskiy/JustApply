@@ -1,6 +1,11 @@
 from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
 
+
+class OutreachSettings(BaseModel):
+    target_russian_speakers: bool = True
+    target_recruiters: bool = True
+
 JobStatus = Literal[
     "sourced", "enriching", "enriched", "evaluating",
     "contacted", "applied", "interviewing", "rejected",
