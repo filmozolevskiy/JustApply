@@ -7,12 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Add project root to path so modules are importable when run directly
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from . import database
-from .pipelines import run_search_pipeline, run_enrichment_pipeline
-from .rate_limiter import scrape_limiter, RateLimitError
+from .. import database
+from ..pipelines import run_search_pipeline, run_enrichment_pipeline
+from ..rate_limiter import scrape_limiter, RateLimitError
 
 
 async def run_search(

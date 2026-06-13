@@ -18,3 +18,13 @@
 - Updated all test imports: `src.server` → `src.web.server` across `test_dashboard_jobs.py`, `test_dashboard_resumes.py`, `test_scraper.py`, `test_outreach.py`, `test_rate_limiter.py`.
 - Updated patch targets: `src.server.run_enrichment_task` → `src.web.server.run_enrichment_task`; `src.server.run_scraping_task` → `src.web.server.run_scraping_task`.
 - All 89 tests pass.
+
+## Iteration 3 — Issue #21: Extract src/cli/ and replace job_hunter.py with __main__.py
+
+- Created `src/cli/` package with `__init__.py`, `cli.py`, and `__main__.py`.
+- Moved `src/cli.py` → `src/cli/cli.py`: updated relative imports from `.` to `..` (`from .. import database`, `from ..pipelines import ...`, `from ..rate_limiter import ...`); removed the `sys.path.insert` hack that was only needed for direct file execution.
+- Created `src/cli/__init__.py`: re-exports `run_search`, `run_promote`, `main`, `database`, `scrape_limiter`, `run_enrichment_pipeline` from `.cli` to preserve backward-compatible import paths (`from src.cli import ...`).
+- Created `src/cli/__main__.py`: `from .cli import main; main()` — enables `python3 -m src.cli`.
+- Deleted `src/cli.py` and root-level `job_hunter.py`.
+- Updated two patch targets in `tests/test_job_hunter.py` from `src.cli.run_enrichment_pipeline` → `src.cli.cli.run_enrichment_pipeline` (the package `__init__` re-export doesn't intercept calls made inside `cli.py`'s own namespace).
+- `python3 -m src.cli --help` exits 0. All 89 tests pass.

@@ -121,7 +121,7 @@ async def test_run_promote_reads_sourced_jobs_and_sources_contacts():
 
     with patch("src.cli.database.init_db"), \
          patch("src.cli.database.get_jobs", return_value=seeded_jobs), \
-         patch("src.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
+         patch("src.cli.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
 
         results = await run_promote()
 
@@ -149,7 +149,7 @@ async def test_run_promote_handles_no_contacts_gracefully():
 
     with patch("src.cli.database.init_db"), \
          patch("src.cli.database.get_jobs", return_value=seeded_jobs), \
-         patch("src.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)):
+         patch("src.cli.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)):
 
         results = await run_promote()
 
