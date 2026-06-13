@@ -49,70 +49,40 @@ async def test_source_contacts_returns_empty_when_no_company_and_no_contacts():
     assert result == []
 
 
-# --- source_contacts: language-based Russian speaker detection ---
+# --- source_contacts: LLM-based classification via classify_contacts ---
 
 @pytest.mark.asyncio
-async def test_source_contacts_returns_russian_speakers_from_language_field():
-    employees = [
-        {"firstName": "Ivan", "lastName": "Petrov", "headline": "Engineer", "linkedinUrl": "https://linkedin.com/in/ivan",
-         "languages": [{"name": "Russian"}, {"name": "English"}]},
-        {"firstName": "Jane", "lastName": "Smith", "headline": "HR Manager", "linkedinUrl": "https://linkedin.com/in/jane",
-         "languages": [{"name": "English"}]},
-    ]
-    job = {"title": "QA Engineer", "company": "TechCorp", "contacts": []}
+async def test_source_contacts_delegates_to_classify_contacts_with_settings():
+    employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Engineer", "linkedinUrl": ""}]
+    settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
+    classified = [{"name": "Ivan Petrov", "title": "Engineer", "url": "", "contacted": False,
+                   "russian_speaker": True, "is_recruiter": False, "currentPosition": "", "location": ""}]
+    job = {"title": "QA", "company": "TechCorp", "contacts": []}
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)):
-        result = await source_contacts(job)
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)) as mock_classify:
+        result = await source_contacts(job, settings=settings)
 
-    assert len(result) == 1
-    assert result[0]["name"] == "Ivan Petrov"
-    assert result[0]["russian_speaker"] is True
+    mock_classify.assert_called_once_with(employees, settings)
+    assert result == classified
 
 
 @pytest.mark.asyncio
-async def test_source_contacts_falls_back_to_hr_when_no_russian_speakers():
-    employees = [
-        {"firstName": "Bob", "lastName": "Lee", "headline": "Software Engineer", "linkedinUrl": "https://linkedin.com/in/bob",
-         "languages": [{"name": "English"}]},
-        {"firstName": "Jane", "lastName": "Smith", "headline": "HR Manager", "linkedinUrl": "https://linkedin.com/in/jane",
-         "languages": [{"name": "French"}]},
-        {"firstName": "Carol", "lastName": "Tang", "headline": "Talent Acquisition Specialist", "linkedinUrl": "https://linkedin.com/in/carol",
-         "languages": []},
-        {"firstName": "Dave", "lastName": "Kim", "headline": "Product Manager", "linkedinUrl": "https://linkedin.com/in/dave",
-         "languages": []},
-    ]
+async def test_source_contacts_uses_default_settings_when_none_provided():
+    employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Dev", "linkedinUrl": ""}]
     job = {"title": "QA", "company": "Corp", "contacts": []}
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)):
-        result = await source_contacts(job)
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
+        await source_contacts(job)
 
-    assert len(result) == 2
-    assert result[0]["name"] == "Jane Smith"
-    assert result[1]["name"] == "Carol Tang"
+    mock_classify.assert_called_once()
+    called_settings = mock_classify.call_args[0][1]
+    assert called_settings.target_russian_speakers is True
+    assert called_settings.target_recruiters is True
 
 
 # --- _normalize_apify_employee ---
-
-def test_normalize_detects_russian_language():
-    item = {
-        "firstName": "Ivan", "lastName": "Petrov",
-        "headline": "Backend Dev", "linkedinUrl": "https://linkedin.com/in/ivan",
-        "languages": [{"name": "Russian"}, {"name": "English"}],
-    }
-    result = _normalize_apify_employee(item)
-    assert result["russian_speaker"] is True
-    assert result["name"] == "Ivan Petrov"
-
-
-def test_normalize_detects_ukrainian_language():
-    item = {
-        "firstName": "Oksana", "lastName": "Kovalenko",
-        "headline": "QA", "linkedinUrl": "https://linkedin.com/in/oksana",
-        "languages": [{"name": "Ukrainian"}],
-    }
-    result = _normalize_apify_employee(item)
-    assert result["russian_speaker"] is True
-
 
 def test_normalize_no_russian_when_no_matching_language():
     item = {

@@ -63,3 +63,22 @@ Added 5 new tests (TDD red→green) to `tests/test_outreach.py`:
 - `test_classify_contacts_returns_empty_when_llm_returns_no_matches`
 
 Full suite: 101 tests pass, no regressions.
+
+## Iteration 5 — Issue #28: source_contacts refactor + enrichment pipeline wiring
+
+Replaced hardcoded `RUSSIAN_LANGUAGES` / `HR_TITLE_KEYWORDS` filtering in `source_contacts` with a call to `classify_contacts`. The function now accepts `settings: OutreachSettings | None = None`; when None, defaults to `OutreachSettings()` (both toggles on). Results are whatever `classify_contacts` returns — up to 5 Russian Speaker + 5 Recruiter contacts controlled by toggle state.
+
+Removed `RUSSIAN_LANGUAGES` and `HR_TITLE_KEYWORDS` constants from `src/core/outreach.py`.
+
+Updated `_normalize_apify_employee` to no longer compute `russian_speaker` from language fields (always defaults to False); classification is now owned by `classify_contacts`.
+
+Updated `run_enrichment_pipeline` in `src/pipelines.py` to fetch `OutreachSettings` from the DB (`database.get_outreach_settings()`) and pass it to `source_contacts(settings=settings)`.
+
+TDD red→green cycles:
+- `test_source_contacts_delegates_to_classify_contacts_with_settings` — tracer bullet: `classify_contacts` called with raw Apify items + settings
+- `test_source_contacts_uses_default_settings_when_none_provided` — default `OutreachSettings()` used when not passed
+- `test_run_enrichment_pipeline_reads_settings_and_passes_to_source_contacts` — pipeline fetches settings from DB and passes `OutreachSettings` instance with correct values
+
+Removed 4 tests that tested the old language-based detection behavior (2 `source_contacts` tests, 2 `_normalize_apify_employee` tests). Updated 2 existing pipeline tests to mock `database.get_outreach_settings`.
+
+Full suite: 107 tests pass, no regressions.

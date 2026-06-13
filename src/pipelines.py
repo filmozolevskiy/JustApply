@@ -5,6 +5,7 @@ from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
 from .core.outreach import source_contacts, generate_outreach_for_job
+from .schemas import OutreachSettings
 
 
 async def run_search_pipeline(
@@ -130,7 +131,8 @@ async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
     company = job.get("company") or ""
     await log(f"Enriching '{title}' at '{company}'...")
 
-    contacts = await source_contacts(job, log_func=log_func)
+    settings = OutreachSettings(**database.get_outreach_settings())
+    contacts = await source_contacts(job, settings=settings, log_func=log_func)
     if contacts:
         await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
     else:

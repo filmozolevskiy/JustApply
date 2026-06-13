@@ -15,8 +15,6 @@ class ApifyTimeoutError(Exception):
 APIFY_API_BASE = "https://api.apify.com/v2"
 ACTOR_ID = "harvestapi~linkedin-company-employees"
 CONTACT_SAMPLE_SIZE = 100
-RUSSIAN_LANGUAGES = {"russian", "ukrainian", "belarusian"}
-HR_TITLE_KEYWORDS = ["recruit", "hr ", "human resource", "talent acquisition", "people ops", "hiring manager", "talent ti", "acquisition de talents"]
 
 
 
@@ -97,31 +95,29 @@ def _normalize_apify_employee(item: dict) -> dict:
     last = item.get("lastName") or ""
     full = f"{first} {last}".strip() or item.get("fullName") or item.get("name") or ""
 
-    languages = item.get("languages") or []
-    lang_names = {(lang.get("name") or "").lower() for lang in languages if isinstance(lang, dict)}
-    is_russian_speaker = bool(lang_names & RUSSIAN_LANGUAGES)
-
     return {
         "name": full,
         "title": item.get("headline") or item.get("title") or "",
         "url": item.get("linkedinUrl") or item.get("linkedInUrl") or item.get("profileUrl") or item.get("url") or "",
         "contacted": False,
-        "russian_speaker": is_russian_speaker,
+        "russian_speaker": False,
         "is_recruiter": False,
         "currentPosition": item.get("currentPosition") or "",
         "location": item.get("location") or "",
     }
 
 
-async def source_contacts(job: dict, log_func=None) -> list:
+async def source_contacts(job: dict, settings=None, log_func=None) -> list:
     """
-    Return outreach contacts for a job.
+    Return outreach contacts for a job using LLM classification.
 
     1. If the job already has contacts, return them as-is.
     2. Fetch up to CONTACT_SAMPLE_SIZE employees via Apify.
-    3. Mark Russian speakers by language field (Russian/Ukrainian/Belarusian).
-    4. Return Russian speakers if any found, otherwise return up to 10 HR/recruiter contacts.
+    3. Classify via classify_contacts using the provided OutreachSettings.
     """
+    from ..schemas import OutreachSettings
+    if settings is None:
+        settings = OutreachSettings()
 
     async def log(msg, level="info"):
         if log_func:
@@ -149,20 +145,9 @@ async def source_contacts(job: dict, log_func=None) -> list:
     if not items:
         return []
 
-    contacts = [_normalize_apify_employee(item) for item in items]
-
-    russian = [c for c in contacts if c["russian_speaker"]]
-    if russian:
-        await log(f"Found {len(russian)} Russian speaker(s).", "info")
-        return russian
-
-    await log("No Russian speakers found. Falling back to HR/recruiter contacts.", "warning")
-    hr_contacts = [
-        c for c in contacts
-        if any(kw in (c.get("title") or "").lower() for kw in HR_TITLE_KEYWORDS)
-    ]
-    await log(f"Found {len(hr_contacts)} HR/recruiter contact(s).", "info")
-    return hr_contacts[:10]
+    contacts = await classify_contacts(items, settings)
+    await log(f"Found {len(contacts)} classified contact(s).", "info")
+    return contacts
 
 
 async def classify_contacts(items: list, settings) -> list:
