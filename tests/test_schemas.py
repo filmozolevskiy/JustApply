@@ -4,7 +4,7 @@ import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from src import database
+from src import db as database
 
 
 @pytest.fixture()

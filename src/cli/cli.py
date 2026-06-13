@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from .. import database
+from .. import db as database
 from ..pipelines import run_search_pipeline, run_enrichment_pipeline
 from ..rate_limiter import scrape_limiter, RateLimitError
 

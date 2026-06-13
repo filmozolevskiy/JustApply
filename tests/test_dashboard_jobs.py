@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import database
+from src import db as database
+import src.db.connection as _db_connection
 import src.web.server as server_module
 from src.web.server import app
 
@@ -18,7 +19,7 @@ def setup_test_db(tmp_path, monkeypatch):
     test_db = tmp_path / "test_job_tracker.db"
     test_db_str = str(test_db)
 
-    monkeypatch.setattr(database, "DB_PATH", test_db_str)
+    monkeypatch.setattr(_db_connection, "DB_PATH", test_db_str)
 
     database.init_db(test_db_str)
 

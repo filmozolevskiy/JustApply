@@ -11,7 +11,7 @@ from ..schemas import Job
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment
 from ..rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database

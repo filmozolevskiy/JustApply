@@ -38,7 +38,11 @@ CLAUDE.md                    # Project rules
 CONTEXT.md                   # Job Hunter system architecture / context
 data/                        # Runtime artifacts (job_tracker.db, logs)
 src/
-├── database.py              # SQLite database storage operations
+├── db/                      # Database package (Job Tracker Database operations)
+│   ├── __init__.py          # Re-exports full public API
+│   ├── connection.py        # DB_PATH, get_db_connection, init_db
+│   ├── seed.py              # Seed data for local development
+│   └── jobs.py              # CRUD operations for the jobs table
 ├── rate_limiter.py          # Scrape trigger rate limiting
 ├── cli/                     # CLI package (entry: python3 -m src.cli)
 │   ├── __init__.py

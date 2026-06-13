@@ -6,7 +6,7 @@ import pytest
 # Add root directory to path to import database
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.database import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, start_enrichment, enrich_job
+from src.db import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, start_enrichment, enrich_job
 
 def test_database_lifecycle(tmp_path):
     test_db = tmp_path / "test_job_tracker.db"
@@ -74,8 +74,8 @@ def test_update_job_comment(tmp_path):
     db_str = str(test_db)
     init_db(db_str)
     
-    from src.database import update_job_comment
-    
+    from src.db import update_job_comment
+
     # Verify initial comment of job 1
     jobs = get_jobs(db_str)
     job1 = next(j for j in jobs if j["id"] == 1)
@@ -97,7 +97,7 @@ def test_update_job_comment_nonexistent(tmp_path):
     db_str = str(test_db)
     init_db(db_str)
     
-    from src.database import update_job_comment
+    from src.db import update_job_comment
     res = update_job_comment(999, "No comment", db_str)
     assert res is None
 
@@ -142,7 +142,7 @@ def test_job_exists(tmp_path):
     db_str = str(test_db)
     init_db(db_str)
     
-    from src.database import job_exists
+    from src.db import job_exists
     
     # 1. Initially, TechCorp QA Engineer exists (from seed data)
     assert job_exists(
