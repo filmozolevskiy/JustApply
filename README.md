@@ -7,13 +7,12 @@ This repository is dedicated to the **Job Hunting** system, which automates job 
 ```text
 CLAUDE.md                    # Project rules
 CONTEXT.md                   # Job Hunter system architecture
-job_hunter.py                # Thin CLI orchestrator launcher
+data/                        # Runtime artifacts (job_tracker.db, logs)
 src/
-├── database.py              # SQLite database storage operations
-├── run_dashboard.py         # Launches local FastAPI server
-├── server.py                # FastAPI backend endpoints
-├── cli.py                   # CLI implementation
-├── dashboard.html           # Kanban board UI
+├── db/                      # Database package (Job Tracker Database operations)
+├── rate_limiter.py          # Scrape trigger rate limiting
+├── cli/                     # CLI package (entry: python3 -m src.cli)
+├── web/                     # HTTP layer (entry: python3 -m src.web.run_dashboard)
 └── core/                    # Core modules (matcher, outreach, scraper)
 tests/                       # Pytest unit and integration tests
 .claude/
@@ -50,19 +49,19 @@ pip install -r requirements.txt
 ### Job Search & Match
 To search for jobs (e.g. "QA") and match them against your resume:
 ```bash
-python3 job_hunter.py --search "QA"
+python3 -m src.cli --search "QA"
 ```
 
 ### Candidate Outreach Promotion
 To source contacts, generate cover letters, and promote marked jobs to the applications sheet:
 ```bash
-python3 job_hunter.py --promote
+python3 -m src.cli --promote
 ```
 
 ### Launch Kanban Dashboard
 To launch the local FastAPI dashboard:
 ```bash
-python3 -m src.run_dashboard
+python3 -m src.web.run_dashboard
 ```
 Open `http://127.0.0.1:8000` in your web browser.
 

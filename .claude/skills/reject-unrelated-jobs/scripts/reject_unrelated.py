@@ -4,8 +4,10 @@ import re
 import argparse
 import os
 
-# Resolve DB Path relative to script location
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../src/job_tracker.db")
+# Resolve DB path relative to project root (same location as src.db.connection.DB_PATH)
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", "..", ".."))
+DB_PATH = os.path.join(_PROJECT_ROOT, "data", "job_tracker.db")
 
 KEYWORDS = [
     # QA / Testing / Quality
@@ -60,14 +62,11 @@ def main():
     
     args = parser.parse_args()
     
-    # Check if DB exists at standard path
     global DB_PATH
     if not os.path.exists(DB_PATH):
-        alt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../src/job_tracker.db")
-        if os.path.exists(alt_path):
-            DB_PATH = alt_path
-        elif os.path.exists("src/job_tracker.db"):
-            DB_PATH = "src/job_tracker.db"
+        cwd_path = os.path.join(os.getcwd(), "data", "job_tracker.db")
+        if os.path.exists(cwd_path):
+            DB_PATH = cwd_path
         else:
             print(f"Error: Database not found at {DB_PATH}")
             return
