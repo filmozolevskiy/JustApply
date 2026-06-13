@@ -121,6 +121,11 @@ async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
     if not job_id:
         return None
 
+    if job.get("status") != "enriching":
+        if not database.start_enrichment(job_id):
+            await log(f"Job id={job_id} not found.", "error")
+            return None
+
     title = job.get("title") or ""
     company = job.get("company") or ""
     await log(f"Enriching '{title}' at '{company}'...")

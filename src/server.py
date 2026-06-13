@@ -11,7 +11,7 @@ from .schemas import Job
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status
+from .database import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment
 from .rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -99,7 +99,7 @@ async def run_enrichment_task(job_id: int):
 
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
-    updated = update_job_status(job_id, "enriching")
+    updated = start_enrichment(job_id)
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
 

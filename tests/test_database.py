@@ -6,7 +6,7 @@ import pytest
 # Add root directory to path to import database
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.database import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES
+from src.database import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, start_enrichment, enrich_job
 
 def test_database_lifecycle(tmp_path):
     test_db = tmp_path / "test_job_tracker.db"
@@ -175,3 +175,46 @@ def test_job_exists(tmp_path):
         link="https://some-new-link.com",
         db_path=db_str
     ) is False
+
+
+def test_start_enrichment(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+
+    updated = start_enrichment(1, db_str)
+    assert updated is not None
+    assert updated["status"] == "enriching"
+
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["status"] == "enriching"
+
+
+def test_start_enrichment_nonexistent(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    assert start_enrichment(999, db_str) is None
+
+
+def test_enrich_job_persists_contacts_and_message(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+
+    contacts = [
+        {"name": "Alice", "title": "Recruiter", "url": "https://linkedin.com/in/alice", "contacted": False, "russian_speaker": False}
+    ]
+    updated = enrich_job(1, contacts, "Hello Alice", db_str)
+
+    assert updated is not None
+    assert updated["status"] == "enriched"
+    assert updated["contacts"] == contacts
+    assert updated["outreachMessage"] == "Hello Alice"
+
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["status"] == "enriched"
+    assert job["outreachMessage"] == "Hello Alice"
+
+
+def test_enrich_job_nonexistent(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    assert enrich_job(999, [], "", db_str) is None

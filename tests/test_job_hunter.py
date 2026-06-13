@@ -169,6 +169,7 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
         "resumeUsed": "qa.md",
         "description": "Build test automation.",
         "contacts": [],
+        "status": "enriching",
     }
     mock_contacts = [{"name": "Jane", "title": "Recruiter", "url": "https://linkedin.com/in/jane", "contacted": False, "russian_speaker": False}]
     enriched = {**job, "status": "enriched", "contacts": mock_contacts, "outreachMessage": "Hello Jane"}
@@ -182,3 +183,28 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
         assert result["status"] == "enriched"
         assert result["contacts"] == mock_contacts
         mock_save.assert_called_once_with(10, mock_contacts, "Hello Jane")
+
+
+@pytest.mark.asyncio
+async def test_run_enrichment_pipeline_starts_enrichment_from_sourced():
+    from src.pipelines import run_enrichment_pipeline
+
+    job = {
+        "id": 10,
+        "title": "QA Engineer",
+        "company": "Docker",
+        "resumeUsed": "qa.md",
+        "status": "sourced",
+        "contacts": [],
+    }
+    enriched = {**job, "status": "enriched", "contacts": [], "outreachMessage": "Hi"}
+
+    with patch("src.pipelines.database.start_enrichment", return_value={**job, "status": "enriching"}) as mock_start, \
+         patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
+         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hi")), \
+         patch("src.pipelines.database.enrich_job", return_value=enriched):
+
+        result = await run_enrichment_pipeline(job)
+
+        mock_start.assert_called_once_with(10)
+        assert result["status"] == "enriched"

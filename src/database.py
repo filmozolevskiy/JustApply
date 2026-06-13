@@ -366,6 +366,11 @@ def get_job(job_id, db_path=None):
     return _parse_job_row(row)
 
 
+def start_enrichment(job_id, db_path=None):
+    """Mark a job as enriching. Returns updated job or None if not found."""
+    return update_job_status(job_id, "enriching", db_path)
+
+
 def enrich_job(job_id, contacts, outreach_message, db_path=None):
     """Persist contacts, outreach message, and set status to enriched."""
     if db_path is None:
