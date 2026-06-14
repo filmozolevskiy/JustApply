@@ -51,3 +51,25 @@ The frontend persistence (localStorage session history, active task reconnect on
 - `connectTaskLogStream()` removes task/skip keys from `localStorage` on task completion
 
 **All 204 tests pass.**
+
+## Iteration 3 — Issue #38: Log Apify and scraper poll status only on change
+
+**What was implemented:**
+
+**`src/core/outreach.py` — Apify polling:**
+- Added `last_status = None` before the `while True:` loop in `_run_apify_actor`
+- Changed unconditional `await log(f"Apify run status: {status}", "info")` to only log when `status != last_status`, then update `last_status`
+
+**`src/core/scraper.py` — Bright Data polling:**
+- Added `last_status = None` before the `while True:` loop in `_scrape_linkedin_jobs_real`
+- Changed unconditional `await log(f"Scraper status: {status}", "info")` to only log when `status != last_status`, then update `last_status`
+
+**Tests (`tests/test_outreach.py`) — 2 new TDD tests:**
+- `test_apify_poll_logs_running_once_for_repeated_status` — RUNNING × 3 then SUCCEEDED; verifies only 2 status log lines total (RUNNING once, SUCCEEDED once)
+- `test_apify_poll_logs_terminal_failure_status` — RUNNING × 2 then FAILED; verifies RUNNING logged once and FAILED still appears
+
+**Tests (`tests/test_scraper.py`) — 2 new TDD tests:**
+- `test_scraper_poll_logs_status_once_when_repeated` — `running` × 3 then `ready`; verifies only 2 status log lines total
+- `test_scraper_poll_logs_failed_status_once` — `running` × 1 then `failed`; verifies both logged once
+
+**All 208 tests pass.**

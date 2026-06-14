@@ -700,3 +700,90 @@ async def test_generate_outreach_for_job_passes_is_recruiter_flag():
 
     _, call_kwargs = mock_gen.call_args_list[0][0], mock_gen.call_args_list[0][1]
     assert mock_gen.call_args[1].get("is_recruiter") is True or mock_gen.call_args[0][4] is True
+
+
+# --- Apify poll status on-change logging ---
+
+@pytest.mark.asyncio
+async def test_apify_poll_logs_running_once_for_repeated_status():
+    """RUNNING polled three times before SUCCEEDED — 'Apify run status: RUNNING' logged once."""
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 201
+    mock_post_resp.json.return_value = {"data": {"id": "run-xyz"}}
+
+    def make_status(status, dataset_id=None):
+        m = MagicMock()
+        m.status_code = 200
+        data = {"status": status}
+        if dataset_id:
+            data["defaultDatasetId"] = dataset_id
+        m.json.return_value = {"data": data}
+        return m
+
+    dataset_resp = MagicMock()
+    dataset_resp.status_code = 200
+    dataset_resp.json.return_value = []
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post.return_value = mock_post_resp
+    mock_client.get.side_effect = [
+        make_status("RUNNING"),
+        make_status("RUNNING"),
+        make_status("RUNNING"),
+        make_status("SUCCEEDED", dataset_id="ds-1"),
+        dataset_resp,
+    ]
+
+    logged = []
+    def capture_log(msg, level="info"):
+        logged.append(msg)
+
+    with patch("httpx.AsyncClient", return_value=mock_client), \
+         patch.dict(os.environ, {"APIFY_API_TOKEN": "fake-token"}), \
+         patch("asyncio.sleep", new=AsyncMock()):
+        await _run_apify_actor("TestCorp", log_func=capture_log)
+
+    status_logs = [m for m in logged if m.startswith("Apify run status:")]
+    assert sum(1 for m in status_logs if "RUNNING" in m) == 1
+    assert sum(1 for m in status_logs if "SUCCEEDED" in m) == 1
+    assert len(status_logs) == 2
+
+
+@pytest.mark.asyncio
+async def test_apify_poll_logs_terminal_failure_status():
+    """FAILED terminal status is logged even after repeated RUNNING polls."""
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 201
+    mock_post_resp.json.return_value = {"data": {"id": "run-xyz"}}
+
+    def make_status(status):
+        m = MagicMock()
+        m.status_code = 200
+        m.json.return_value = {"data": {"status": status}}
+        return m
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post.return_value = mock_post_resp
+    mock_client.get.side_effect = [
+        make_status("RUNNING"),
+        make_status("RUNNING"),
+        make_status("FAILED"),
+    ]
+
+    logged = []
+    def capture_log(msg, level="info"):
+        logged.append(msg)
+
+    with patch("httpx.AsyncClient", return_value=mock_client), \
+         patch.dict(os.environ, {"APIFY_API_TOKEN": "fake-token"}), \
+         patch("asyncio.sleep", new=AsyncMock()):
+        result = await _run_apify_actor("TestCorp", log_func=capture_log)
+
+    assert result == []
+    status_logs = [m for m in logged if m.startswith("Apify run status:")]
+    assert sum(1 for m in status_logs if "RUNNING" in m) == 1
+    assert sum(1 for m in status_logs if "FAILED" in m) == 1

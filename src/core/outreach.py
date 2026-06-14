@@ -146,6 +146,7 @@ async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float =
 
         status_url = f"{APIFY_API_BASE}/actor-runs/{run_id}"
         start_time = time.monotonic()
+        last_status = None
         while True:
             if time.monotonic() - start_time >= timeout_seconds:
                 raise ApifyTimeoutError(
@@ -159,7 +160,9 @@ async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float =
 
             run_data = status_resp.json().get("data", {})
             status = run_data.get("status")
-            await log(f"Apify run status: {status}", "info")
+            if status != last_status:
+                await log(f"Apify run status: {status}", "info")
+                last_status = status
 
             if status == "SUCCEEDED":
                 dataset_id = run_data.get("defaultDatasetId")

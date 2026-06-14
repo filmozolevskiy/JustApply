@@ -283,6 +283,7 @@ async def _scrape_linkedin_jobs_real(
             progress_url = f"https://api.brightdata.com/datasets/v3/progress/{snapshot_id}"
             max_polls = 120  # 120 * 5s = 10 minutes maximum
             polls = 0
+            last_status = None
             while True:
                 polls += 1
                 if polls > max_polls:
@@ -308,7 +309,9 @@ async def _scrape_linkedin_jobs_real(
                 
                 progress_data = progress_resp.json()
                 status = progress_data.get("status")
-                await log(f"Scraper status: {status}", "info")
+                if status != last_status:
+                    await log(f"Scraper status: {status}", "info")
+                    last_status = status
                 
                 if status == "ready":
                     break

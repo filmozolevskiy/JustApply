@@ -454,5 +454,97 @@ async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
         assert len(get_calls) == 4
 
 
+@pytest.mark.asyncio
+async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
+    """'running' repeated three times before 'ready' — 'Scraper status: running' logged once."""
+    from unittest.mock import patch, MagicMock, AsyncMock
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_abc"})
+
+    mock_snapshot_resp = MagicMock()
+    mock_snapshot_resp.status_code = 200
+    mock_snapshot_resp.json = MagicMock(return_value=[])
+
+    progress_statuses = ["running", "running", "running", "ready"]
+    progress_call_count = [0]
+
+    async def mock_get(url, **kwargs):
+        if "progress" in url:
+            idx = min(progress_call_count[0], len(progress_statuses) - 1)
+            status = progress_statuses[idx]
+            progress_call_count[0] += 1
+            m = MagicMock()
+            m.status_code = 200
+            m.json = MagicMock(return_value={"status": status})
+            return m
+        return mock_snapshot_resp
+
+    logged = []
+    def capture_log(msg, level="info"):
+        logged.append(msg)
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get), \
+         patch("asyncio.sleep", new_callable=AsyncMock):
+        await scrape_linkedin_jobs(
+            query="QA Engineer",
+            location="New York",
+            log_func=capture_log
+        )
+
+    status_logs = [m for m in logged if m.startswith("Scraper status:")]
+    assert sum(1 for m in status_logs if "running" in m) == 1
+    assert sum(1 for m in status_logs if "ready" in m) == 1
+    assert len(status_logs) == 2
+
+
+@pytest.mark.asyncio
+async def test_scraper_poll_logs_failed_status_once(monkeypatch):
+    """'failed' scraper status is logged once when status transitions to failed."""
+    from unittest.mock import patch, MagicMock, AsyncMock
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_fail"})
+
+    progress_statuses = ["running", "failed"]
+    progress_call_count = [0]
+
+    async def mock_get(url, **kwargs):
+        if "progress" in url:
+            idx = min(progress_call_count[0], len(progress_statuses) - 1)
+            status = progress_statuses[idx]
+            progress_call_count[0] += 1
+            m = MagicMock()
+            m.status_code = 200
+            m.json = MagicMock(return_value={"status": status})
+            return m
+        raise Exception(f"Unexpected GET: {url}")
+
+    logged = []
+    def capture_log(msg, level="info"):
+        logged.append(msg)
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get), \
+         patch("asyncio.sleep", new_callable=AsyncMock):
+        with pytest.raises(Exception):
+            await scrape_linkedin_jobs(
+                query="QA Engineer",
+                location="New York",
+                log_func=capture_log
+            )
+
+    status_logs = [m for m in logged if m.startswith("Scraper status:")]
+    assert sum(1 for m in status_logs if "running" in m) == 1
+    assert sum(1 for m in status_logs if "failed" in m) == 1
+
+
 
 
