@@ -128,9 +128,12 @@ def test_dashboard_html_outreach_panel_is_separate_from_board_controls():
 
 
 def _get_drawer_body(content):
-    drawer_start = content.find("function openJobDetailsDrawer(")
-    assert drawer_start != -1, "openJobDetailsDrawer not found"
-    return content[drawer_start:drawer_start + 12000]
+    # Include contact-group helpers (buildContactGroupsHtml, contactGroup) + openJobDetailsDrawer
+    start = content.find("function buildContactGroupsHtml(")
+    if start == -1:
+        start = content.find("function openJobDetailsDrawer(")
+    assert start != -1, "Drawer function (or buildContactGroupsHtml) not found"
+    return content[start:start + 20000]
 
 
 def test_drawer_active_contact_loads_recruiter_template_for_is_recruiter():
@@ -205,3 +208,93 @@ def test_drawer_title_keyword_badge_logic_removed():
         "Title-keyword HR heuristic must be removed from the drawer"
     assert "human resource" not in drawer_body.lower(), \
         "Title-keyword HR heuristic must be removed from the drawer"
+
+
+# --- Issue #32: Contact Grouping ---
+
+def _get_script_section(content):
+    """Return the entire <script> block content."""
+    start = content.find("<script>")
+    assert start != -1, "<script> block not found"
+    return content[start:]
+
+
+def test_contact_group_function_routes_recruiter_to_recruiters():
+    """contactGroup(contact) returns 'recruiters' when is_recruiter is true."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    assert "function contactGroup(" in script, "contactGroup function must be defined"
+    fn_start = script.find("function contactGroup(")
+    fn_body = script[fn_start:fn_start + 400]
+    assert "is_recruiter" in fn_body, "contactGroup must check is_recruiter"
+    assert "'recruiters'" in fn_body, "contactGroup must return 'recruiters'"
+
+
+def test_contact_group_function_routes_russian_speaker_to_russian_speakers():
+    """contactGroup(contact) returns 'russian_speakers' for non-recruiter russian speakers."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    fn_start = script.find("function contactGroup(")
+    fn_body = script[fn_start:fn_start + 400]
+    assert "russian_speaker" in fn_body, "contactGroup must check russian_speaker"
+    assert "'russian_speakers'" in fn_body, "contactGroup must return 'russian_speakers'"
+
+
+def test_contact_group_function_dual_classified_routes_to_recruiters():
+    """Dual-classified contacts (is_recruiter + russian_speaker) go to 'recruiters'."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    fn_start = script.find("function contactGroup(")
+    fn_body = script[fn_start:fn_start + 400]
+    # is_recruiter must be checked before russian_speaker (dual → recruiters)
+    recruiter_pos = fn_body.find("is_recruiter")
+    russian_pos = fn_body.find("russian_speaker")
+    assert recruiter_pos != -1 and russian_pos != -1
+    assert recruiter_pos < russian_pos, \
+        "contactGroup must check is_recruiter before russian_speaker so dual-classified → recruiters"
+
+
+def test_contact_group_function_neither_routes_to_other():
+    """contactGroup(contact) returns 'other' when neither flag is set."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    fn_start = script.find("function contactGroup(")
+    fn_body = script[fn_start:fn_start + 400]
+    assert "'other'" in fn_body, "contactGroup must return 'other' as the fallback"
+
+
+def test_drawer_contacts_show_all_three_group_headings():
+    """openJobDetailsDrawer renders Recruiters, Russian Speakers, and Other group headings."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    # Group headings may be in openJobDetailsDrawer or in a helper called from it
+    # Search the full script section for the group label strings
+    script = _get_script_section(content)
+    assert "Recruiters" in script, "Script must include 'Recruiters' group label"
+    assert "Russian Speakers" in script, "Script must include 'Russian Speakers' group label"
+    assert "Other" in script, "Script must include 'Other' group label"
+    # Verify they appear together (a helper function renders all three)
+    recruiters_pos = script.find("'Recruiters'")
+    if recruiters_pos == -1:
+        recruiters_pos = script.find('"Recruiters"')
+    assert recruiters_pos != -1, "Recruiters label must appear in script"
+
+
+def test_drawer_contacts_grouped_preserve_flat_array_index():
+    """Contact callbacks (toggleContacted, selectActiveContact) use the original flat-array index."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    # A helper that builds grouped contact HTML must use origIdx (original flat index)
+    assert "origIdx" in script, \
+        "Grouped contact rendering must use origIdx to preserve flat-array index for API calls"

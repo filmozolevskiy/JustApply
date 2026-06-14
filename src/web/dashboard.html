@@ -2113,6 +2113,53 @@
     // activeContactIdx tracks which contact row is selected while the drawer is open.
     let activeContactIdx = -1;
 
+    function contactGroup(contact) {
+      if (contact.is_recruiter) return 'recruiters';
+      if (contact.russian_speaker) return 'russian_speakers';
+      return 'other';
+    }
+
+    function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
+      if (contacts.length === 0) {
+        return '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>';
+      }
+      const GROUPS = [
+        { key: 'recruiters', label: 'Recruiters', items: [] },
+        { key: 'russian_speakers', label: 'Russian Speakers', items: [] },
+        { key: 'other', label: 'Other', items: [] },
+      ];
+      contacts.forEach((contact, origIdx) => {
+        const key = contactGroup(contact);
+        const g = GROUPS.find(gr => gr.key === key);
+        if (g) g.items.push({ contact, origIdx });
+      });
+      return GROUPS.filter(g => g.items.length > 0).map(group => `
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); padding:0 4px; margin-top:4px;">${group.label}</div>
+          ${group.items.map(({ contact, origIdx }) => `
+            <div id="contact-row-${jobId}-${origIdx}"
+              onclick="selectActiveContact(${jobId}, ${origIdx})"
+              style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.18); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.02); border-left:${origIdx === activeContactIdx ? '3px solid var(--accent-cyan)' : '3px solid transparent'}; cursor:pointer;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="contact-${jobId}-${origIdx}" ${contact.contacted ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleContacted(${jobId}, ${origIdx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
+                <label for="contact-${jobId}-${origIdx}" onclick="event.stopPropagation()" style="cursor:pointer; display:flex; flex-direction:column;">
+                  <span style="font-size:0.85rem; font-weight:500; color:${contact.contacted ? 'var(--accent-emerald)' : 'var(--text-primary)'};">
+                    ${contact.name}
+                    ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
+                    ${contact.russian_speaker ? '<span style="font-size:0.65rem; background:rgba(239,68,68,0.15); color:#f87171; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🇷🇺 RU</span>' : ''}
+                    ${contact.is_recruiter ? '<span style="font-size:0.65rem; background:rgba(99,102,241,0.15); color:#a5b4fc; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🎯 HR</span>' : ''}
+                    ${contact.is_job_poster ? '<span style="font-size:0.65rem; background:rgba(245,158,11,0.15); color:#fbbf24; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">📋 Poster</span>' : ''}
+                  </span>
+                  <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.title || contact.role || ''}</span>
+                </label>
+              </div>
+              <a href="${contact.url || contact.linkedin || '#'}" target="_blank" onclick="event.stopPropagation()" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
     function getActiveTemplate(job, contactIdx) {
       const contacts = job.contacts || [];
       const contact = contacts[contactIdx];
@@ -2249,26 +2296,7 @@
           <div style="display:flex; flex-direction:column; gap:8px;">
             <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Outreach Contacts & Referral Status</h4>
             <div style="display:flex; flex-direction:column; gap:8px;">
-              ${contacts.length > 0 ? contacts.map((contact, idx) => `
-                <div id="contact-row-${job.id}-${idx}"
-                  onclick="selectActiveContact(${job.id}, ${idx})"
-                  style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.18); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.02); border-left:${idx === activeContactIdx ? '3px solid var(--accent-cyan)' : '3px solid transparent'}; cursor:pointer;">
-                  <div style="display:flex; align-items:center; gap:10px;">
-                    <input type="checkbox" id="contact-${job.id}-${idx}" ${contact.contacted ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleContacted(${job.id}, ${idx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
-                    <label for="contact-${job.id}-${idx}" onclick="event.stopPropagation()" style="cursor:pointer; display:flex; flex-direction:column;">
-                      <span style="font-size:0.85rem; font-weight:500; color:${contact.contacted ? 'var(--accent-emerald)' : 'var(--text-primary)'};">
-                        ${contact.name}
-                        ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
-                        ${contact.russian_speaker ? '<span style="font-size:0.65rem; background:rgba(239,68,68,0.15); color:#f87171; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🇷🇺 RU</span>' : ''}
-                        ${contact.is_recruiter ? '<span style="font-size:0.65rem; background:rgba(99,102,241,0.15); color:#a5b4fc; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🎯 HR</span>' : ''}
-                        ${contact.is_job_poster ? '<span style="font-size:0.65rem; background:rgba(245,158,11,0.15); color:#fbbf24; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">📋 Poster</span>' : ''}
-                      </span>
-                      <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.title || contact.role || ''}</span>
-                    </label>
-                  </div>
-                  <a href="${contact.url || contact.linkedin || '#'}" target="_blank" onclick="event.stopPropagation()" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
-                </div>
-              `).join('') : '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>'}
+              ${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}
             </div>
           </div>
 

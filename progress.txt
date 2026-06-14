@@ -133,3 +133,23 @@
   - `test_drawer_character_counter_present`: drawer contains `/200` character counter.
   - `test_drawer_regenerate_button_removed`: `regenerateOutreach` call is absent from the drawer.
   - `test_drawer_title_keyword_badge_logic_removed`: "talent acquisition" and "human resource" keywords absent from drawer.
+
+---
+
+## Iteration 5 — Issue #32: Group contacts by Outreach Audience in job drawer
+
+### What was implemented
+
+**`src/web/dashboard.html`**
+- Added `contactGroup(contact)` pure function — routes `is_recruiter: true` → `'recruiters'`, `russian_speaker: true` (non-recruiter) → `'russian_speakers'`, neither → `'other'`. Dual-classified contacts (both flags) go to `'recruiters'` because `is_recruiter` is checked first.
+- Added `buildContactGroupsHtml(jobId, contacts, activeContactIdx)` helper — builds grouped contact HTML for the drawer. Iterates contacts with their original flat-array index (`origIdx`), assigns each to a group via `contactGroup`, renders non-empty groups in order (Recruiters → Russian Speakers → Other) each with a section heading. All contact row IDs, `selectActiveContact`, and `toggleContacted` callbacks use `origIdx` (original flat-array index), so the `PUT /api/jobs/{id}/contacts/{idx}` API call is correct regardless of display order.
+- Replaced the flat `contacts.map(...)` rendering in `openJobDetailsDrawer` with `${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}`.
+- Badge rendering (🎯 HR, 🇷🇺 RU, 📋 Poster) preserved in `buildContactGroupsHtml` — flag-based, no title-keyword heuristics.
+
+**Tests (6 new, 0 regressions — 170 total)**
+- `test_contact_group_function_routes_recruiter_to_recruiters`: `contactGroup` checks `is_recruiter` and returns `'recruiters'`.
+- `test_contact_group_function_routes_russian_speaker_to_russian_speakers`: `contactGroup` checks `russian_speaker` and returns `'russian_speakers'`.
+- `test_contact_group_function_dual_classified_routes_to_recruiters`: `is_recruiter` appears before `russian_speaker` in function body (dual-classified → recruiters).
+- `test_contact_group_function_neither_routes_to_other`: `contactGroup` falls through to `'other'`.
+- `test_drawer_contacts_show_all_three_group_headings`: All three group labels ('Recruiters', 'Russian Speakers', 'Other') present in script.
+- `test_drawer_contacts_grouped_preserve_flat_array_index`: `origIdx` variable used in grouped contact rendering to preserve flat-array index for API calls.
