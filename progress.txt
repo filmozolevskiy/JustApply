@@ -104,3 +104,32 @@
 - `tests/test_schemas.py` (+3): `recruiterOutreachTemplate` defaults and round-trip; `russianSpeakerOutreachTemplate` defaults and round-trip; full template DB round-trip.
 - `tests/test_database.py` (+4): `enrich_job` persists both templates; legacy `outreachMessage` migrates to `recruiterOutreachTemplate` on read; existing `recruiterOutreachTemplate` not overwritten by legacy message.
 - `tests/test_enrichment_pipeline.py` (+1, updated 5): updated existing pipeline tests to patch `generate_outreach_templates`; new test verifies pipeline persists both templates.
+
+---
+
+## Iteration 4 — Issue #34: Kanban drawer — Active Contact + template switching
+
+### What was implemented
+
+**`src/web/dashboard.html`**
+- Added `activeContactIdx` module-level variable to track the selected contact while the drawer is open.
+- Added `getActiveTemplate(job, contactIdx)` — returns `recruiterOutreachTemplate` when `contact.is_recruiter` is true (including dual-classified), otherwise returns `russianSpeakerOutreachTemplate`; falls back to `outreachMessage` for legacy jobs.
+- Added `selectActiveContact(jobId, contactIdx)` — sets `activeContactIdx`, applies cyan left-border highlight to the active contact row, and loads the matching template into the outreach textarea with a live character counter update.
+- Rewrote contact rendering in `openJobDetailsDrawer`:
+  - Each contact row is now clickable (`onclick="selectActiveContact(...)"`) and carries `id="contact-row-{jobId}-{idx}"` for highlight targeting.
+  - Contacted checkbox uses `onclick="event.stopPropagation()"` so clicking the checkbox does not change the Active Contact.
+  - Badge logic changed to flag-only: `is_recruiter` → **🎯 HR**, `russian_speaker` → **🇷🇺 RU**, `is_job_poster` → **📋 Poster** (permanent). The previous title-keyword array (`['recruit','hr ','human resource','talent acquisition',...]`) is fully removed.
+  - Default Active Contact on drawer open: first uncontacted contact, or first contact if all are contacted.
+- Outreach textarea now shows a live character counter (`{len}/200`) via `id="drawer-char-counter"`; counter text turns red when length exceeds 200.
+- Added `updateOutreachCounter()` function wired to `oninput` on the textarea.
+- Removed the **Regenerate** button from the drawer entirely.
+
+**Tests (7 new, 0 regressions — 164 total)**
+- `tests/test_dashboard_outreach_settings.py` (+7):
+  - `test_drawer_active_contact_loads_recruiter_template_for_is_recruiter`: drawer references `recruiterOutreachTemplate`.
+  - `test_drawer_active_contact_loads_russian_speaker_template_for_non_recruiter`: drawer references `russianSpeakerOutreachTemplate`.
+  - `test_drawer_active_contact_highlight_uses_is_recruiter_flag`: drawer uses `is_recruiter` flag for HR badge; title keyword "hiring manager" absent.
+  - `test_drawer_active_contact_row_highlighted`: drawer tracks `activeContactIdx` for highlight.
+  - `test_drawer_character_counter_present`: drawer contains `/200` character counter.
+  - `test_drawer_regenerate_button_removed`: `regenerateOutreach` call is absent from the drawer.
+  - `test_drawer_title_keyword_badge_logic_removed`: "talent acquisition" and "human resource" keywords absent from drawer.
