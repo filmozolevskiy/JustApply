@@ -1,187 +1,22 @@
 # Ralph Loop Progress Log
 
-## Iteration 1 — Issue #30: Always enrich via Apify with Job Poster classification
+## Iteration 1 — Issue #36: Add Job Activity Log to job drawer
 
-### What was implemented
+**What was implemented:**
 
-**`src/schemas.py`**
-- Added `is_job_poster: bool = False` field to `Contact` schema.
+- Added 12 TDD tests in `tests/test_activity_log.py` covering all activity log DB behaviors:
+  - `add_job` creates a "Sourced" entry
+  - `update_job_status` logs "Moved X → Y" on status change, skips when status unchanged, logs "Enrichment started" (not a move) when transitioning to "enriching"
+  - `enrich_job` logs "Enriched · N contacts" (singular/plural) on success, "Enrichment failed · <note>" on failure
+  - `update_contact_status` logs "Marked X contacted" and "Moved Y → Contacted" for auto-promote
+  - Activity log is capped at 50 entries; all jobs have a valid `activityLog` list; entries have `ts` and `message` fields
 
-**`src/core/scraper.py`**
-- `normalize_brightdata_job` now sets `is_job_poster: True` on contacts created from a Bright Data `job_poster` field. The poster is stored at scrape time with its identity flag.
+- Added Job Activity Log UI section in the job drawer (`src/web/dashboard.html`):
+  - Inserted below Job Info section, hidden when `activityLog` is empty
+  - Collapsed by default: chevron button + latest event as one-line preview
+  - Expanded: full chronological list with smart-date timestamps (time-only for today; date + time for older entries)
+  - `toggleActivityLog()` JS function wired to the chevron button
 
-**`src/core/outreach.py`**
-- Added `normalize_linkedin_url(url)` — canonicalizes any LinkedIn profile URL to `/in/{slug}`, stripping country subdomains, `www`, trailing slashes, and query params.
-- Added `_poster_to_apify_item(poster)` — converts a Job Poster contact dict to an Apify-compatible item dict for batch LLM classification.
-- Rewrote `source_contacts` to remove the early return that skipped Apify when existing contacts were present. New flow:
-  1. Always calls Apify for a fresh Contact Sample.
-  2. Extracts the Job Poster from existing contacts (`is_job_poster: True`).
-  3. Deduplicates poster against Apify results by normalized LinkedIn URL; injects as synthetic extra when absent.
-  4. Falls back to classifying the poster alone when Apify returns zero profiles.
-  5. Sets `is_job_poster: True` on any classified contact whose URL matches the poster.
-  6. Preserves `contacted: True` from previous contacts matched by normalized URL.
+- Fixed pre-existing regression: `enrichJob()` was incorrectly calling `startPollingEnrichingJobs()` (violating the SSE-handles-updates invariant); removed the erroneous call so `test_dashboard_html_polling_loop_not_called_from_enrich` passes again.
 
-**`docs/adr/0005-always-enrich-via-apify-with-job-poster-classification.md`**
-- New ADR documenting the decision to always run Apify on enrichment and include the Job Poster in the classification batch. Supersedes the "poster → skip Apify" shortcut from ADR 0002.
-
-**Tests (13 new, 0 regressions — 122 total)**
-- `test_outreach.py`: 7 tests for `normalize_linkedin_url` (subdomain, www, trailing slash, query params, empty, non-LinkedIn), 1 test verifying Apify is always called even with existing poster, and 5 tests covering poster injection, no-duplicate injection, Apify-failure fallback, `contacted` preservation, and `is_job_poster` flag propagation.
-- `test_scraper.py`: 2 tests for `normalize_brightdata_job` — `is_job_poster: True` on poster contact, and no contacts when no poster.
-
----
-
-## Iteration 2 — Issue #31: Stream enrichment logs to console and surface Enrichment Failures on cards
-
-### What was implemented
-
-**`src/schemas.py`**
-- Added `enrichmentNote: str = ""` field to the `Job` schema.
-
-**`src/db/connection.py`**
-- Added `enrichmentNote TEXT DEFAULT ''` column to `CREATE TABLE jobs`.
-- Added migration `ALTER TABLE jobs ADD COLUMN enrichmentNote TEXT DEFAULT ''` (no-op if already present).
-
-**`src/db/jobs.py`**
-- Updated `_parse_job_row` to normalize `enrichmentNote` to `""` when NULL.
-- Updated `enrich_job(job_id, contacts, outreach_message, enrichment_note="", db_path=None)` — persists `enrichmentNote` alongside contacts and outreach message.
-
-**`src/pipelines.py`**
-- `run_enrichment_pipeline` now wraps `source_contacts` in try/except to capture infrastructure errors.
-- Sets `enrichment_note` with a reason-specific message on failure (infrastructure error or zero contacts).
-- Passes `enrichment_note` to `database.enrich_job` — job always lands in `enriched` lane.
-- Final log line: `"success"` level when contacts found, `"error"` level on Enrichment Failure.
-
-**`src/web/server.py`**
-- Added `result` attribute to `TaskState` for generic non-search result payloads.
-- Added `run_enrichment_task_with_logs(task_id, job_id)` — runs enrichment pipeline with SSE log streaming via `TaskState.queue`; sets `state.result = {"type": "result", "job": updated}` on completion.
-- Updated `POST /api/jobs/{job_id}/enrich` to create a `TaskState`, store it in `active_tasks`, return `{"task_id": ..., "job_id": ...}`.
-- Updated `logs_stream` to yield `state.result` when present (enrichment result), falling back to `{"type": "result", "jobs": state.jobs}` for search tasks.
-
-**`src/web/dashboard.html`**
-- Replaced `enrichJob()` — now POSTs to enrich endpoint, receives `task_id`, opens `EventSource(/api/logs/{task_id})`, handles `log`/`result`/`done` SSE events. On `result`, merges the updated job into `masterJobs` and re-renders.
-- Removed `startPollingEnrichingJobs()` call from `enrichJob()` and `loadJobs()`.
-- `renderVariantB()`: added amber warning strip on card face when `job.enrichmentNote` is non-empty.
-- `openJobDetailsDrawer()`: added read-only **Enrichment Status** section (amber box with full note) when `job.enrichmentNote` is set.
-
-**Tests (13 new, 0 regressions — 135 total)**
-- `test_enrichment_pipeline.py` (new, 5 tests): zero-contacts failure sets note, infrastructure error sets note, success clears note, final log level `"error"` on failure, final log level `"success"` on success.
-- `test_schemas.py` (+2): `enrichmentNote` defaults to `""`, round-trips via DB.
-- `test_database.py` (+2): `enrich_job` persists enrichment note, clears it on success.
-- `test_dashboard_jobs.py` (updated): enrich endpoint returns `{task_id, job_id}`; `run_enrichment_task_with_logs` integration tests.
-- `test_dashboard_outreach_settings.py` (+4): HTML tests for SSE in `enrichJob`, no polling call, card warning strip, drawer Enrichment Status section.
-
----
-
-## Iteration 3 — Issue #33: Connection Note Outreach Generator + two-template storage
-
-### What was implemented
-
-**`src/schemas.py`**
-- Added `recruiterOutreachTemplate: str = ""` and `russianSpeakerOutreachTemplate: str = ""` fields to `Job` schema.
-
-**`src/db/connection.py`**
-- Added `recruiterOutreachTemplate TEXT DEFAULT ''` and `russianSpeakerOutreachTemplate TEXT DEFAULT ''` columns to `CREATE TABLE jobs`.
-- Added migration `ALTER TABLE jobs ADD COLUMN` statements for both new columns (no-op if already present).
-
-**`src/db/jobs.py`**
-- Updated `_parse_job_row` to normalize both new template fields to `""` when NULL.
-- Added legacy migration in `_parse_job_row`: when `recruiterOutreachTemplate` is empty but `outreachMessage` is not, the Legacy Outreach Message is promoted to the Recruiter Outreach Template on read.
-- Updated `enrich_job` signature with two new params: `recruiter_template=""` and `russian_speaker_template=""`. Both are persisted to the new DB columns.
-
-**`src/core/outreach.py`**
-- Added constants: `RECRUITER_CTA`, `RUSSIAN_SPEAKER_CTA`, `FIT_LINE`.
-- Added `minimal_fallback_template(audience)` — returns a ≤200-character Connection Note with three Name Placeholders and the audience-appropriate CTA.
-- Added `generate_connection_note_template(job, audience, log_func=None)` — calls Gemini to generate a ≤200-char Connection Note. Retries once with stricter shortening instructions on first attempt overflow. Falls back to `minimal_fallback_template` when both attempts exceed the limit or no API key.
-- Added `generate_outreach_templates(job, contacts, log_func=None)` — generates audience-specific templates based on which Outreach Audiences have classified contacts. On Enrichment Failure (empty contacts), generates both templates anyway.
-
-**`src/pipelines.py`**
-- Replaced `generate_outreach_for_job` call with `generate_outreach_templates(job, contacts)`.
-- Passes `recruiter_template` and `russian_speaker_template` from the returned dict to `database.enrich_job`.
-- Legacy `outreachMessage` column populated from the recruiter template (falls back to russian speaker template) for backwards compat.
-
-**Tests (22 new, 0 regressions — 157 total)**
-- `tests/test_connection_note.py` (new, 15 tests): `minimal_fallback_template` shape/CTA/length/placeholder; `generate_connection_note_template` happy path, retry on overflow, double-overflow fallback, LLM exception fallback, no-API-key fallback; `generate_outreach_templates` both-on-failure, recruiter-only, russian-only, mixed contacts.
-- `tests/test_schemas.py` (+3): `recruiterOutreachTemplate` defaults and round-trip; `russianSpeakerOutreachTemplate` defaults and round-trip; full template DB round-trip.
-- `tests/test_database.py` (+4): `enrich_job` persists both templates; legacy `outreachMessage` migrates to `recruiterOutreachTemplate` on read; existing `recruiterOutreachTemplate` not overwritten by legacy message.
-- `tests/test_enrichment_pipeline.py` (+1, updated 5): updated existing pipeline tests to patch `generate_outreach_templates`; new test verifies pipeline persists both templates.
-
----
-
-## Iteration 4 — Issue #34: Kanban drawer — Active Contact + template switching
-
-### What was implemented
-
-**`src/web/dashboard.html`**
-- Added `activeContactIdx` module-level variable to track the selected contact while the drawer is open.
-- Added `getActiveTemplate(job, contactIdx)` — returns `recruiterOutreachTemplate` when `contact.is_recruiter` is true (including dual-classified), otherwise returns `russianSpeakerOutreachTemplate`; falls back to `outreachMessage` for legacy jobs.
-- Added `selectActiveContact(jobId, contactIdx)` — sets `activeContactIdx`, applies cyan left-border highlight to the active contact row, and loads the matching template into the outreach textarea with a live character counter update.
-- Rewrote contact rendering in `openJobDetailsDrawer`:
-  - Each contact row is now clickable (`onclick="selectActiveContact(...)"`) and carries `id="contact-row-{jobId}-{idx}"` for highlight targeting.
-  - Contacted checkbox uses `onclick="event.stopPropagation()"` so clicking the checkbox does not change the Active Contact.
-  - Badge logic changed to flag-only: `is_recruiter` → **🎯 HR**, `russian_speaker` → **🇷🇺 RU**, `is_job_poster` → **📋 Poster** (permanent). The previous title-keyword array (`['recruit','hr ','human resource','talent acquisition',...]`) is fully removed.
-  - Default Active Contact on drawer open: first uncontacted contact, or first contact if all are contacted.
-- Outreach textarea now shows a live character counter (`{len}/200`) via `id="drawer-char-counter"`; counter text turns red when length exceeds 200.
-- Added `updateOutreachCounter()` function wired to `oninput` on the textarea.
-- Removed the **Regenerate** button from the drawer entirely.
-
-**Tests (7 new, 0 regressions — 164 total)**
-- `tests/test_dashboard_outreach_settings.py` (+7):
-  - `test_drawer_active_contact_loads_recruiter_template_for_is_recruiter`: drawer references `recruiterOutreachTemplate`.
-  - `test_drawer_active_contact_loads_russian_speaker_template_for_non_recruiter`: drawer references `russianSpeakerOutreachTemplate`.
-  - `test_drawer_active_contact_highlight_uses_is_recruiter_flag`: drawer uses `is_recruiter` flag for HR badge; title keyword "hiring manager" absent.
-  - `test_drawer_active_contact_row_highlighted`: drawer tracks `activeContactIdx` for highlight.
-  - `test_drawer_character_counter_present`: drawer contains `/200` character counter.
-  - `test_drawer_regenerate_button_removed`: `regenerateOutreach` call is absent from the drawer.
-  - `test_drawer_title_keyword_badge_logic_removed`: "talent acquisition" and "human resource" keywords absent from drawer.
-
----
-
-## Iteration 5 — Issue #32: Group contacts by Outreach Audience in job drawer
-
-### What was implemented
-
-**`src/web/dashboard.html`**
-- Added `contactGroup(contact)` pure function — routes `is_recruiter: true` → `'recruiters'`, `russian_speaker: true` (non-recruiter) → `'russian_speakers'`, neither → `'other'`. Dual-classified contacts (both flags) go to `'recruiters'` because `is_recruiter` is checked first.
-- Added `buildContactGroupsHtml(jobId, contacts, activeContactIdx)` helper — builds grouped contact HTML for the drawer. Iterates contacts with their original flat-array index (`origIdx`), assigns each to a group via `contactGroup`, renders non-empty groups in order (Recruiters → Russian Speakers → Other) each with a section heading. All contact row IDs, `selectActiveContact`, and `toggleContacted` callbacks use `origIdx` (original flat-array index), so the `PUT /api/jobs/{id}/contacts/{idx}` API call is correct regardless of display order.
-- Replaced the flat `contacts.map(...)` rendering in `openJobDetailsDrawer` with `${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}`.
-- Badge rendering (🎯 HR, 🇷🇺 RU, 📋 Poster) preserved in `buildContactGroupsHtml` — flag-based, no title-keyword heuristics.
-
-**Tests (6 new, 0 regressions — 170 total)**
-- `test_contact_group_function_routes_recruiter_to_recruiters`: `contactGroup` checks `is_recruiter` and returns `'recruiters'`.
-- `test_contact_group_function_routes_russian_speaker_to_russian_speakers`: `contactGroup` checks `russian_speaker` and returns `'russian_speakers'`.
-- `test_contact_group_function_dual_classified_routes_to_recruiters`: `is_recruiter` appears before `russian_speaker` in function body (dual-classified → recruiters).
-- `test_contact_group_function_neither_routes_to_other`: `contactGroup` falls through to `'other'`.
-- `test_drawer_contacts_show_all_three_group_headings`: All three group labels ('Recruiters', 'Russian Speakers', 'Other') present in script.
-- `test_drawer_contacts_grouped_preserve_flat_array_index`: `origIdx` variable used in grouped contact rendering to preserve flat-array index for API calls.
-
----
-
-## Iteration 6 — Issue #35: Persist outreach template edits
-
-### What was implemented
-
-**`src/db/jobs.py`**
-- Added `update_outreach_template(job_id, audience, template, db_path=None)` — updates `recruiterOutreachTemplate` or `russianSpeakerOutreachTemplate` based on `audience` argument (`"recruiter"` or `"russian_speaker"`). Returns the updated job dict or `None` when the job does not exist.
-
-**`src/db/__init__.py`**
-- Exported `update_outreach_template` from the db package public API.
-
-**`src/web/server.py`**
-- Imported `update_outreach_template`.
-- Added `TemplateUpdate` Pydantic model with `audience: str` and `template: str`.
-- Added `PUT /api/jobs/{job_id}/template` endpoint — calls `update_outreach_template`, returns 404 when job not found, otherwise returns the updated `Job`.
-
-**`src/web/dashboard.html`**
-- Added `let templateSaveTimeout = null;` module-level variable alongside `commentTimeout`.
-- Added `saveOutreachTemplate(jobId, template)` function:
-  - Determines `audience` from the Active Contact's `is_recruiter` flag (`"recruiter"` when true, `"russian_speaker"` otherwise).
-  - Updates the corresponding in-memory template field on the job immediately (optimistic update).
-  - Debounces 500 ms, then PUTs to `/api/jobs/{jobId}/template` with `{audience, template}`.
-  - On success, syncs both template fields from the server response.
-  - On error, logs a warning to the on-page console.
-- Updated the outreach textarea `oninput` to call both `updateOutreachCounter()` and `saveOutreachTemplate(${job.id}, this.value)`.
-
-**Tests (14 new, 0 regressions — 184 total)**
-- `test_database.py` (+4): `update_outreach_template` saves recruiter template and persists across reads; saves Russian speaker template; recruiter and Russian speaker edits are independent; returns `None` for nonexistent job.
-- `test_dashboard_jobs.py` (+4): PUT `/template` endpoint saves recruiter template; saves Russian speaker template; audiences do not overwrite each other; returns 404 for nonexistent job.
-- `test_dashboard_outreach_settings.py` (+6): `saveOutreachTemplate` function is defined; textarea `oninput` is wired to it; function uses `templateSaveTimeout` for debouncing; function calls `/template` endpoint; function inspects `is_recruiter` for audience selection; function updates in-memory template field.
+**All 196 tests pass.**

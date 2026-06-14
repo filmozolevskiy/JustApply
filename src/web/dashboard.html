@@ -1613,11 +1613,13 @@
             if (localJob) {
               if (localJob.status !== updatedJob.status || 
                   JSON.stringify(localJob.contacts) !== JSON.stringify(updatedJob.contacts) ||
-                  localJob.outreachMessage !== updatedJob.outreachMessage) {
+                  localJob.outreachMessage !== updatedJob.outreachMessage ||
+                  JSON.stringify(localJob.activityLog) !== JSON.stringify(updatedJob.activityLog)) {
                 
                 localJob.status = updatedJob.status;
                 localJob.contacts = updatedJob.contacts;
                 localJob.outreachMessage = updatedJob.outreachMessage;
+                localJob.activityLog = updatedJob.activityLog || [];
                 changed = true;
                 
                 if (updatedJob.status === 'enriched') {
@@ -1654,25 +1656,27 @@
         .then(data => {
           const task_id = data.task_id;
           addLogLine(`Enrichment task started: ${task_id}`, 'info');
+          localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
+          localStorage.setItem(ACTIVE_ENRICH_LOG_SKIP_KEY, '0');
 
-          const es = new EventSource(`/api/logs/${task_id}`);
-          es.onmessage = function(event) {
-            const logData = JSON.parse(event.data);
-            if (logData.type === 'log') {
-              addLogLine(logData.message, logData.level);
-            } else if (logData.type === 'result' && logData.job) {
-              const idx = masterJobs.findIndex(j => j.id === logData.job.id);
-              if (idx !== -1) masterJobs[idx] = logData.job;
+          enrichEventSource = connectTaskLogStream(task_id, {
+            skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
+            taskKey: ACTIVE_ENRICH_TASK_KEY,
+            existingSource: enrichEventSource,
+            onResult(logData) {
+              if (logData.job) {
+                const idx = masterJobs.findIndex(j => j.id === logData.job.id);
+                if (idx !== -1) masterJobs[idx] = logData.job;
+              }
               renderActiveVariant();
-            } else if (logData.type === 'done') {
-              es.close();
+            },
+            onDone() {
               renderActiveVariant();
-            }
-          };
-          es.onerror = function() {
-            es.close();
-            addLogLine(`Enrichment SSE stream closed for job [${job.title}].`, 'warning');
-          };
+            },
+            onError() {
+              addLogLine(`Enrichment SSE stream closed for job [${job.title}].`, 'warning');
+            },
+          });
         })
         .catch(err => {
           job.status = 'sourced';
@@ -1716,8 +1720,8 @@
           return r.json();
         })
         .then(updatedJob => {
-          // Sync with the backend's returned status
           job.status = updatedJob.status;
+          job.activityLog = updatedJob.activityLog || job.activityLog;
           addLogLine(`Successfully moved card [${job.title}] to '${updatedJob.status}' (persisted to DB)`, 'success');
           renderActiveVariant();
         })
@@ -1785,6 +1789,139 @@
 
     // --- LOG STREAMING & SSE INTEGRATION ---
     let logEventSource = null;
+    let enrichEventSource = null;
+    const SESSION_LOGS_KEY = 'taskLogsSession';
+    const SESSION_LOGS_MAX = 200;
+    const ACTIVE_SCRAPE_TASK_KEY = 'activeScrapeTaskId';
+    const ACTIVE_SCRAPE_LOG_SKIP_KEY = 'activeScrapeTaskLogSkip';
+    const ACTIVE_ENRICH_TASK_KEY = 'activeEnrichTaskId';
+    const ACTIVE_ENRICH_LOG_SKIP_KEY = 'activeEnrichTaskLogSkip';
+    let sessionLogs = [];
+
+    function persistSessionLogs() {
+      try {
+        localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(sessionLogs));
+      } catch (e) {
+        console.warn('Failed to persist task logs', e);
+      }
+    }
+
+    function restoreSessionLogs() {
+      try {
+        const raw = localStorage.getItem(SESSION_LOGS_KEY);
+        if (!raw) return;
+        sessionLogs = JSON.parse(raw);
+        if (!Array.isArray(sessionLogs)) {
+          sessionLogs = [];
+          return;
+        }
+        const consoles = [
+          document.getElementById('cc-logs-console'),
+          document.getElementById('kb-logs-console')
+        ];
+        consoles.forEach(consoleEl => {
+          if (!consoleEl) return;
+          consoleEl.innerHTML = '';
+        });
+        sessionLogs.forEach(entry => {
+          renderLogLine(entry.message, entry.level, entry.ts);
+        });
+        if (sessionLogs.length > 0) {
+          const kbLogsPanel = document.getElementById('kb-logs-panel');
+          if (kbLogsPanel) kbLogsPanel.style.display = 'block';
+        }
+      } catch (e) {
+        console.warn('Failed to restore task logs', e);
+        sessionLogs = [];
+      }
+    }
+
+    function renderLogLine(msg, level = 'info', ts = null) {
+      const consoles = [
+        document.getElementById('cc-logs-console'),
+        document.getElementById('kb-logs-console')
+      ];
+      const timeStr = ts
+        ? new Date(ts).toTimeString().split(' ')[0]
+        : new Date().toTimeString().split(' ')[0];
+
+      consoles.forEach(consoleEl => {
+        if (!consoleEl) return;
+        if (consoleEl.children.length === 1 &&
+            consoleEl.children[0].innerText.includes('System initialized')) {
+          consoleEl.innerHTML = '';
+        }
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+        line.innerHTML = `
+          <span class="terminal-time">${timeStr}</span>
+          <span class="terminal-text ${level}">${msg}</span>
+        `;
+        consoleEl.appendChild(line);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      });
+    }
+
+    function bumpTaskLogSkip(storageKey) {
+      const skip = parseInt(localStorage.getItem(storageKey) || '0', 10) + 1;
+      localStorage.setItem(storageKey, String(skip));
+      return skip;
+    }
+
+    function connectTaskLogStream(taskId, options = {}) {
+      const {
+        skipKey,
+        taskKey,
+        onResult,
+        onDone,
+        onError,
+        existingSource = null,
+      } = options;
+
+      if (existingSource) {
+        existingSource.close();
+      }
+
+      const skip = parseInt(localStorage.getItem(skipKey) || '0', 10);
+      const es = new EventSource(`/api/logs/${taskId}?skip=${skip}`);
+
+      es.onmessage = function(event) {
+        const logData = JSON.parse(event.data);
+        if (logData.type === 'log') {
+          addLogLine(logData.message, logData.level);
+          bumpTaskLogSkip(skipKey);
+        } else if (logData.type === 'result') {
+          if (onResult) onResult(logData);
+        } else if (logData.type === 'done') {
+          es.close();
+          localStorage.removeItem(taskKey);
+          localStorage.removeItem(skipKey);
+          if (onDone) onDone(logData);
+        }
+      };
+
+      es.onerror = function(err) {
+        es.close();
+        localStorage.removeItem(taskKey);
+        localStorage.removeItem(skipKey);
+        if (onError) onError(err);
+      };
+
+      return es;
+    }
+
+    function resetScrapeButtons() {
+      const btnTop = document.getElementById('kb-scrape-btn-top');
+      const btnPanel = document.getElementById('kb-scrape-btn-panel');
+      if (btnTop) {
+        btnTop.disabled = false;
+        btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
+      }
+      if (btnPanel) {
+        btnPanel.disabled = false;
+        btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+      }
+    }
 
     function triggerScrapeRun() {
       let query = "QA Engineer";
@@ -1892,50 +2029,34 @@
       })
       .then(data => {
         const taskId = data.task_id;
-        localStorage.setItem('activeScrapeTaskId', taskId);
+        localStorage.setItem(ACTIVE_SCRAPE_TASK_KEY, taskId);
+        localStorage.setItem(ACTIVE_SCRAPE_LOG_SKIP_KEY, '0');
         addLogLine(`FastAPI background task created: ${taskId}`, 'info');
 
-        // Start SSE stream
-        logEventSource = new EventSource(`/api/logs/${taskId}`);
-        
-        logEventSource.onmessage = function(event) {
-          const logData = JSON.parse(event.data);
-          
-          if (logData.type === 'log') {
-            addLogLine(logData.message, logData.level);
-          } else if (logData.type === 'result') {
-            // Merge newly scraped jobs into our list
+        logEventSource = connectTaskLogStream(taskId, {
+          skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
+          taskKey: ACTIVE_SCRAPE_TASK_KEY,
+          existingSource: logEventSource,
+          onResult(logData) {
             if (logData.jobs && logData.jobs.length > 0) {
               logData.jobs.forEach(newJob => {
-                // Check if already exists by title/company
                 if (!masterJobs.some(j => j.title === newJob.title && j.company === newJob.company)) {
                   masterJobs.unshift(newJob);
                 }
               });
               addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
             }
-          } else if (logData.type === 'done') {
-            addLogLine("Scraper process complete.", 'success');
-            logEventSource.close();
-            localStorage.removeItem('activeScrapeTaskId');
-            if (btnTop) {
-              btnTop.disabled = false;
-              btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
-            }
-            if (btnPanel) {
-              btnPanel.disabled = false;
-              btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
-            }
+          },
+          onDone() {
+            addLogLine('Scraper process complete.', 'success');
+            resetScrapeButtons();
             renderActiveVariant();
-          }
-        };
-
-        logEventSource.onerror = function(err) {
-          console.error("SSE Error:", err);
-          logEventSource.close();
-          localStorage.removeItem('activeScrapeTaskId');
-          simulateLocalScrape();
-        };
+          },
+          onError() {
+            addLogLine('Scraper SSE stream closed unexpectedly.', 'warning');
+            resetScrapeButtons();
+          },
+        });
       })
       .catch(err => {
         console.warn("FastAPI backend not responding, falling back to client-side simulated logging.", err);
@@ -2034,36 +2155,18 @@
     }
 
     function addLogLine(msg, level = 'info') {
-      const consoles = [
-        document.getElementById('cc-logs-console'),
-        document.getElementById('kb-logs-console')
-      ];
-      
-      const now = new Date();
-      const timeStr = now.toTimeString().split(' ')[0];
-      
-      consoles.forEach(consoleEl => {
-        if (!consoleEl) return;
-        
-        // Remove default placeholder line if it's the first real log
-        if (consoleEl.children.length === 1 && 
-            consoleEl.children[0].innerText.includes("System initialized")) {
-          consoleEl.innerHTML = '';
-        }
-        
-        const line = document.createElement('div');
-        line.className = 'terminal-line';
-        
-        line.innerHTML = `
-          <span class="terminal-time">${timeStr}</span>
-          <span class="terminal-text ${level}">${msg}</span>
-        `;
-        consoleEl.appendChild(line);
-        consoleEl.scrollTop = consoleEl.scrollHeight;
-      });
+      const ts = new Date().toISOString();
+      renderLogLine(msg, level, ts);
+      sessionLogs.push({ ts, message: msg, level });
+      if (sessionLogs.length > SESSION_LOGS_MAX) {
+        sessionLogs = sessionLogs.slice(-SESSION_LOGS_MAX);
+      }
+      persistSessionLogs();
     }
 
     function clearLogs() {
+      sessionLogs = [];
+      persistSessionLogs();
       const consoles = [
         document.getElementById('cc-logs-console'),
         document.getElementById('kb-logs-console')
@@ -2257,6 +2360,34 @@
             </div>
           </div>
 
+          ${(job.activityLog && job.activityLog.length > 0) ? (() => {
+            const log = job.activityLog;
+            const latest = log[log.length - 1];
+            const logId = 'activity-log-' + job.id;
+            return `
+          <div>
+            <button onclick="toggleActivityLog('${logId}')" style="background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:6px; padding:0; width:100%; text-align:left; margin-bottom:0;">
+              <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Job Activity Log</h4>
+              <i id="${logId}-chevron" class="fa-solid fa-chevron-right" style="font-size:0.65rem; color:var(--text-muted); transition:transform 0.2s;"></i>
+              <span style="font-size:0.78rem; color:var(--text-secondary); font-weight:400; text-transform:none; letter-spacing:0; margin-left:4px;">${latest.message}</span>
+            </button>
+            <div id="${logId}" style="display:none; margin-top:8px; border-left:2px solid rgba(6,182,212,0.2); padding-left:10px; flex-direction:column; gap:4px;">
+              ${log.map(e => {
+                const d = new Date(e.ts);
+                const now = new Date();
+                const isToday = d.toDateString() === now.toDateString();
+                const timeStr = isToday
+                  ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+                  : d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                return `<div style="display:flex; gap:8px; font-size:0.78rem;">
+                  <span style="color:var(--text-muted); white-space:nowrap; flex-shrink:0;">${timeStr}</span>
+                  <span style="color:var(--text-secondary);">${e.message}</span>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+          })() : ''}
+
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Description</h4>
             <div class="detail-description" style="font-size:0.85rem; max-height: 150px; overflow-y: auto;">${job.description}</div>
@@ -2444,6 +2575,15 @@
       }
     }
 
+    function toggleActivityLog(logId) {
+      const panel = document.getElementById(logId);
+      const chevron = document.getElementById(logId + '-chevron');
+      if (!panel) return;
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'flex';
+      if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
+    }
+
     function copyDrawerOutreach() {
       const txt = document.getElementById('drawer-outreach-text');
       if (txt) {
@@ -2562,7 +2702,7 @@
     }
 
     function restoreActiveScrapeTask() {
-      const taskId = localStorage.getItem('activeScrapeTaskId');
+      const taskId = localStorage.getItem(ACTIVE_SCRAPE_TASK_KEY);
       if (!taskId) return;
 
       const kbLogsPanel = document.getElementById('kb-logs-panel');
@@ -2584,14 +2724,11 @@
 
       addLogLine(`Reconnecting to active background task: ${taskId}`, 'info');
 
-      logEventSource = new EventSource(`/api/logs/${taskId}`);
-      
-      logEventSource.onmessage = function(event) {
-        const logData = JSON.parse(event.data);
-        
-        if (logData.type === 'log') {
-          addLogLine(logData.message, logData.level);
-        } else if (logData.type === 'result') {
+      logEventSource = connectTaskLogStream(taskId, {
+        skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
+        taskKey: ACTIVE_SCRAPE_TASK_KEY,
+        existingSource: logEventSource,
+        onResult(logData) {
           if (logData.jobs && logData.jobs.length > 0) {
             logData.jobs.forEach(newJob => {
               if (!masterJobs.some(j => j.title === newJob.title && j.company === newJob.company)) {
@@ -2600,35 +2737,43 @@
             });
             addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
           }
-        } else if (logData.type === 'done') {
-          addLogLine("Scraper process complete.", 'success');
-          logEventSource.close();
-          localStorage.removeItem('activeScrapeTaskId');
-          if (btnTop) {
-            btnTop.disabled = false;
-            btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
-          }
-          if (btnPanel) {
-            btnPanel.disabled = false;
-            btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+        },
+        onDone() {
+          addLogLine('Scraper process complete.', 'success');
+          resetScrapeButtons();
+          renderActiveVariant();
+        },
+        onError() {
+          resetScrapeButtons();
+        },
+      });
+    }
+
+    function restoreActiveEnrichTask() {
+      const taskId = localStorage.getItem(ACTIVE_ENRICH_TASK_KEY);
+      if (!taskId) return;
+
+      const kbLogsPanel = document.getElementById('kb-logs-panel');
+      if (kbLogsPanel) kbLogsPanel.style.display = 'block';
+      expandLogsConsole();
+      addLogLine(`Reconnecting to active enrichment task: ${taskId}`, 'info');
+      startPollingEnrichingJobs();
+
+      enrichEventSource = connectTaskLogStream(taskId, {
+        skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
+        taskKey: ACTIVE_ENRICH_TASK_KEY,
+        existingSource: enrichEventSource,
+        onResult(logData) {
+          if (logData.job) {
+            const idx = masterJobs.findIndex(j => j.id === logData.job.id);
+            if (idx !== -1) masterJobs[idx] = logData.job;
           }
           renderActiveVariant();
-        }
-      };
-
-      logEventSource.onerror = function(err) {
-        console.warn("SSE connection error or task not found. Cleaning up active task reference.", err);
-        logEventSource.close();
-        localStorage.removeItem('activeScrapeTaskId');
-        if (btnTop) {
-          btnTop.disabled = false;
-          btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
-        }
-        if (btnPanel) {
-          btnPanel.disabled = false;
-          btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
-        }
-      };
+        },
+        onDone() {
+          renderActiveVariant();
+        },
+      });
     }
 
     async function loadOutreachSettings() {
@@ -2659,10 +2804,12 @@
     // Initialize
     initBoardControls();
     initLogsConsoleState();
+    restoreSessionLogs();
     loadResumes();
     loadOutreachSettings();
     loadJobs().then(() => {
       restoreActiveScrapeTask();
+      restoreActiveEnrichTask();
     });
   </script>
 </body>
