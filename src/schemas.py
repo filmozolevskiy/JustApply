@@ -47,6 +47,8 @@ class Job(BaseModel):
     gaps: list[str] = []
     contacts: list[Contact] = []
     outreachMessage: str = ""
+    recruiterOutreachTemplate: str = ""
+    russianSpeakerOutreachTemplate: str = ""
     comment: str = ""
     isRecruiter: bool = False
     enrichmentNote: str = ""

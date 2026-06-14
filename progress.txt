@@ -69,3 +69,38 @@
 - `test_database.py` (+2): `enrich_job` persists enrichment note, clears it on success.
 - `test_dashboard_jobs.py` (updated): enrich endpoint returns `{task_id, job_id}`; `run_enrichment_task_with_logs` integration tests.
 - `test_dashboard_outreach_settings.py` (+4): HTML tests for SSE in `enrichJob`, no polling call, card warning strip, drawer Enrichment Status section.
+
+---
+
+## Iteration 3 — Issue #33: Connection Note Outreach Generator + two-template storage
+
+### What was implemented
+
+**`src/schemas.py`**
+- Added `recruiterOutreachTemplate: str = ""` and `russianSpeakerOutreachTemplate: str = ""` fields to `Job` schema.
+
+**`src/db/connection.py`**
+- Added `recruiterOutreachTemplate TEXT DEFAULT ''` and `russianSpeakerOutreachTemplate TEXT DEFAULT ''` columns to `CREATE TABLE jobs`.
+- Added migration `ALTER TABLE jobs ADD COLUMN` statements for both new columns (no-op if already present).
+
+**`src/db/jobs.py`**
+- Updated `_parse_job_row` to normalize both new template fields to `""` when NULL.
+- Added legacy migration in `_parse_job_row`: when `recruiterOutreachTemplate` is empty but `outreachMessage` is not, the Legacy Outreach Message is promoted to the Recruiter Outreach Template on read.
+- Updated `enrich_job` signature with two new params: `recruiter_template=""` and `russian_speaker_template=""`. Both are persisted to the new DB columns.
+
+**`src/core/outreach.py`**
+- Added constants: `RECRUITER_CTA`, `RUSSIAN_SPEAKER_CTA`, `FIT_LINE`.
+- Added `minimal_fallback_template(audience)` — returns a ≤200-character Connection Note with three Name Placeholders and the audience-appropriate CTA.
+- Added `generate_connection_note_template(job, audience, log_func=None)` — calls Gemini to generate a ≤200-char Connection Note. Retries once with stricter shortening instructions on first attempt overflow. Falls back to `minimal_fallback_template` when both attempts exceed the limit or no API key.
+- Added `generate_outreach_templates(job, contacts, log_func=None)` — generates audience-specific templates based on which Outreach Audiences have classified contacts. On Enrichment Failure (empty contacts), generates both templates anyway.
+
+**`src/pipelines.py`**
+- Replaced `generate_outreach_for_job` call with `generate_outreach_templates(job, contacts)`.
+- Passes `recruiter_template` and `russian_speaker_template` from the returned dict to `database.enrich_job`.
+- Legacy `outreachMessage` column populated from the recruiter template (falls back to russian speaker template) for backwards compat.
+
+**Tests (22 new, 0 regressions — 157 total)**
+- `tests/test_connection_note.py` (new, 15 tests): `minimal_fallback_template` shape/CTA/length/placeholder; `generate_connection_note_template` happy path, retry on overflow, double-overflow fallback, LLM exception fallback, no-API-key fallback; `generate_outreach_templates` both-on-failure, recruiter-only, russian-only, mixed contacts.
+- `tests/test_schemas.py` (+3): `recruiterOutreachTemplate` defaults and round-trip; `russianSpeakerOutreachTemplate` defaults and round-trip; full template DB round-trip.
+- `tests/test_database.py` (+4): `enrich_job` persists both templates; legacy `outreachMessage` migrates to `recruiterOutreachTemplate` on read; existing `recruiterOutreachTemplate` not overwritten by legacy message.
+- `tests/test_enrichment_pipeline.py` (+1, updated 5): updated existing pipeline tests to patch `generate_outreach_templates`; new test verifies pipeline persists both templates.

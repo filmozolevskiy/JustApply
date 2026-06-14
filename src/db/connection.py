@@ -45,7 +45,9 @@ def init_db(db_path=None):
             outreachMessage TEXT,
             comment TEXT,
             isRecruiter INTEGER DEFAULT 0,
-            enrichmentNote TEXT DEFAULT ''
+            enrichmentNote TEXT DEFAULT '',
+            recruiterOutreachTemplate TEXT DEFAULT '',
+            russianSpeakerOutreachTemplate TEXT DEFAULT ''
         )
     """)
     conn.commit()
@@ -58,6 +60,18 @@ def init_db(db_path=None):
 
     try:
         cursor.execute("ALTER TABLE jobs ADD COLUMN enrichmentNote TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN recruiterOutreachTemplate TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN russianSpeakerOutreachTemplate TEXT DEFAULT ''")
         conn.commit()
     except sqlite3.OperationalError:
         pass

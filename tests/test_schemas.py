@@ -99,3 +99,40 @@ def test_job_schema_enrichment_note_round_trip(db):
     row = database.get_job(job_id, db_path=db)
     job = Job(**row)
     assert job.enrichmentNote == ""
+
+
+def test_job_schema_has_recruiter_outreach_template_field():
+    from src.schemas import Job
+    job = Job(title="QA", company="Acme")
+    assert job.recruiterOutreachTemplate == ""
+    job2 = Job(title="QA", company="Acme", recruiterOutreachTemplate="Hello ______,\nAcme – QA.\nFit line.\nCTA.")
+    assert job2.recruiterOutreachTemplate == "Hello ______,\nAcme – QA.\nFit line.\nCTA."
+
+
+def test_job_schema_has_russian_speaker_outreach_template_field():
+    from src.schemas import Job
+    job = Job(title="QA", company="Acme")
+    assert job.russianSpeakerOutreachTemplate == ""
+    job2 = Job(title="QA", company="Acme", russianSpeakerOutreachTemplate="Hello ______,\nAcme – QA.\nFit.\nRU CTA.")
+    assert job2.russianSpeakerOutreachTemplate == "Hello ______,\nAcme – QA.\nFit.\nRU CTA."
+
+
+def test_job_schema_outreach_templates_round_trip(db):
+    from src.schemas import Job
+    from src.db import enrich_job
+    job_id = database.add_job(
+        {"title": "QA Engineer", "company": "Acme", "status": "sourced"},
+        db_path=db,
+    )
+    recruiter_tmpl = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
+    russian_tmpl = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI'd be grateful if you could refer me for the role."
+    enrich_job(
+        job_id, [], recruiter_tmpl,
+        recruiter_template=recruiter_tmpl,
+        russian_speaker_template=russian_tmpl,
+        db_path=db,
+    )
+    row = database.get_job(job_id, db_path=db)
+    job = Job(**row)
+    assert job.recruiterOutreachTemplate == recruiter_tmpl
+    assert job.russianSpeakerOutreachTemplate == russian_tmpl

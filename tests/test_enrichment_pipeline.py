@@ -17,12 +17,18 @@ def db(tmp_path, monkeypatch):
     return db_path
 
 
+_EMPTY_TEMPLATES = {"recruiter": "", "russian_speaker": ""}
+_BOTH_TEMPLATES = {
+    "recruiter": "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV.",
+    "russian_speaker": "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI'd be grateful if you could refer me for the role.",
+}
+
+
 @pytest.mark.asyncio
 async def test_enrichment_failure_zero_contacts_sets_note(db):
     """Zero contacts sets a non-empty enrichmentNote on the job."""
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="msg")), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
         job = get_job(1, db_path=db)
         result = await run_enrichment_pipeline(job)
@@ -36,8 +42,7 @@ async def test_enrichment_failure_zero_contacts_sets_note(db):
 async def test_enrichment_infrastructure_error_sets_note(db):
     """Infrastructure error during source_contacts sets enrichmentNote."""
     with patch("src.pipelines.source_contacts", new=AsyncMock(side_effect=Exception("Apify trigger failed: HTTP 403"))), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="msg")), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
         job = get_job(1, db_path=db)
         result = await run_enrichment_pipeline(job)
@@ -55,8 +60,7 @@ async def test_enrichment_success_clears_note(db):
     contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice",
                  "contacted": False, "russian_speaker": True, "is_recruiter": False, "is_job_poster": False}]
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello")), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
         job = get_job(1, db_path=db)
         result = await run_enrichment_pipeline(job)
@@ -75,8 +79,7 @@ async def test_enrichment_zero_contacts_logs_final_error(db):
         log_records.append((msg, level))
 
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="msg")), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
         job = get_job(1, db_path=db)
         await run_enrichment_pipeline(job, log_func=capture_log)
@@ -97,8 +100,7 @@ async def test_enrichment_success_logs_final_success(db):
     contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice",
                  "contacted": False, "russian_speaker": True}]
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello")), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
         job = get_job(1, db_path=db)
         await run_enrichment_pipeline(job, log_func=capture_log)
@@ -106,3 +108,21 @@ async def test_enrichment_success_logs_final_success(db):
     assert log_records, "No log lines emitted"
     final_level = log_records[-1][1]
     assert final_level == "success", f"Expected final log level 'success', got {final_level!r}"
+
+
+@pytest.mark.asyncio
+async def test_enrichment_pipeline_persists_both_outreach_templates(db):
+    """Pipeline passes both audience templates to enrich_job."""
+    contacts = [
+        {"name": "Sarah", "is_recruiter": True, "russian_speaker": False, "url": "", "contacted": False},
+        {"name": "Ivan", "is_recruiter": False, "russian_speaker": True, "url": "", "contacted": False},
+    ]
+    with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
+        from src.pipelines import run_enrichment_pipeline
+        job = get_job(1, db_path=db)
+        result = await run_enrichment_pipeline(job)
+
+    assert result is not None
+    assert result["recruiterOutreachTemplate"] == _BOTH_TEMPLATES["recruiter"]
+    assert result["russianSpeakerOutreachTemplate"] == _BOTH_TEMPLATES["russian_speaker"]

@@ -127,16 +127,17 @@ async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_
     active_tasks[task_id] = state
 
     mock_contacts = [{"name": "Test Contact", "url": "https://linkedin.com/in/test", "contacted": False, "russian_speaker": False}]
+    recruiter_note = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
+    mock_templates = {"recruiter": recruiter_note, "russian_speaker": ""}
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello")), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=mock_templates)):
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1)
     assert job["status"] == "enriched"
     assert len(job["contacts"]) == 1
     assert job["contacts"][0]["name"] == "Test Contact"
-    assert job["outreachMessage"] != ""
+    assert job["recruiterOutreachTemplate"] == recruiter_note
 
 
 @pytest.mark.asyncio

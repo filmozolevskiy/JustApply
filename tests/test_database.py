@@ -236,3 +236,42 @@ def test_enrich_job_clears_enrichment_note(tmp_path):
     updated = enrich_job(1, contacts, "Hello", enrichment_note="", db_path=db_str)
     assert updated is not None
     assert updated["enrichmentNote"] == ""
+
+
+def test_enrich_job_persists_both_outreach_templates(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    recruiter_tmpl = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
+    russian_tmpl = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI'd be grateful if you could refer me for the role."
+    updated = enrich_job(
+        1, [], recruiter_tmpl,
+        recruiter_template=recruiter_tmpl,
+        russian_speaker_template=russian_tmpl,
+        db_path=db_str,
+    )
+    assert updated is not None
+    assert updated["recruiterOutreachTemplate"] == recruiter_tmpl
+    assert updated["russianSpeakerOutreachTemplate"] == russian_tmpl
+
+
+def test_legacy_outreach_message_migrates_to_recruiter_template_on_read(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    # Simulate a legacy job with outreachMessage but no recruiterOutreachTemplate
+    enrich_job(1, [], "Legacy outreach message", db_path=db_str)
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["recruiterOutreachTemplate"] == "Legacy outreach message"
+    assert job["russianSpeakerOutreachTemplate"] == ""
+
+
+def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    recruiter_tmpl = "Hello ______,\nAcme – QA Lead.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
+    enrich_job(
+        1, [], "legacy msg",
+        recruiter_template=recruiter_tmpl,
+        db_path=db_str,
+    )
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["recruiterOutreachTemplate"] == recruiter_tmpl

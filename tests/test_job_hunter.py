@@ -173,9 +173,10 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
     }
     mock_contacts = [{"name": "Jane", "title": "Recruiter", "url": "https://linkedin.com/in/jane", "contacted": False, "russian_speaker": False}]
     enriched = {**job, "status": "enriched", "contacts": mock_contacts, "outreachMessage": "Hello Jane"}
+    mock_templates = {"recruiter": "Hello Jane", "russian_speaker": ""}
 
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello Jane")), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=mock_templates)), \
          patch("src.pipelines.database.enrich_job", return_value=enriched) as mock_save, \
          patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": True, "target_recruiters": True}):
 
@@ -183,7 +184,12 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
 
         assert result["status"] == "enriched"
         assert result["contacts"] == mock_contacts
-        mock_save.assert_called_once_with(10, mock_contacts, "Hello Jane", enrichment_note="")
+        mock_save.assert_called_once_with(
+            10, mock_contacts, "Hello Jane",
+            enrichment_note="",
+            recruiter_template="Hello Jane",
+            russian_speaker_template="",
+        )
 
 
 @pytest.mark.asyncio
@@ -202,7 +208,7 @@ async def test_run_enrichment_pipeline_starts_enrichment_from_sourced():
 
     with patch("src.pipelines.database.start_enrichment", return_value={**job, "status": "enriching"}) as mock_start, \
          patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hi")), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value={"recruiter": "Hi", "russian_speaker": ""})), \
          patch("src.pipelines.database.enrich_job", return_value=enriched), \
          patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": True, "target_recruiters": True}):
 
@@ -229,7 +235,7 @@ async def test_run_enrichment_pipeline_reads_settings_and_passes_to_source_conta
 
     with patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": False, "target_recruiters": True}) as mock_get_settings, \
          patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])) as mock_source, \
-         patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hi")), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value={"recruiter": "Hi", "russian_speaker": ""})), \
          patch("src.pipelines.database.enrich_job", return_value=enriched):
 
         await run_enrichment_pipeline(job)

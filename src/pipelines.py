@@ -4,7 +4,7 @@ import inspect
 from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
-from .core.outreach import source_contacts, generate_outreach_for_job
+from .core.outreach import source_contacts, generate_outreach_for_job, generate_outreach_templates
 from .schemas import OutreachSettings
 
 
@@ -147,9 +147,17 @@ async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
     elif contacts:
         await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
 
-    outreach_message = await generate_outreach_for_job(job, contacts)
+    templates = await generate_outreach_templates(job, contacts, log_func=log_func)
+    outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
 
-    enriched = database.enrich_job(job_id, contacts, outreach_message, enrichment_note=enrichment_note)
+    enriched = database.enrich_job(
+        job_id,
+        contacts,
+        outreach_message,
+        enrichment_note=enrichment_note,
+        recruiter_template=templates.get("recruiter", ""),
+        russian_speaker_template=templates.get("russian_speaker", ""),
+    )
     if enriched:
         if enrichment_note:
             await log(f"Enrichment failed for job id={job_id}: {enrichment_note}", "error")
