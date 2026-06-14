@@ -36,3 +36,21 @@ Implemented Pre-Evaluation Filters and aggregate pipeline summary in the Search 
 - 7 new tests: duplicate skips evaluate/add, remote mismatch drops before eval and not saved, rejection logged with title and reason, matching remote type proceeds to eval, `allowed_remote_types=["any"]` passes all, aggregate summary logged, summary counts correct.
 - All 245 tests pass.
 
+## Iteration 3 — Refresh Contacts on enriched jobs (#44)
+
+Implemented the Refresh Contacts action per issue #44.
+
+**Server** (`src/web/server.py`):
+- Extracted `_run_enrichment_task(task_id, job_id, bust_cache)` as a shared helper.
+- `run_enrichment_task_with_logs` delegates to the helper with `bust_cache=False` (unchanged behavior).
+- Added `run_refresh_contacts_task_with_logs` which calls the helper with `bust_cache=True`.
+- Added `POST /api/jobs/{job_id}/refresh-contacts` endpoint: sets job to enriching, creates task, runs `run_refresh_contacts_task_with_logs` as a background task. Returns `{task_id, job_id}`. Returns 404 for unknown jobs.
+
+**Dashboard** (`src/web/dashboard.html`):
+- Added `function refreshContacts(id)`: mirrors `enrichJob` but calls `/api/jobs/{id}/refresh-contacts`, reverts to `enriched` on error.
+- Added **Refresh Contacts** button in the Outreach Contacts section header, conditionally rendered when `job.status === 'enriched'` or `job.status === 'enriching'`. Not shown on sourced jobs.
+
+**Tests** (`tests/test_refresh_contacts.py`):
+- 10 new tests: endpoint returns task_id, sets job to enriching, 404 for missing job, pipeline called with `bust_cache=True`, job contacts updated after refresh, `refreshContacts` JS function defined, calls `/refresh-contacts` endpoint, uses SSE, button present in enriched drawer, enrichJob still shown for sourced drawer.
+- All 255 tests pass.
+

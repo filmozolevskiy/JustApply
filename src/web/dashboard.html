@@ -1685,6 +1685,52 @@
         });
     }
 
+    function refreshContacts(id) {
+      const job = masterJobs.find(j => j.id === id);
+      if (!job) return;
+
+      job.status = 'enriching';
+      addLogLine(`Refreshing contacts for [${job.title} @ ${job.company}]...`, 'warning');
+      expandLogsConsole();
+      renderActiveVariant();
+
+      fetch(`/api/jobs/${id}/refresh-contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP error " + r.status);
+          return r.json();
+        })
+        .then(data => {
+          const task_id = data.task_id;
+          addLogLine(`Refresh contacts task started: ${task_id}`, 'info');
+          localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
+          localStorage.setItem(ACTIVE_ENRICH_LOG_SKIP_KEY, '0');
+
+          enrichEventSource = connectTaskLogStream(task_id, {
+            skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
+            taskKey: ACTIVE_ENRICH_TASK_KEY,
+            existingSource: enrichEventSource,
+            onResult(logData) {
+              if (logData.job) {
+                const idx = masterJobs.findIndex(j => j.id === logData.job.id);
+                if (idx !== -1) masterJobs[idx] = logData.job;
+              }
+              renderActiveVariant();
+            },
+            onDone() {
+              renderActiveVariant();
+            },
+            onError() {
+              addLogLine(`Refresh contacts SSE stream closed for job [${job.title}].`, 'warning');
+            },
+          });
+        })
+        .catch(err => {
+          job.status = 'enriched';
+          addLogLine(`Failed to trigger refresh contacts: ${err.message}. Reverted to 'enriched'.`, 'error');
+          renderActiveVariant();
+        });
+    }
+
     function deleteJob(id) {
       const job = masterJobs.find(j => j.id === id);
       if (job) {
@@ -2445,7 +2491,12 @@
 
           <!-- Outreach Contacts & Referral Status -->
           <div style="display:flex; flex-direction:column; gap:8px;">
-            <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Outreach Contacts & Referral Status</h4>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
+              ${(job.status === 'enriched' || job.status === 'enriching') ? `
+                <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="refreshContacts(${job.id}); closeDrawer(null);"><i class="fa-solid fa-arrows-rotate"></i> Refresh Contacts</button>
+              ` : ''}
+            </div>
             <div style="display:flex; flex-direction:column; gap:8px;">
               ${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}
             </div>

@@ -111,7 +111,7 @@ async def update_template(job_id: int, update: TemplateUpdate):
     return updated
 
 
-async def run_enrichment_task_with_logs(task_id: str, job_id: int):
+async def _run_enrichment_task(task_id: str, job_id: int, bust_cache: bool = False):
     state = active_tasks.get(task_id)
     if not state:
         return
@@ -129,7 +129,7 @@ async def run_enrichment_task_with_logs(task_id: str, job_id: int):
             return
 
         from ..pipelines import run_enrichment_pipeline
-        updated = await run_enrichment_pipeline(job, log_func=log_callback)
+        updated = await run_enrichment_pipeline(job, log_func=log_callback, bust_cache=bust_cache)
 
         if updated:
             state.result = {"type": "result", "job": updated}
@@ -143,6 +143,14 @@ async def run_enrichment_task_with_logs(task_id: str, job_id: int):
         await state.queue.put(None)
 
 
+async def run_enrichment_task_with_logs(task_id: str, job_id: int):
+    await _run_enrichment_task(task_id, job_id, bust_cache=False)
+
+
+async def run_refresh_contacts_task_with_logs(task_id: str, job_id: int):
+    await _run_enrichment_task(task_id, job_id, bust_cache=True)
+
+
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     updated = start_enrichment(job_id)
@@ -153,6 +161,19 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     state = TaskState({"job_id": job_id})
     active_tasks[task_id] = state
     background_tasks.add_task(run_enrichment_task_with_logs, task_id, job_id)
+    return {"task_id": task_id, "job_id": job_id}
+
+
+@app.post("/api/jobs/{job_id}/refresh-contacts")
+async def refresh_contacts(job_id: int, background_tasks: BackgroundTasks):
+    updated = start_enrichment(job_id)
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    background_tasks.add_task(run_refresh_contacts_task_with_logs, task_id, job_id)
     return {"task_id": task_id, "job_id": job_id}
 
 
