@@ -20,3 +20,19 @@ Implemented the Contact Sample Cache as specified in ADR 0006 and issue #42.
 - Renamed `test_source_contacts_always_calls_apify_even_with_existing_job_poster` → `test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poster`.
 - All 238 tests pass.
 
+## Iteration 2 — Search Pre-Evaluation Filters and cost summary (#43)
+
+Implemented Pre-Evaluation Filters and aggregate pipeline summary in the Search & Evaluation Pipeline per issue #43.
+
+**Pipeline** (`src/pipelines.py`):
+- Added counters: `scraped_count`, `duplicates_count`, `pre_filtered_count`, `evaluated_count`, `saved_count`.
+- Added Pre-Evaluation Filter (v1): after deduplicate check, compares scraper-derived `remoteType` against `allowed_remote_types`. When preferences are not `any` and remote type is not allowed, the job is dropped (not saved) and the rejection is logged to Task Logs.
+- Duplicate log message updated to "Skipping duplicate:" for consistency.
+- Final log replaced with aggregate summary line: `Pipeline complete. Scraped: N | Duplicates skipped: N | Pre-filtered: N | Evaluated: N | Saved: N`.
+- Updated docstring to reflect scrape → deduplicate → Pre-Evaluation Filters → evaluate order.
+- Recruiting agency postings unchanged — still reach Resume Matcher and are saved with penalty.
+
+**Tests** (`tests/test_search_pipeline.py`):
+- 7 new tests: duplicate skips evaluate/add, remote mismatch drops before eval and not saved, rejection logged with title and reason, matching remote type proceeds to eval, `allowed_remote_types=["any"]` passes all, aggregate summary logged, summary counts correct.
+- All 245 tests pass.
+

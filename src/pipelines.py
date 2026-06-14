@@ -20,7 +20,7 @@ async def run_search_pipeline(
     time_range: str = "any",
     log_func=None,
 ) -> list:
-    """Scrape, evaluate, deduplicate, and save jobs. Returns list of saved job dicts."""
+    """Scrape, deduplicate, apply Pre-Evaluation Filters, evaluate, and save jobs. Returns list of saved job dicts."""
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -41,7 +41,8 @@ async def run_search_pipeline(
         log_func=log_func,
     )
 
-    await log(f"Found {len(jobs)} matching jobs.")
+    scraped_count = len(jobs)
+    await log(f"Found {scraped_count} matching jobs.")
 
     resume_content = None
     if not mock_eval:
@@ -57,15 +58,35 @@ async def run_search_pipeline(
 
     database.init_db()
     saved = []
+    duplicates_count = 0
+    pre_filtered_count = 0
+    evaluated_count = 0
+
+    # Normalise allowed remote types once for Pre-Evaluation Filter comparisons.
+    _allowed_remote = [t.lower().strip() for t in (allowed_remote_types or [])]
+    _filter_remote = bool(_allowed_remote) and "any" not in _allowed_remote
 
     for job in jobs:
         title = job.get("title") or ""
         company = job.get("company") or ""
         link = job.get("link") or ""
 
+        # 1. Deduplicate — skip jobs already on the board.
         if database.job_exists(title, company, link):
-            await log(f"Skipping duplicate job: '{title}' at '{company}'")
+            await log(f"Skipping duplicate: '{title}' at '{company}'")
+            duplicates_count += 1
             continue
+
+        # 2. Pre-Evaluation Filters — cheap non-LLM checks before Resume Matcher.
+        if _filter_remote:
+            job_remote_type = (job.get("remoteType") or "").lower()
+            if job_remote_type not in _allowed_remote:
+                pre_filtered_count += 1
+                await log(
+                    f"Pre-filter: '{title}' at '{company}' — remote type '{job_remote_type}' not in {_allowed_remote}",
+                    "info",
+                )
+                continue
 
         job["resumeUsed"] = active_resume
 
@@ -81,6 +102,7 @@ async def run_search_pipeline(
             else:
                 job["isRecruiter"] = False
         elif resume_content:
+            evaluated_count += 1
             await log(f"Evaluating '{title}' at {company}...")
             evaluation = await evaluate_job(job, resume_content, log_func, allowed_remote_types)
             if evaluation:
@@ -103,7 +125,11 @@ async def run_search_pipeline(
             saved.append(job)
             await log(f"Saved: '{title}' at {company} (id={job_id})")
 
-    await log(f"Pipeline complete. {len(saved)} jobs saved.")
+    saved_count = len(saved)
+    await log(
+        f"Pipeline complete. Scraped: {scraped_count} | Duplicates skipped: {duplicates_count} | "
+        f"Pre-filtered: {pre_filtered_count} | Evaluated: {evaluated_count} | Saved: {saved_count}"
+    )
     return saved
 
 
