@@ -11,4 +11,5 @@ from .jobs import (
     start_enrichment,
     enrich_job,
     job_exists,
+    update_outreach_template,
 )

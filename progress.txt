@@ -153,3 +153,35 @@
 - `test_contact_group_function_neither_routes_to_other`: `contactGroup` falls through to `'other'`.
 - `test_drawer_contacts_show_all_three_group_headings`: All three group labels ('Recruiters', 'Russian Speakers', 'Other') present in script.
 - `test_drawer_contacts_grouped_preserve_flat_array_index`: `origIdx` variable used in grouped contact rendering to preserve flat-array index for API calls.
+
+---
+
+## Iteration 6 — Issue #35: Persist outreach template edits
+
+### What was implemented
+
+**`src/db/jobs.py`**
+- Added `update_outreach_template(job_id, audience, template, db_path=None)` — updates `recruiterOutreachTemplate` or `russianSpeakerOutreachTemplate` based on `audience` argument (`"recruiter"` or `"russian_speaker"`). Returns the updated job dict or `None` when the job does not exist.
+
+**`src/db/__init__.py`**
+- Exported `update_outreach_template` from the db package public API.
+
+**`src/web/server.py`**
+- Imported `update_outreach_template`.
+- Added `TemplateUpdate` Pydantic model with `audience: str` and `template: str`.
+- Added `PUT /api/jobs/{job_id}/template` endpoint — calls `update_outreach_template`, returns 404 when job not found, otherwise returns the updated `Job`.
+
+**`src/web/dashboard.html`**
+- Added `let templateSaveTimeout = null;` module-level variable alongside `commentTimeout`.
+- Added `saveOutreachTemplate(jobId, template)` function:
+  - Determines `audience` from the Active Contact's `is_recruiter` flag (`"recruiter"` when true, `"russian_speaker"` otherwise).
+  - Updates the corresponding in-memory template field on the job immediately (optimistic update).
+  - Debounces 500 ms, then PUTs to `/api/jobs/{jobId}/template` with `{audience, template}`.
+  - On success, syncs both template fields from the server response.
+  - On error, logs a warning to the on-page console.
+- Updated the outreach textarea `oninput` to call both `updateOutreachCounter()` and `saveOutreachTemplate(${job.id}, this.value)`.
+
+**Tests (14 new, 0 regressions — 184 total)**
+- `test_database.py` (+4): `update_outreach_template` saves recruiter template and persists across reads; saves Russian speaker template; recruiter and Russian speaker edits are independent; returns `None` for nonexistent job.
+- `test_dashboard_jobs.py` (+4): PUT `/template` endpoint saves recruiter template; saves Russian speaker template; audiences do not overwrite each other; returns 404 for nonexistent job.
+- `test_dashboard_outreach_settings.py` (+6): `saveOutreachTemplate` function is defined; textarea `oninput` is wired to it; function uses `templateSaveTimeout` for debouncing; function calls `/template` endpoint; function inspects `is_recruiter` for audience selection; function updates in-memory template field.

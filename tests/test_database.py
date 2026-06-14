@@ -275,3 +275,52 @@ def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path)
     )
     job = next(j for j in get_jobs(db_str) if j["id"] == 1)
     assert job["recruiterOutreachTemplate"] == recruiter_tmpl
+
+
+def test_update_outreach_template_persists_recruiter_template(tmp_path):
+    from src.db.jobs import update_outreach_template
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    new_text = "Hello ______,\nEdited recruiter draft."
+    updated = update_outreach_template(1, "recruiter", new_text, db_path=db_str)
+    assert updated is not None
+    assert updated["recruiterOutreachTemplate"] == new_text
+    # Persists across reads
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["recruiterOutreachTemplate"] == new_text
+
+
+def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
+    from src.db.jobs import update_outreach_template
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    new_text = "Hello ______,\nEdited Russian speaker draft."
+    updated = update_outreach_template(1, "russian_speaker", new_text, db_path=db_str)
+    assert updated is not None
+    assert updated["russianSpeakerOutreachTemplate"] == new_text
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["russianSpeakerOutreachTemplate"] == new_text
+
+
+def test_update_outreach_template_audiences_independent(tmp_path):
+    from src.db.jobs import update_outreach_template
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    enrich_job(
+        1, [], "",
+        recruiter_template="Recruiter draft",
+        russian_speaker_template="Russian draft",
+        db_path=db_str,
+    )
+    update_outreach_template(1, "recruiter", "Edited recruiter", db_path=db_str)
+    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
+    assert job["recruiterOutreachTemplate"] == "Edited recruiter"
+    assert job["russianSpeakerOutreachTemplate"] == "Russian draft"
+
+
+def test_update_outreach_template_nonexistent_job(tmp_path):
+    from src.db.jobs import update_outreach_template
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    result = update_outreach_template(999, "recruiter", "anything", db_path=db_str)
+    assert result is None

@@ -157,6 +157,29 @@ def enrich_job(
     return _parse_job_row(row) if row else None
 
 
+def update_outreach_template(job_id, audience, template, db_path=None):
+    if audience == "recruiter":
+        column = "recruiterOutreachTemplate"
+    elif audience == "russian_speaker":
+        column = "russianSpeakerOutreachTemplate"
+    else:
+        raise ValueError(f"Invalid audience {audience!r}")
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute(f"UPDATE jobs SET {column} = ? WHERE id = ?", (template, job_id))
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return _parse_job_row(row) if row else None
+
+
 def job_exists(title, company, link=None, db_path=None):
     if db_path is None:
         db_path = connection.DB_PATH

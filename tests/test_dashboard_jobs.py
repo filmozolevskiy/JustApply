@@ -149,3 +149,41 @@ async def test_run_enrichment_task_with_logs_noop_for_missing_job():
     active_tasks[task_id] = state
     # Should complete without raising for a non-existent job ID
     await run_enrichment_task_with_logs(task_id, 99999)
+
+
+# --- PUT /api/jobs/{id}/template ---
+
+def test_put_template_endpoint_saves_recruiter_template():
+    response = client.put("/api/jobs/1/template", json={"audience": "recruiter", "template": "Edited recruiter draft"})
+    assert response.status_code == 200
+    job = response.json()
+    assert job["recruiterOutreachTemplate"] == "Edited recruiter draft"
+    # Persists on GET
+    get_response = client.get("/api/jobs")
+    jobs = get_response.json()
+    job1 = next(j for j in jobs if j["id"] == 1)
+    assert job1["recruiterOutreachTemplate"] == "Edited recruiter draft"
+
+
+def test_put_template_endpoint_saves_russian_speaker_template():
+    response = client.put("/api/jobs/1/template", json={"audience": "russian_speaker", "template": "Edited RS draft"})
+    assert response.status_code == 200
+    job = response.json()
+    assert job["russianSpeakerOutreachTemplate"] == "Edited RS draft"
+
+
+def test_put_template_endpoint_audiences_do_not_overwrite_each_other():
+    client.put("/api/jobs/1/template", json={"audience": "recruiter", "template": "R draft"})
+    client.put("/api/jobs/1/template", json={"audience": "russian_speaker", "template": "RS draft"})
+    client.put("/api/jobs/1/template", json={"audience": "recruiter", "template": "R draft v2"})
+    get_response = client.get("/api/jobs")
+    jobs = get_response.json()
+    job1 = next(j for j in jobs if j["id"] == 1)
+    assert job1["recruiterOutreachTemplate"] == "R draft v2"
+    assert job1["russianSpeakerOutreachTemplate"] == "RS draft"
+
+
+def test_put_template_endpoint_nonexistent_job():
+    response = client.put("/api/jobs/999/template", json={"audience": "recruiter", "template": "anything"})
+    assert response.status_code == 404
+    assert response.json() == {"message": "Job not found"}

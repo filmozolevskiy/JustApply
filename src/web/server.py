@@ -11,7 +11,7 @@ from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment, get_outreach_settings, save_outreach_settings
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment, get_outreach_settings, save_outreach_settings, update_outreach_template
 from ..rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -97,6 +97,19 @@ async def update_contact(job_id: int, contact_idx: int, update: ContactUpdate):
     if updated is None:
         return JSONResponse(status_code=404, content={"message": "Job or contact not found"})
     return updated
+
+class TemplateUpdate(BaseModel):
+    audience: str
+    template: str
+
+
+@app.put("/api/jobs/{job_id}/template", response_model=Job)
+async def update_template(job_id: int, update: TemplateUpdate):
+    updated = update_outreach_template(job_id, update.audience, update.template)
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return updated
+
 
 async def run_enrichment_task_with_logs(task_id: str, job_id: int):
     state = active_tasks.get(task_id)

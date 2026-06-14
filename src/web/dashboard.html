@@ -1354,6 +1354,7 @@
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let commentTimeout = null;
+    let templateSaveTimeout = null;
 
     // ----------------------------------------------------
     // ----------------------------------------------------
@@ -2305,7 +2306,7 @@
               <h4 style="font-size:0.85rem; color:var(--accent-indigo); margin:0;">Outreach Message Draft</h4>
             </div>
             ${activeTemplate || (contacts.length === 0 && (job.outreachMessage || job.recruiterOutreachTemplate || job.russianSpeakerOutreachTemplate)) ? `
-              <textarea class="outreach-text" id="drawer-outreach-text" oninput="updateOutreachCounter()" style="font-size:0.8rem; min-height:100px;">${activeTemplate}</textarea>
+              <textarea class="outreach-text" id="drawer-outreach-text" oninput="updateOutreachCounter(); saveOutreachTemplate(${job.id}, this.value)" style="font-size:0.8rem; min-height:100px;">${activeTemplate}</textarea>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
                 <span id="drawer-char-counter" style="font-size:0.75rem; color:var(--text-muted);">${activeTemplate.length}/200</span>
                 <div style="display:flex; gap:8px;">
@@ -2366,6 +2367,44 @@
         })
         .catch(err => {
           addLogLine(`Failed to save comment: ${err.message}`, 'warning');
+        });
+      }, 500);
+    }
+
+    function saveOutreachTemplate(jobId, template) {
+      const job = masterJobs.find(j => j.id === jobId);
+      if (!job) return;
+
+      const contact = (activeContactIdx >= 0 && job.contacts) ? job.contacts[activeContactIdx] : null;
+      const audience = (contact && contact.is_recruiter) ? 'recruiter' : 'russian_speaker';
+
+      if (audience === 'recruiter') {
+        job.recruiterOutreachTemplate = template;
+      } else {
+        job.russianSpeakerOutreachTemplate = template;
+      }
+
+      if (templateSaveTimeout) {
+        clearTimeout(templateSaveTimeout);
+      }
+      templateSaveTimeout = setTimeout(() => {
+        fetch(`/api/jobs/${jobId}/template`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audience, template })
+        })
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP error ' + r.status);
+          return r.json();
+        })
+        .then(updatedJob => {
+          if (job) {
+            job.recruiterOutreachTemplate = updatedJob.recruiterOutreachTemplate;
+            job.russianSpeakerOutreachTemplate = updatedJob.russianSpeakerOutreachTemplate;
+          }
+        })
+        .catch(err => {
+          addLogLine(`Failed to save outreach template: ${err.message}`, 'warning');
         });
       }, 500);
     }

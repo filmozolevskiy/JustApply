@@ -298,3 +298,76 @@ def test_drawer_contacts_grouped_preserve_flat_array_index():
     # A helper that builds grouped contact HTML must use origIdx (original flat index)
     assert "origIdx" in script, \
         "Grouped contact rendering must use origIdx to preserve flat-array index for API calls"
+
+
+# --- Issue #35: Persist outreach template edits ---
+
+def test_save_outreach_template_function_defined():
+    """saveOutreachTemplate function must be present in the script."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    assert "function saveOutreachTemplate(" in script, \
+        "saveOutreachTemplate function must be defined in the dashboard script"
+
+
+def test_outreach_textarea_wired_to_save_template():
+    """Outreach textarea oninput must call saveOutreachTemplate."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    assert "saveOutreachTemplate" in script, \
+        "saveOutreachTemplate must be referenced in the drawer outreach textarea oninput"
+
+
+def test_save_outreach_template_uses_debounce():
+    """saveOutreachTemplate must debounce saves (uses templateSaveTimeout)."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    assert "templateSaveTimeout" in script, \
+        "saveOutreachTemplate must use templateSaveTimeout for debouncing"
+
+
+def test_save_outreach_template_calls_template_endpoint():
+    """saveOutreachTemplate must PUT to /api/jobs/.../template."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    assert "/template" in script, \
+        "saveOutreachTemplate must call the /template API endpoint"
+
+
+def test_save_outreach_template_uses_active_contact_audience():
+    """saveOutreachTemplate selects audience from active contact's is_recruiter flag."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    fn_start = script.find("function saveOutreachTemplate(")
+    assert fn_start != -1
+    fn_body = script[fn_start:fn_start + 800]
+    assert "is_recruiter" in fn_body, \
+        "saveOutreachTemplate must inspect is_recruiter to determine audience"
+    assert "recruiter" in fn_body, \
+        "saveOutreachTemplate must send audience='recruiter' for recruiter contacts"
+    assert "russian_speaker" in fn_body, \
+        "saveOutreachTemplate must send audience='russian_speaker' for non-recruiter contacts"
+
+
+def test_save_outreach_template_updates_in_memory_job():
+    """saveOutreachTemplate updates the in-memory masterJobs entry immediately."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    script = _get_script_section(content)
+    fn_start = script.find("function saveOutreachTemplate(")
+    assert fn_start != -1
+    fn_body = script[fn_start:fn_start + 800]
+    # Must update at least one of the in-memory template fields
+    assert "recruiterOutreachTemplate" in fn_body or "russianSpeakerOutreachTemplate" in fn_body, \
+        "saveOutreachTemplate must update the in-memory job template field"
