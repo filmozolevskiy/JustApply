@@ -371,3 +371,97 @@ def test_save_outreach_template_updates_in_memory_job():
     # Must update at least one of the in-memory template fields
     assert "recruiterOutreachTemplate" in fn_body or "russianSpeakerOutreachTemplate" in fn_body, \
         "saveOutreachTemplate must update the in-memory job template field"
+
+
+# --- Issue #39: Active Contact greeting name substitution ---
+
+def _load_script():
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    return _get_script_section(content)
+
+
+def test_name_placeholder_constant_defined():
+    """NAME_PLACEHOLDER constant must be defined in the script."""
+    script = _load_script()
+    assert "NAME_PLACEHOLDER" in script, \
+        "NAME_PLACEHOLDER constant must be defined in the dashboard script"
+
+
+def test_apply_greeting_name_function_defined():
+    """applyGreetingName function must be defined in the script."""
+    script = _load_script()
+    assert "function applyGreetingName(" in script, \
+        "applyGreetingName function must be defined in the dashboard script"
+
+
+def test_normalize_greeting_function_defined():
+    """normalizeGreeting function must be defined in the script."""
+    script = _load_script()
+    assert "function normalizeGreeting(" in script, \
+        "normalizeGreeting function must be defined in the dashboard script"
+
+
+def test_select_active_contact_applies_greeting_substitution():
+    """selectActiveContact must call applyGreetingName to substitute the contact's first name."""
+    script = _load_script()
+    fn_start = script.find("function selectActiveContact(")
+    assert fn_start != -1, "selectActiveContact function must exist"
+    fn_body = script[fn_start:fn_start + 1200]
+    assert "applyGreetingName" in fn_body, \
+        "selectActiveContact must call applyGreetingName to substitute the greeting name"
+
+
+def test_save_outreach_template_normalizes_greeting():
+    """saveOutreachTemplate must call normalizeGreeting before persisting the template."""
+    script = _load_script()
+    fn_start = script.find("function saveOutreachTemplate(")
+    assert fn_start != -1, "saveOutreachTemplate function must exist"
+    fn_body = script[fn_start:fn_start + 1000]
+    assert "normalizeGreeting" in fn_body, \
+        "saveOutreachTemplate must call normalizeGreeting to restore the Name Placeholder before saving"
+
+
+def test_open_job_drawer_applies_greeting_for_default_contact():
+    """openJobDetailsDrawer must apply greeting substitution for the default active contact."""
+    script = _load_script()
+    fn_start = script.find("function openJobDetailsDrawer(")
+    assert fn_start != -1, "openJobDetailsDrawer function must exist"
+    fn_body = script[fn_start:fn_start + 2000]
+    assert "applyGreetingName" in fn_body, \
+        "openJobDetailsDrawer must call applyGreetingName for the default active contact"
+
+
+def test_apply_greeting_name_replaces_placeholder_in_hi_greeting():
+    """applyGreetingName JS function body must replace NAME_PLACEHOLDER with first name."""
+    script = _load_script()
+    fn_start = script.find("function applyGreetingName(")
+    assert fn_start != -1
+    fn_body = script[fn_start:fn_start + 500]
+    assert "replace" in fn_body, \
+        "applyGreetingName must use string replace to substitute the name"
+
+
+def test_normalize_greeting_restores_placeholder():
+    """normalizeGreeting JS function body must replace back to NAME_PLACEHOLDER."""
+    script = _load_script()
+    fn_start = script.find("function normalizeGreeting(")
+    assert fn_start != -1
+    fn_body = script[fn_start:fn_start + 500]
+    assert "NAME_PLACEHOLDER" in fn_body, \
+        "normalizeGreeting must restore NAME_PLACEHOLDER in the greeting line"
+
+
+def test_switch_audience_loads_template_and_applies_greeting():
+    """selectActiveContact must load the audience template then apply greeting for the new contact."""
+    script = _load_script()
+    fn_start = script.find("function selectActiveContact(")
+    assert fn_start != -1
+    fn_body = script[fn_start:fn_start + 1200]
+    # must call getActiveTemplate (loads correct audience template)
+    assert "getActiveTemplate" in fn_body, \
+        "selectActiveContact must call getActiveTemplate to load the correct audience template"
+    # then apply greeting substitution
+    assert "applyGreetingName" in fn_body, \
+        "selectActiveContact must apply greeting substitution after loading the template"

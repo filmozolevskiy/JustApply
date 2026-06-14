@@ -73,3 +73,34 @@ The frontend persistence (localStorage session history, active task reconnect on
 - `test_scraper_poll_logs_failed_status_once` — `running` × 1 then `failed`; verifies both logged once
 
 **All 208 tests pass.**
+
+## Iteration 4 — Issue #39: Active Contact greeting name substitution
+
+**What was implemented:**
+
+**`src/web/dashboard.html` — greeting substitution helpers:**
+- Added `NAME_PLACEHOLDER = '______'` constant
+- Added `applyGreetingName(template, firstName)` — regex-replaces the name token in the greeting line (`Hi <name>,` / `Dear <name>,`) with the contact's first name; works whether the token is `______` or a previously substituted name
+- Added `normalizeGreeting(template)` — restores `NAME_PLACEHOLDER` in the greeting line before saving, so stored templates always use the placeholder
+
+**`selectActiveContact` update:**
+- After loading the audience template via `getActiveTemplate`, extracts the contact's first name (first word of `contact.name`) and calls `applyGreetingName` before setting `textarea.value`
+
+**`openJobDetailsDrawer` update:**
+- Applies `applyGreetingName` for the default active contact so the greeting shows the correct first name when the drawer first opens
+
+**`saveOutreachTemplate` update:**
+- Calls `normalizeGreeting(template)` before updating in-memory state and before sending the `PUT /api/jobs/{id}/template` request, ensuring the stored template always holds `______`
+
+**Tests (`tests/test_dashboard_outreach_settings.py`) — 9 new TDD tests:**
+- `test_name_placeholder_constant_defined` — `NAME_PLACEHOLDER` constant exists in the script
+- `test_apply_greeting_name_function_defined` — `applyGreetingName` function is defined
+- `test_normalize_greeting_function_defined` — `normalizeGreeting` function is defined
+- `test_select_active_contact_applies_greeting_substitution` — `selectActiveContact` calls `applyGreetingName`
+- `test_save_outreach_template_normalizes_greeting` — `saveOutreachTemplate` calls `normalizeGreeting`
+- `test_open_job_drawer_applies_greeting_for_default_contact` — `openJobDetailsDrawer` calls `applyGreetingName`
+- `test_apply_greeting_name_replaces_placeholder_in_hi_greeting` — function body uses `replace`
+- `test_normalize_greeting_restores_placeholder` — function body references `NAME_PLACEHOLDER`
+- `test_switch_audience_loads_template_and_applies_greeting` — `selectActiveContact` calls both `getActiveTemplate` and `applyGreetingName`
+
+**All 217 tests pass.**

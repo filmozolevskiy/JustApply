@@ -2217,6 +2217,19 @@
     // activeContactIdx tracks which contact row is selected while the drawer is open.
     let activeContactIdx = -1;
 
+    const NAME_PLACEHOLDER = '______';
+
+    // Replace the name token in the greeting line (Hi/Dear <name>,) with firstName.
+    // Works whether the current token is NAME_PLACEHOLDER or a previously substituted name.
+    function applyGreetingName(template, firstName) {
+      return template.replace(/^((?:Hi|Dear)\s+)\S+,/m, `$1${firstName},`);
+    }
+
+    // Restore NAME_PLACEHOLDER in the greeting line before persisting the template.
+    function normalizeGreeting(template) {
+      return template.replace(/^((?:Hi|Dear)\s+)\S+,/m, `$1${NAME_PLACEHOLDER},`);
+    }
+
     function contactGroup(contact) {
       if (contact.is_recruiter) return 'recruiters';
       if (contact.russian_speaker) return 'russian_speakers';
@@ -2289,10 +2302,13 @@
         }
       });
 
-      // Load matching template into textarea
+      // Load matching template into textarea and apply greeting substitution
       const textarea = document.getElementById('drawer-outreach-text');
       const counter = document.getElementById('drawer-char-counter');
-      const template = getActiveTemplate(job, contactIdx);
+      const rawTemplate = getActiveTemplate(job, contactIdx);
+      const contact = contacts[contactIdx];
+      const firstName = contact ? contact.name.split(' ')[0] : '';
+      const template = firstName ? applyGreetingName(rawTemplate, firstName) : rawTemplate;
       if (textarea) {
         textarea.value = template;
         if (counter) {
@@ -2326,7 +2342,10 @@
       if (defaultContactIdx === -1) defaultContactIdx = contacts.length > 0 ? 0 : -1;
       activeContactIdx = defaultContactIdx;
 
-      const activeTemplate = activeContactIdx >= 0 ? getActiveTemplate(job, activeContactIdx) : '';
+      const rawActiveTemplate = activeContactIdx >= 0 ? getActiveTemplate(job, activeContactIdx) : '';
+      const defaultContact = activeContactIdx >= 0 ? contacts[activeContactIdx] : null;
+      const defaultFirstName = defaultContact ? defaultContact.name.split(' ')[0] : '';
+      const activeTemplate = defaultFirstName ? applyGreetingName(rawActiveTemplate, defaultFirstName) : rawActiveTemplate;
 
       body.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
@@ -2508,11 +2527,12 @@
 
       const contact = (activeContactIdx >= 0 && job.contacts) ? job.contacts[activeContactIdx] : null;
       const audience = (contact && contact.is_recruiter) ? 'recruiter' : 'russian_speaker';
+      const normalizedTemplate = normalizeGreeting(template);
 
       if (audience === 'recruiter') {
-        job.recruiterOutreachTemplate = template;
+        job.recruiterOutreachTemplate = normalizedTemplate;
       } else {
-        job.russianSpeakerOutreachTemplate = template;
+        job.russianSpeakerOutreachTemplate = normalizedTemplate;
       }
 
       if (templateSaveTimeout) {
@@ -2522,7 +2542,7 @@
         fetch(`/api/jobs/${jobId}/template`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audience, template })
+          body: JSON.stringify({ audience, template: normalizedTemplate })
         })
         .then(r => {
           if (!r.ok) throw new Error('HTTP error ' + r.status);
