@@ -20,3 +20,34 @@
 - Fixed pre-existing regression: `enrichJob()` was incorrectly calling `startPollingEnrichingJobs()` (violating the SSE-handles-updates invariant); removed the erroneous call so `test_dashboard_html_polling_loop_not_called_from_enrich` passes again.
 
 **All 196 tests pass.**
+
+## Iteration 2 — Issue #37: Persist Task Logs across dashboard refresh
+
+**What was implemented:**
+
+The frontend persistence (localStorage session history, active task reconnect on refresh) and server-side `skip` parameter for the SSE log stream were already partially implemented from prior work. This iteration completed and verified the full feature:
+
+**Server-side (`src/web/server.py`):**
+- Added `skip: int = 0` query parameter to `GET /api/logs/{task_id}`
+- Negative skip values are clamped to 0
+- The SSE generator yields `state.logs[skip:]` instead of all logs, so reconnecting clients skip already-received lines
+
+**Tests (`tests/test_log_stream.py`) — 8 new TDD tests:**
+- `test_unknown_task_returns_404` — unknown task_id returns 404
+- `test_skip_zero_returns_all_logs` — skip=0 yields all pre-existing log lines
+- `test_skip_two_omits_first_two_logs` — skip=2 skips first 2 entries
+- `test_skip_equal_to_total_yields_no_logs` — skip at log count yields nothing
+- `test_negative_skip_is_treated_as_zero` — skip=-5 behaves like skip=0
+- `test_completed_task_stream_ends_with_done_event` — done event is sent
+- `test_failed_task_stream_ends_with_error_and_done` — error log + done on failure
+- `test_skip_one_then_skip_two_covers_all_logs` — simulates two reconnects without overlap
+
+**Frontend (`src/web/dashboard.html`) — already committed in #36, verified:**
+- `sessionLogs` array capped at 200 entries, persisted to `localStorage` on every `addLogLine()`
+- `restoreSessionLogs()` repopulates the console on page load
+- `clearLogs()` wipes both the UI and `localStorage`
+- `ACTIVE_SCRAPE_TASK_KEY` / `ACTIVE_ENRICH_TASK_KEY` and matching skip-counter keys persisted
+- `restoreActiveScrapeTask()` and `restoreActiveEnrichTask()` reconnect SSE streams with correct `?skip=N` on refresh
+- `connectTaskLogStream()` removes task/skip keys from `localStorage` on task completion
+
+**All 204 tests pass.**

@@ -302,15 +302,17 @@ async def trigger_scrape(
 
 
 @app.get("/api/logs/{task_id}")
-async def logs_stream(task_id: str):
+async def logs_stream(task_id: str, skip: int = 0):
     if task_id not in active_tasks:
         return JSONResponse(status_code=404, content={"message": "Task ID not found"})
 
     state = active_tasks[task_id]
+    if skip < 0:
+        skip = 0
 
     async def event_generator():
         try:
-            for log in state.logs:
+            for log in state.logs[skip:]:
                 yield {
                     "data": json.dumps({
                         "type": "log",
