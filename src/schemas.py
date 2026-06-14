@@ -12,6 +12,11 @@ JobStatus = Literal[
 ]
 
 
+class ActivityLogEntry(BaseModel):
+    ts: str
+    message: str
+
+
 class Contact(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -52,3 +57,4 @@ class Job(BaseModel):
     comment: str = ""
     isRecruiter: bool = False
     enrichmentNote: str = ""
+    activityLog: list[ActivityLogEntry] = []

@@ -321,6 +321,17 @@ async def logs_stream(task_id: str, skip: int = 0):
                     })
                 }
 
+            # log_callback mirrors each line into logs and the queue; drop
+            # the full queued history (skip only affects replay, not queue depth).
+            for _ in range(len(state.logs)):
+                try:
+                    queued = state.queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                if queued is None:
+                    await state.queue.put(None)
+                    break
+
             while True:
                 log = await state.queue.get()
                 if log is None:

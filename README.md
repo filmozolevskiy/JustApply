@@ -30,7 +30,7 @@ cp .env.example .env
 ```
 Ensure you have:
 * `GEMINI_API_KEY`: Required for resume evaluation and cover letter generation.
-* `GITHUB_PERSONAL_ACCESS_TOKEN`: Required for git/issues integration.
+* `GITHUB_TOKEN`: Required for `gh` CLI and GitHub issues/PR integration.
 * `BRIGHTDATA_API_KEY`: Required for job scraping.
 * `APIFY_API_KEY`: Required for fallback outreach contact scraping.
 

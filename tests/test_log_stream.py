@@ -126,3 +126,36 @@ def test_skip_one_then_skip_two_covers_all_logs():
     logs2 = [m for m in msgs2 if m.get("type") == "log"]
     assert len(logs2) == 2
     assert logs2[0]["message"] == "B"
+
+
+def _make_live_task_state(log_messages):
+    """Mirror log_callback: each line is stored in logs and queued."""
+    state = TaskState({"job_id": 1})
+    for msg in log_messages:
+        event = {"level": "info", "message": msg}
+        state.logs.append(event)
+        state.queue.put_nowait(event)
+    state.status = "completed"
+    state.queue.put_nowait(None)
+    return state
+
+
+def test_live_stream_does_not_duplicate_replayed_logs():
+    """Logs buffered before SSE connect must not appear twice (replay + queue)."""
+    active_tasks["live1"] = _make_live_task_state(
+        ["Enriching 'QA' at 'Acme'...", "Fetching up to 100 employees for 'Acme'..."]
+    )
+    msgs = _collect_messages("live1", skip=0)
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["message"] for m in logs] == [
+        "Enriching 'QA' at 'Acme'...",
+        "Fetching up to 100 employees for 'Acme'...",
+    ]
+
+
+def test_live_stream_reconnect_skips_replayed_and_queued_history():
+    """Reconnect with skip=N must not re-deliver lines already seen."""
+    active_tasks["live2"] = _make_live_task_state(["A", "B", "C"])
+    msgs = _collect_messages("live2", skip=1)
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["message"] for m in logs] == ["B", "C"]

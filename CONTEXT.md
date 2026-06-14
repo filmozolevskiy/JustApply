@@ -29,12 +29,20 @@ The LinkedIn employee Bright Data identifies as the person who published a job l
 _Avoid_: poster contact, job author, listing owner
 
 **Contact**:
-A person in a job's outreach list. Carries identity flags (`is_job_poster`) and Outreach Audience flags (`russian_speaker`, `is_recruiter`) set during enrichment classification. Identity flags are for display and tracking; audience flags control inclusion and message template selection. LinkedIn profile identity is matched by normalized `/in/{slug}` URL.
+A person in a job's outreach list. Carries identity flags (`is_job_poster`) and Outreach Audience flags (`russian_speaker`, `is_recruiter`) set during enrichment classification. Identity flags are for display and tracking; audience flags control inclusion and message template selection. LinkedIn profile identity is matched by normalized `/in/{slug}` URL. The contacted checkbox toggles that contact's contacted flag only — it does not change the job's pipeline status.
 _Avoid_: employee record, profile entry, lead
 
 **Contact Sample**:
 Up to 100 LinkedIn employee profiles fetched from a target company via Apify, passed as a batch to the LLM for Outreach Audience classification. The Job Poster is included in the same classification pass when present. Up to 5 contacts per Outreach Audience type are selected from the classified results.
 _Avoid_: Employee list, full company scrape
+
+**Contact Sample Cache**:
+A per-company store of the most recent raw Contact Sample, keyed by the normalized LinkedIn company slug (lowercase, trimmed, spaces and underscores to hyphens — the same transform used for Apify lookup). Reused across enrichments for jobs at the same company to avoid repeat Apify calls; entries do not expire by age. Busted only by an explicit **Refresh Contacts** action — re-enrichment alone does not invalidate the cache. Outreach Audience classification and Job Poster merge run on every enrichment regardless of cache hit — only the Apify fetch is skipped. Empty or failed Apify fetches are never cached.
+_Avoid_: contact cache, outreach candidate cache, classified contact cache
+
+**Refresh Contacts**:
+A manual action in the job drawer that busts the Contact Sample Cache for the job's company, fetches a fresh Contact Sample via Apify, and re-runs classification and template generation. Distinct from ordinary enrichment or re-enrichment, which reuse a valid cache entry when one exists.
+_Avoid_: force refresh, bust cache, reload contacts
 
 **Outreach Audience**:
 The classification assigned to a contact by the LLM: Russian Speaker, Recruiter, or both. Determines which Outreach Message Template is loaded and which badges the Kanban Dashboard shows. Badges follow classification flags only (`is_recruiter` → **HR** badge, `russian_speaker` → **RU** badge) — not title keyword matching. When a contact qualifies as both, the Recruiter template takes priority and the contact is grouped under Recruiters — but both audience badges are shown.
@@ -45,11 +53,11 @@ The visual section a contact appears under in the job drawer: **Recruiters**, **
 _Avoid_: contact bucket, audience section, contact category
 
 **Active Contact**:
-The contact currently selected in the job drawer whose Outreach Audience determines which Outreach Message Template is shown in the textarea. Clicking a contact row sets them as Active Contact and loads the matching template (Recruiter template when `is_recruiter` is true — including dual-classified contacts; otherwise Russian Speaker template). The Active Contact row is visually highlighted (e.g. cyan left border). The contacted checkbox is independent — it only toggles contacted status. When the drawer opens, Active Contact defaults to the first uncontacted contact in the list; if all contacts are already marked contacted, it falls back to the first contact in the list.
+The contact currently selected in the job drawer whose Outreach Audience determines which Outreach Message Template is shown in the textarea. Clicking a contact row sets them as Active Contact and loads the matching template (Recruiter template when `is_recruiter` is true — including dual-classified contacts; otherwise Russian Speaker template). The Active Contact row is visually highlighted (e.g. cyan left border). On switch, the greeting name in the textarea is replaced with the new contact's first name (first word of `name`) — whether the stored template still has a Name Placeholder or the previous contact's name was showing. That substitution is display-only for copy/paste; the stored Outreach Message Template keeps the Name Placeholder. The contacted checkbox is independent — it only toggles contacted status on that contact and does not move the job card. When the drawer opens, Active Contact defaults to the first uncontacted contact in the list; if all contacts are already marked contacted, it falls back to the first contact in the list.
 _Avoid_: selected contact, focused contact, current contact
 
 **Outreach Message Template**:
-An audience-specific Connection Note draft stored on a job — either a Recruiter Outreach Template or a Russian Speaker Outreach Template. Generated at enrichment time only (at most two LLM calls); there is no Regenerate action in the Kanban Dashboard. The greeting uses a **Name Placeholder** instead of a contact name so the user can paste the same draft to multiple people and fill in the name manually. The Kanban Dashboard shows the template matching the Active Contact's Outreach Audience. User edits in the textarea are saved back to the corresponding audience template on the job.
+An audience-specific Connection Note draft stored on a job — either a Recruiter Outreach Template or a Russian Speaker Outreach Template. Generated at enrichment time only (at most two LLM calls); there is no Regenerate action in the Kanban Dashboard. The greeting uses a **Name Placeholder** instead of a contact name so the user can paste the same draft to multiple people and fill in the name manually. The Kanban Dashboard shows the template matching the Active Contact's Outreach Audience. User edits in the textarea are saved back to the corresponding audience template on the job, with the greeting name normalized back to the Name Placeholder before save so the stored draft stays audience-generic.
 _Avoid_: outreach message, single draft, per-contact message
 
 **Recruiter Outreach Template**:
@@ -81,7 +89,7 @@ An LLM-based component that creates Connection Note Outreach Message Templates f
 _Avoid_: Letter generator, email writer
 
 **Enrichment**:
-The pipeline that sources a Contact Sample via Apify, classifies Outreach Audience contacts, and generates Outreach Message Templates for a job. Triggered manually from the Kanban Dashboard or CLI. Always runs the full fetch-and-classify flow even when a Job Poster contact already exists; merges results by LinkedIn profile URL and preserves identity flags.
+The pipeline that sources a Contact Sample (from the Contact Sample Cache or via Apify), classifies Outreach Audience contacts, and generates Outreach Message Templates for a job. Triggered manually from the Kanban Dashboard or CLI. Always runs classification even when a Job Poster contact already exists or the Contact Sample is served from cache; merges results by LinkedIn profile URL and preserves identity flags.
 _Avoid_: promote, contact sourcing, outreach generation
 
 **Enrichment Note**:
@@ -96,8 +104,12 @@ _Avoid_: failed enrich, sourcing error, empty contacts
 A global configuration panel in the Kanban Dashboard for toggling which Outreach Audience types to target during enrichment (Russian Speakers, Recruiters, or both). Applies to all enrichments — not per-job.
 _Avoid_: Outreach filters, enrichment config, audience popup
 
+**Job Activity Log**:
+A per-job append-only history of lifecycle events: lane moves, enrichment outcomes, contacts marked contacted, and job creation. Excludes comment edits, outreach template edits, and pipeline internals (Apify polling, LLM retries). Shown only in the job drawer — not on the Kanban card — directly below Job Info. Hidden until the first event exists. Collapsed by default with a chevron; collapsed view shows the latest event as a one-line preview (no timestamp); expand to reveal the full chronological list with smart-date timestamps (time only for today, date + time for older entries). Lane moves are logged separately from per-contact contacted toggles — marking a contact contacted does not log a lane move. Enrichment started is recorded separately from enrichment outcome; failures include the Enrichment Note text. Populated forward from rollout — no retroactive history for jobs already in the tracker. Retains at most 50 entries; oldest drop off. Distinct from the global Task Logs console.
+_Avoid_: card history, audit trail, status log, event feed
+
 **Kanban Dashboard**:
-A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Enriching`, `Enriched`, `Contacted`, `Interviewing`, `Rejected`). Streams pipeline logs from background tasks (job search and enrichment) to an on-page console via Server-Sent Events. Enrichment completion logs match the outcome: success when contacts are found, error on Enrichment Failure. Contact Groups and audience badges appear in the job drawer only. The outreach textarea shows a live character counter (`142/200`) that turns red when the draft exceeds the Connection Note limit.
+A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Enriching`, `Enriched`, `Contacted`, `Interviewing`, `Rejected`). Moving a job to the Contacted lane is always a deliberate user action — via the drawer's **Mark Contacted** button or the kanban card's lane chevrons — never triggered by marking an individual contact as contacted. The job drawer exposes a foldable **Job Activity Log** section. Streams pipeline logs from background tasks (job search and enrichment) to an on-page console via Server-Sent Events. Enrichment completion logs match the outcome: success when contacts are found, error on Enrichment Failure. Contact Groups and audience badges appear in the job drawer only. The outreach textarea shows a live character counter (`142/200`) that turns red when the draft exceeds the Connection Note limit.
 _Avoid_: Sheets UI, Command Center
 
 **Board Controls**:

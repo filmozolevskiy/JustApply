@@ -2219,15 +2219,15 @@
 
     const NAME_PLACEHOLDER = '______';
 
-    // Replace the name token in the greeting line (Hi/Dear <name>,) with firstName.
+    // Replace the name token in the greeting line (Hello/Hi/Dear <name>,) with firstName.
     // Works whether the current token is NAME_PLACEHOLDER or a previously substituted name.
     function applyGreetingName(template, firstName) {
-      return template.replace(/^((?:Hi|Dear)\s+)\S+,/m, `$1${firstName},`);
+      return template.replace(/^((?:Hello|Hi|Dear)\s+)\S+,/m, `$1${firstName},`);
     }
 
     // Restore NAME_PLACEHOLDER in the greeting line before persisting the template.
     function normalizeGreeting(template) {
-      return template.replace(/^((?:Hi|Dear)\s+)\S+,/m, `$1${NAME_PLACEHOLDER},`);
+      return template.replace(/^((?:Hello|Hi|Dear)\s+)\S+,/m, `$1${NAME_PLACEHOLDER},`);
     }
 
     function contactGroup(contact) {
@@ -2259,7 +2259,7 @@
               style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.18); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.02); border-left:${origIdx === activeContactIdx ? '3px solid var(--accent-cyan)' : '3px solid transparent'}; cursor:pointer;">
               <div style="display:flex; align-items:center; gap:10px;">
                 <input type="checkbox" id="contact-${jobId}-${origIdx}" ${contact.contacted ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleContacted(${jobId}, ${origIdx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
-                <label for="contact-${jobId}-${origIdx}" onclick="event.stopPropagation()" style="cursor:pointer; display:flex; flex-direction:column;">
+                <div style="display:flex; flex-direction:column;">
                   <span style="font-size:0.85rem; font-weight:500; color:${contact.contacted ? 'var(--accent-emerald)' : 'var(--text-primary)'};">
                     ${contact.name}
                     ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
@@ -2268,7 +2268,7 @@
                     ${contact.is_job_poster ? '<span style="font-size:0.65rem; background:rgba(245,158,11,0.15); color:#fbbf24; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">📋 Poster</span>' : ''}
                   </span>
                   <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.title || contact.role || ''}</span>
-                </label>
+                </div>
               </div>
               <a href="${contact.url || contact.linkedin || '#'}" target="_blank" onclick="event.stopPropagation()" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
             </div>

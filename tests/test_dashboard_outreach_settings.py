@@ -300,6 +300,18 @@ def test_drawer_contacts_grouped_preserve_flat_array_index():
         "Grouped contact rendering must use origIdx to preserve flat-array index for API calls"
 
 
+def test_contact_name_title_do_not_toggle_contacted_checkbox():
+    """Only the checkbox may toggle contacted; name/title must not be label-linked."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    drawer_body = _get_drawer_body(content)
+    assert 'label for="contact-${jobId}-${origIdx}"' not in drawer_body, \
+        "Contact name/title must not be wrapped in a label tied to the contacted checkbox"
+    assert "onchange=\"toggleContacted(" in drawer_body, \
+        "toggleContacted must remain wired to the checkbox onchange handler"
+
+
 # --- Issue #35: Persist outreach template edits ---
 
 def test_save_outreach_template_function_defined():
@@ -465,3 +477,14 @@ def test_switch_audience_loads_template_and_applies_greeting():
     # then apply greeting substitution
     assert "applyGreetingName" in fn_body, \
         "selectActiveContact must apply greeting substitution after loading the template"
+
+
+def test_greeting_functions_support_hello_prefix():
+    """applyGreetingName and normalizeGreeting must handle Hello greetings used by Connection Notes."""
+    script = _load_script()
+    for fn_name in ("applyGreetingName", "normalizeGreeting"):
+        fn_start = script.find(f"function {fn_name}(")
+        assert fn_start != -1, f"{fn_name} function must exist"
+        fn_body = script[fn_start:fn_start + 500]
+        assert "Hello" in fn_body, \
+            f"{fn_name} must match Hello greetings from outreach templates"
