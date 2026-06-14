@@ -292,7 +292,7 @@ def test_contact_new_fields_persist_through_db_roundtrip(setup_test_db):
 
 # --- API: PUT /api/jobs/{id}/contacts/{idx} ---
 
-def test_contact_toggle_updates_db_and_promotes_status(setup_test_db):
+def test_contact_toggle_updates_contact_flag_only(setup_test_db):
     db_path = setup_test_db
     contacts = [
         {"name": "Alice", "title": "Recruiter", "url": "https://linkedin.com/in/alice", "contacted": False, "russian_speaker": False}
@@ -308,7 +308,7 @@ def test_contact_toggle_updates_db_and_promotes_status(setup_test_db):
     assert response.status_code == 200
     data = response.json()
     assert data["contacts"][0]["contacted"] is True
-    assert data["status"] == "contacted"
+    assert data["status"] == "sourced"
 
 
 def test_contact_toggle_does_not_downgrade_status(setup_test_db):

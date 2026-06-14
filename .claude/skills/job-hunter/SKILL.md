@@ -34,4 +34,4 @@ When matched jobs are in the database:
    ```bash
    python3 -m src.web.run_dashboard
    ```
-4. Access the dashboard at `http://127.0.0.1:8000` to manage applications across status lanes (`Sourced`, `Evaluating`, `Applied`, `Contacted`, `Interviewing`, `Rejected`). Marking outreach contacts as contacted in the UI will automatically promote job status to `applied`.
+4. Access the dashboard at `http://127.0.0.1:8000` to manage applications across status lanes (`Sourced`, `Evaluating`, `Applied`, `Contacted`, `Interviewing`, `Rejected`). Marking a contact's checkbox as contacted only updates that contact's flag — it does not change the job's lane. Use the **Mark Contacted** button or kanban chevrons to move a job to the Contacted lane.

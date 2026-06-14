@@ -2578,9 +2578,6 @@
         if (masterIdx !== -1) masterJobs[masterIdx] = updated;
 
         addLogLine(`Marked contact ${job.contacts[contactIdx].name} as ${isChecked ? 'CONTACTED' : 'NOT CONTACTED'}.`, isChecked ? 'success' : 'warning');
-        if (isChecked && ['sourced', 'enriching', 'enriched'].includes(job.status)) {
-          addLogLine(`Auto-promoted ${job.company} → Contacted.`, 'success');
-        }
       } catch (err) {
         addLogLine(`Failed to update contact: ${err.message}`, 'error');
       }

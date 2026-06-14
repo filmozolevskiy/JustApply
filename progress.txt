@@ -104,3 +104,32 @@ The frontend persistence (localStorage session history, active task reconnect on
 - `test_switch_audience_loads_template_and_applies_greeting` — `selectActiveContact` calls both `getActiveTemplate` and `applyGreetingName`
 
 **All 217 tests pass.**
+
+## Iteration 5 — Issue #40: Decouple contacted checkbox from job lane
+
+**What was implemented:**
+
+**`src/db/jobs.py` — `update_contact_status`:**
+- Removed auto-promote logic: checking a contact's contacted flag no longer changes `job.status`
+- Removed "Moved X → Contacted" activity log entry from the checkbox path
+- Changed SQL UPDATE to only write `contacts`, not `status`
+- "Marked {name} contacted" activity log entry is unchanged
+
+**`src/web/dashboard.html` — `toggleContacted`:**
+- Removed the `if (isChecked && ...)` block that logged "Auto-promoted {company} → Contacted."
+- Contact checkbox now only updates the contact flag client-side with no implied lane change
+
+**`tests/test_activity_log.py`:**
+- Replaced `test_contact_marked_contacted_auto_promote_logs_two_entries` with two new TDD tests:
+  - `test_contact_marked_contacted_does_not_change_job_status` — status stays "enriched" after marking contact
+  - `test_contact_marked_contacted_no_lane_move_in_log` — no "→ Contacted" entry in activity log
+
+**`tests/test_outreach.py`:**
+- Renamed `test_contact_toggle_updates_db_and_promotes_status` → `test_contact_toggle_updates_contact_flag_only`
+- Changed assertion from `data["status"] == "contacted"` to `data["status"] == "sourced"` (status unchanged)
+
+**`.claude/skills/job-hunter/SKILL.md`:**
+- Removed claim that checking a contact checkbox auto-promotes job status
+- Updated to clarify: checkbox only updates contact flag; Mark Contacted button/chevrons move the lane
+
+**All 218 tests pass.**

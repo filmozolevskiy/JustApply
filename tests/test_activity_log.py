@@ -109,17 +109,26 @@ def test_contact_marked_contacted_logs_name(tmp_path):
     assert "Marked Jane Doe contacted" in messages
 
 
-def test_contact_marked_contacted_auto_promote_logs_two_entries(tmp_path):
+def test_contact_marked_contacted_does_not_change_job_status(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
     contacts = [{"name": "Jane Doe", "url": "https://linkedin.com/in/jane", "contacted": False}]
     enrich_job(job_id, contacts, "Hi!", db_path=db_str)
-    # After enrich the status is "enriched" — marking as contacted should auto-promote
+    # status is "enriched" after enrich — checkbox must NOT change it
+    update_contact_status(job_id, 0, True, db_str)
+    job = _get_job(db_str, job_id)
+    assert job["status"] == "enriched"
+
+
+def test_contact_marked_contacted_no_lane_move_in_log(tmp_path):
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
+    contacts = [{"name": "Jane Doe", "url": "https://linkedin.com/in/jane", "contacted": False}]
+    enrich_job(job_id, contacts, "Hi!", db_path=db_str)
     update_contact_status(job_id, 0, True, db_str)
     job = _get_job(db_str, job_id)
     messages = [e["message"] for e in job["activityLog"]]
-    assert "Marked Jane Doe contacted" in messages
-    assert any("→ Contacted" in m for m in messages)
+    assert not any("→ Contacted" in m for m in messages)
 
 
 # --- cap at 50 ---

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from . import connection
 
@@ -6,6 +7,37 @@ VALID_STATUSES = frozenset({
     "sourced", "enriching", "enriched", "evaluating",
     "contacted", "applied", "interviewing", "rejected",
 })
+
+ACTIVITY_LOG_MAX = 50
+
+
+def _format_lane(status: str) -> str:
+    return status.replace("_", " ").title()
+
+
+def _parse_activity_log(raw) -> list:
+    try:
+        return json.loads(raw) if raw else []
+    except Exception:
+        return []
+
+
+def _append_activity_log(cursor, job_id: int, message: str) -> None:
+    cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        return
+    log = _parse_activity_log(row[0])
+    log.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "message": message,
+    })
+    if len(log) > ACTIVITY_LOG_MAX:
+        log = log[-ACTIVITY_LOG_MAX:]
+    cursor.execute(
+        "UPDATE jobs SET activityLog = ? WHERE id = ?",
+        (json.dumps(log), job_id),
+    )
 
 
 def _parse_job_row(row) -> dict:
@@ -16,6 +48,7 @@ def _parse_job_row(row) -> dict:
             job[field] = json.loads(raw) if raw else []
         except Exception:
             job[field] = []
+    job["activityLog"] = _parse_activity_log(job.get("activityLog"))
     job["shouldProceed"] = bool(job["shouldProceed"])
     job["isRecruiter"] = bool(job.get("isRecruiter", 0))
     job["enrichmentNote"] = job.get("enrichmentNote") or ""
@@ -45,7 +78,22 @@ def update_job_status(job_id, status, db_path=None):
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
+    cursor.execute("SELECT status FROM jobs WHERE id = ?", (job_id,))
+    old_row = cursor.fetchone()
+    if not old_row:
+        conn.close()
+        return None
+    old_status = old_row[0]
     cursor.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job_id))
+    if old_status != status:
+        if status == "enriching":
+            _append_activity_log(cursor, job_id, "Enrichment started")
+        else:
+            _append_activity_log(
+                cursor,
+                job_id,
+                f"Moved {_format_lane(old_status)} → {_format_lane(status)}",
+            )
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
@@ -93,13 +141,13 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
 
     contacts[contact_idx]["contacted"] = bool(contacted)
 
-    status = job["status"]
-    if contacted and status in ("sourced", "enriching", "enriched"):
-        status = "contacted"
+    if contacted:
+        contact_name = contacts[contact_idx].get("name") or "Contact"
+        _append_activity_log(cursor, job_id, f"Marked {contact_name} contacted")
 
     cursor.execute(
-        "UPDATE jobs SET contacts = ?, status = ? WHERE id = ?",
-        (json.dumps(contacts), status, job_id),
+        "UPDATE jobs SET contacts = ? WHERE id = ?",
+        (json.dumps(contacts), job_id),
     )
     conn.commit()
 
@@ -150,6 +198,12 @@ def enrich_job(
         (json.dumps(contacts), outreach_message, enrichment_note,
          recruiter_template, russian_speaker_template, job_id),
     )
+    if enrichment_note:
+        _append_activity_log(cursor, job_id, f"Enrichment failed · {enrichment_note}")
+    else:
+        count = len(contacts)
+        label = "contact" if count == 1 else "contacts"
+        _append_activity_log(cursor, job_id, f"Enriched · {count} {label}")
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
@@ -256,6 +310,7 @@ def add_job(job, db_path=None):
         1 if job.get("isRecruiter") else 0
     ))
     new_id = cursor.lastrowid
+    _append_activity_log(cursor, new_id, "Sourced")
     conn.commit()
     conn.close()
     return new_id
