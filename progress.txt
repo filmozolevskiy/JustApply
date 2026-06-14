@@ -1,135 +1,22 @@
 # Ralph Loop Progress Log
 
-## Iteration 1 — Issue #36: Add Job Activity Log to job drawer
+## Iteration 1 — Contact Sample Cache on enrichment (#42)
 
-**What was implemented:**
+Implemented the Contact Sample Cache as specified in ADR 0006 and issue #42.
 
-- Added 12 TDD tests in `tests/test_activity_log.py` covering all activity log DB behaviors:
-  - `add_job` creates a "Sourced" entry
-  - `update_job_status` logs "Moved X → Y" on status change, skips when status unchanged, logs "Enrichment started" (not a move) when transitioning to "enriching"
-  - `enrich_job` logs "Enriched · N contacts" (singular/plural) on success, "Enrichment failed · <note>" on failure
-  - `update_contact_status` logs "Marked X contacted" and "Moved Y → Contacted" for auto-promote
-  - Activity log is capped at 50 entries; all jobs have a valid `activityLog` list; entries have `ts` and `message` fields
+**DB layer** (`src/db/cache.py`, `src/db/connection.py`):
+- Added `contact_sample_cache` table (`company_slug` PK, `profiles` JSON, `fetched_at`, `display_name`) to `init_db`.
+- New `src/db/cache.py` with `get_contact_sample`, `set_contact_sample`, `delete_contact_sample`.
+- Added `log_activity(job_id, message)` public helper to `src/db/jobs.py`.
+- Exported all new functions from `src/db/__init__.py`.
 
-- Added Job Activity Log UI section in the job drawer (`src/web/dashboard.html`):
-  - Inserted below Job Info section, hidden when `activityLog` is empty
-  - Collapsed by default: chevron button + latest event as one-line preview
-  - Expanded: full chronological list with smart-date timestamps (time-only for today; date + time for older entries)
-  - `toggleActivityLog()` JS function wired to the chevron button
+**Enrichment pipeline** (`src/core/outreach.py`, `src/pipelines.py`):
+- `source_contacts` now checks the cache first (keyed by normalized company slug). On cache hit: skips Apify, logs company name + `fetched_at`, appends to the job's Job Activity Log. On cache miss: calls Apify, writes non-empty results to cache. Empty Apify results are never cached.
+- Added `bust_cache=False` parameter to `source_contacts` (deletes cache entry before lookup when `True`).
+- `run_enrichment_pipeline` accepts and forwards `bust_cache`.
 
-- Fixed pre-existing regression: `enrichJob()` was incorrectly calling `startPollingEnrichingJobs()` (violating the SSE-handles-updates invariant); removed the erroneous call so `test_dashboard_html_polling_loop_not_called_from_enrich` passes again.
+**Tests** (`tests/test_contact_sample_cache.py`, `tests/test_outreach.py`):
+- 16 new tests covering DB layer CRUD, cache-miss Apify call, cache-hit Apify skip, cache population, empty-result not cached, `classify_contacts` always runs, Task Logs log line, Job Activity Log append, `bust_cache` flow, slug normalization.
+- Renamed `test_source_contacts_always_calls_apify_even_with_existing_job_poster` → `test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poster`.
+- All 238 tests pass.
 
-**All 196 tests pass.**
-
-## Iteration 2 — Issue #37: Persist Task Logs across dashboard refresh
-
-**What was implemented:**
-
-The frontend persistence (localStorage session history, active task reconnect on refresh) and server-side `skip` parameter for the SSE log stream were already partially implemented from prior work. This iteration completed and verified the full feature:
-
-**Server-side (`src/web/server.py`):**
-- Added `skip: int = 0` query parameter to `GET /api/logs/{task_id}`
-- Negative skip values are clamped to 0
-- The SSE generator yields `state.logs[skip:]` instead of all logs, so reconnecting clients skip already-received lines
-
-**Tests (`tests/test_log_stream.py`) — 8 new TDD tests:**
-- `test_unknown_task_returns_404` — unknown task_id returns 404
-- `test_skip_zero_returns_all_logs` — skip=0 yields all pre-existing log lines
-- `test_skip_two_omits_first_two_logs` — skip=2 skips first 2 entries
-- `test_skip_equal_to_total_yields_no_logs` — skip at log count yields nothing
-- `test_negative_skip_is_treated_as_zero` — skip=-5 behaves like skip=0
-- `test_completed_task_stream_ends_with_done_event` — done event is sent
-- `test_failed_task_stream_ends_with_error_and_done` — error log + done on failure
-- `test_skip_one_then_skip_two_covers_all_logs` — simulates two reconnects without overlap
-
-**Frontend (`src/web/dashboard.html`) — already committed in #36, verified:**
-- `sessionLogs` array capped at 200 entries, persisted to `localStorage` on every `addLogLine()`
-- `restoreSessionLogs()` repopulates the console on page load
-- `clearLogs()` wipes both the UI and `localStorage`
-- `ACTIVE_SCRAPE_TASK_KEY` / `ACTIVE_ENRICH_TASK_KEY` and matching skip-counter keys persisted
-- `restoreActiveScrapeTask()` and `restoreActiveEnrichTask()` reconnect SSE streams with correct `?skip=N` on refresh
-- `connectTaskLogStream()` removes task/skip keys from `localStorage` on task completion
-
-**All 204 tests pass.**
-
-## Iteration 3 — Issue #38: Log Apify and scraper poll status only on change
-
-**What was implemented:**
-
-**`src/core/outreach.py` — Apify polling:**
-- Added `last_status = None` before the `while True:` loop in `_run_apify_actor`
-- Changed unconditional `await log(f"Apify run status: {status}", "info")` to only log when `status != last_status`, then update `last_status`
-
-**`src/core/scraper.py` — Bright Data polling:**
-- Added `last_status = None` before the `while True:` loop in `_scrape_linkedin_jobs_real`
-- Changed unconditional `await log(f"Scraper status: {status}", "info")` to only log when `status != last_status`, then update `last_status`
-
-**Tests (`tests/test_outreach.py`) — 2 new TDD tests:**
-- `test_apify_poll_logs_running_once_for_repeated_status` — RUNNING × 3 then SUCCEEDED; verifies only 2 status log lines total (RUNNING once, SUCCEEDED once)
-- `test_apify_poll_logs_terminal_failure_status` — RUNNING × 2 then FAILED; verifies RUNNING logged once and FAILED still appears
-
-**Tests (`tests/test_scraper.py`) — 2 new TDD tests:**
-- `test_scraper_poll_logs_status_once_when_repeated` — `running` × 3 then `ready`; verifies only 2 status log lines total
-- `test_scraper_poll_logs_failed_status_once` — `running` × 1 then `failed`; verifies both logged once
-
-**All 208 tests pass.**
-
-## Iteration 4 — Issue #39: Active Contact greeting name substitution
-
-**What was implemented:**
-
-**`src/web/dashboard.html` — greeting substitution helpers:**
-- Added `NAME_PLACEHOLDER = '______'` constant
-- Added `applyGreetingName(template, firstName)` — regex-replaces the name token in the greeting line (`Hi <name>,` / `Dear <name>,`) with the contact's first name; works whether the token is `______` or a previously substituted name
-- Added `normalizeGreeting(template)` — restores `NAME_PLACEHOLDER` in the greeting line before saving, so stored templates always use the placeholder
-
-**`selectActiveContact` update:**
-- After loading the audience template via `getActiveTemplate`, extracts the contact's first name (first word of `contact.name`) and calls `applyGreetingName` before setting `textarea.value`
-
-**`openJobDetailsDrawer` update:**
-- Applies `applyGreetingName` for the default active contact so the greeting shows the correct first name when the drawer first opens
-
-**`saveOutreachTemplate` update:**
-- Calls `normalizeGreeting(template)` before updating in-memory state and before sending the `PUT /api/jobs/{id}/template` request, ensuring the stored template always holds `______`
-
-**Tests (`tests/test_dashboard_outreach_settings.py`) — 9 new TDD tests:**
-- `test_name_placeholder_constant_defined` — `NAME_PLACEHOLDER` constant exists in the script
-- `test_apply_greeting_name_function_defined` — `applyGreetingName` function is defined
-- `test_normalize_greeting_function_defined` — `normalizeGreeting` function is defined
-- `test_select_active_contact_applies_greeting_substitution` — `selectActiveContact` calls `applyGreetingName`
-- `test_save_outreach_template_normalizes_greeting` — `saveOutreachTemplate` calls `normalizeGreeting`
-- `test_open_job_drawer_applies_greeting_for_default_contact` — `openJobDetailsDrawer` calls `applyGreetingName`
-- `test_apply_greeting_name_replaces_placeholder_in_hi_greeting` — function body uses `replace`
-- `test_normalize_greeting_restores_placeholder` — function body references `NAME_PLACEHOLDER`
-- `test_switch_audience_loads_template_and_applies_greeting` — `selectActiveContact` calls both `getActiveTemplate` and `applyGreetingName`
-
-**All 217 tests pass.**
-
-## Iteration 5 — Issue #40: Decouple contacted checkbox from job lane
-
-**What was implemented:**
-
-**`src/db/jobs.py` — `update_contact_status`:**
-- Removed auto-promote logic: checking a contact's contacted flag no longer changes `job.status`
-- Removed "Moved X → Contacted" activity log entry from the checkbox path
-- Changed SQL UPDATE to only write `contacts`, not `status`
-- "Marked {name} contacted" activity log entry is unchanged
-
-**`src/web/dashboard.html` — `toggleContacted`:**
-- Removed the `if (isChecked && ...)` block that logged "Auto-promoted {company} → Contacted."
-- Contact checkbox now only updates the contact flag client-side with no implied lane change
-
-**`tests/test_activity_log.py`:**
-- Replaced `test_contact_marked_contacted_auto_promote_logs_two_entries` with two new TDD tests:
-  - `test_contact_marked_contacted_does_not_change_job_status` — status stays "enriched" after marking contact
-  - `test_contact_marked_contacted_no_lane_move_in_log` — no "→ Contacted" entry in activity log
-
-**`tests/test_outreach.py`:**
-- Renamed `test_contact_toggle_updates_db_and_promotes_status` → `test_contact_toggle_updates_contact_flag_only`
-- Changed assertion from `data["status"] == "contacted"` to `data["status"] == "sourced"` (status unchanged)
-
-**`.claude/skills/job-hunter/SKILL.md`:**
-- Removed claim that checking a contact checkbox auto-promotes job status
-- Updated to clarify: checkbox only updates contact flag; Mark Contacted button/chevrons move the lane
-
-**All 218 tests pass.**

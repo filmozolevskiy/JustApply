@@ -54,7 +54,8 @@ def test_normalize_linkedin_url_returns_empty_for_non_linkedin():
 # --- source_contacts: always calls Apify ---
 
 @pytest.mark.asyncio
-async def test_source_contacts_always_calls_apify_even_with_existing_job_poster():
+async def test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poster():
+    """On cache miss, Apify is called even when a Job Poster contact already exists."""
     job = {
         "title": "QA Engineer",
         "company": "Acme",

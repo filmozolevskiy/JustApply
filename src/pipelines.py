@@ -107,7 +107,7 @@ async def run_search_pipeline(
     return saved
 
 
-async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
+async def run_enrichment_pipeline(job: dict, log_func=None, bust_cache: bool = False) -> dict | None:
     """Source contacts, generate outreach message, and persist enriched job."""
 
     async def log(msg: str, level: str = "info"):
@@ -136,7 +136,7 @@ async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
 
     try:
         settings = OutreachSettings(**database.get_outreach_settings())
-        contacts = await source_contacts(job, settings=settings, log_func=log_func)
+        contacts = await source_contacts(job, settings=settings, log_func=log_func, bust_cache=bust_cache)
     except Exception as exc:
         enrichment_note = f"Enrichment failed: {exc}"
         await log(enrichment_note, "error")

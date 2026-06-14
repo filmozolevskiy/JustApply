@@ -223,17 +223,22 @@ def _poster_to_apify_item(poster: dict) -> dict:
     }
 
 
-async def source_contacts(job: dict, settings=None, log_func=None) -> list:
+async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: bool = False) -> list:
     """
     Return outreach contacts for a job using LLM classification.
 
-    Always calls Apify to fetch a fresh Contact Sample. The Job Poster from
-    existing contacts is included in the same classification batch — deduped
-    by normalized LinkedIn URL or injected as a synthetic extra when absent.
-    Falls back to classifying the poster alone if Apify returns nothing.
-    Preserves contacted:True from previous contacts matched by normalized URL.
+    Checks the Contact Sample Cache first. On cache miss, fetches via Apify and
+    writes the result to cache when non-empty. On cache hit, skips the Apify call.
+    The Job Poster from existing contacts is included in the same classification
+    batch — deduped by normalized LinkedIn URL or injected as a synthetic extra
+    when absent. Falls back to classifying the poster alone if no profiles are
+    available. Preserves contacted:True from previous contacts matched by
+    normalized URL. bust_cache=True deletes the cache entry before lookup.
     """
     from ..schemas import OutreachSettings
+    from ..db.cache import get_contact_sample, set_contact_sample, delete_contact_sample
+    from ..db.jobs import log_activity
+
     if settings is None:
         settings = OutreachSettings()
 
@@ -257,12 +262,29 @@ async def source_contacts(job: dict, settings=None, log_func=None) -> list:
         await log("No company name for Apify sourcing.", "warning")
         return []
 
-    await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
-    try:
-        items = await _run_apify_actor(company, log_func=log_func)
-    except ApifyTimeoutError as e:
-        await log(f"Apify polling timed out: {e}", "error")
-        items = []
+    slug = company.lower().strip().replace(" ", "-").replace("_", "-")
+
+    if bust_cache:
+        delete_contact_sample(slug)
+
+    cache_entry = get_contact_sample(slug)
+    if cache_entry:
+        display = cache_entry.get("display_name") or company
+        fetched_at = cache_entry.get("fetched_at") or ""
+        await log(f"Contact Sample Cache hit for '{display}' (fetched {fetched_at}).", "info")
+        job_id = job.get("id")
+        if job_id:
+            log_activity(job_id, f"Contact Sample Cache hit · {display}")
+        items = cache_entry["profiles"]
+    else:
+        await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
+        try:
+            items = await _run_apify_actor(company, log_func=log_func)
+        except ApifyTimeoutError as e:
+            await log(f"Apify polling timed out: {e}", "error")
+            items = []
+        if items:
+            set_contact_sample(slug, items, display_name=company)
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
 

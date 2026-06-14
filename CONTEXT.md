@@ -13,8 +13,16 @@ Markdown files (`.md`) stored in a local `resumes/` folder in the project root r
 _Avoid_: Google Drive CVs, resume database, cloud resumes
 
 **Resume Matcher**:
-An LLM-based component that compares job descriptions with candidate resumes to compute compatibility scores, list strengths, identify skill gaps, determine remote/hybrid status, and generate a concise job summary. The target role is configured per search run using the corresponding profile.
+An LLM-based component that compares job descriptions with candidate resumes to compute compatibility scores, list strengths, identify skill gaps, and generate a concise job summary. Runs only on jobs that survive deduplication and **Pre-Evaluation Filters** in the Search & Evaluation Pipeline. Remote type for gating uses scraper-derived values; the Resume Matcher does not run for jobs filtered out before evaluation.
 _Avoid_: Resume filter, CV checker
+
+**Search & Evaluation Pipeline**:
+The orchestrated flow triggered by job search: scrape listings via Bright Data, deduplicate against existing Kanban cards, apply Pre-Evaluation Filters, then run the Resume Matcher only on remaining new jobs. No LLM calls occur for duplicates or jobs rejected by cheap filters. Emits an aggregate cost summary to Task Logs at completion (scraped, duplicates skipped, pre-filtered, evaluated, saved counts).
+_Avoid_: search pipeline, job search flow, scrape-and-match
+
+**Pre-Evaluation Filters**:
+Cheap, non-LLM checks applied to new scraped jobs after deduplication and before the Resume Matcher. In v1, includes remote-type matching against the search run's allowed remote preferences using scraper-derived `remoteType`. Rejected jobs are not saved to the Job Tracker Database; each rejection is logged to the Task Logs console. **Recruiting Company** detection is not a Pre-Evaluation Filter — agency postings still pass through to the Resume Matcher and are saved with penalty, per existing behavior.
+_Avoid_: pre-filter, cheap gate, early rejection
 
 **LinkedIn Scraper API**:
 A hybrid web scraping integration using third-party APIs (Bright Data for job listings and Apify for company employee details) to fetch data without requiring personal LinkedIn credentials or cookies. It operates in a fail-fast manner with trigger rate-limiting to protect API credentials and credits from run-away loops.
@@ -25,7 +33,7 @@ A company employee classified by the LLM (using name, headline, languages, curre
 _Avoid_: Russian HR contact, Russian recruiter, language filter
 
 **Job Poster**:
-The LinkedIn employee Bright Data identifies as the person who published a job listing (~11% of listings). Stored as a preliminary contact at sourcing time (`is_job_poster: true`) and visible on the Kanban immediately. Shows a **Poster** badge in the UI — retained permanently even after enrichment assigns an Outreach Audience. On enrichment, the Contact Sample is always fetched and classified; results are merged by LinkedIn profile URL, preserving `is_job_poster` on the matching contact. Dropped from the contact list only if they match neither active Outreach Audience toggle.
+The LinkedIn employee Bright Data identifies as the person who published a job listing (~11% of listings). Stored as a preliminary contact at sourcing time (`is_job_poster: true`) and visible on the Kanban immediately. Shows a **Poster** badge in the UI — retained permanently even after enrichment assigns an Outreach Audience. On enrichment, the Contact Sample is fetched (from cache or Apify) and classified; results are merged by LinkedIn profile URL, preserving `is_job_poster` on the matching contact. Dropped from the contact list only if they match neither active Outreach Audience toggle.
 _Avoid_: poster contact, job author, listing owner
 
 **Contact**:
@@ -37,12 +45,12 @@ Up to 100 LinkedIn employee profiles fetched from a target company via Apify, pa
 _Avoid_: Employee list, full company scrape
 
 **Contact Sample Cache**:
-A per-company store of the most recent raw Contact Sample, keyed by the normalized LinkedIn company slug (lowercase, trimmed, spaces and underscores to hyphens — the same transform used for Apify lookup). Reused across enrichments for jobs at the same company to avoid repeat Apify calls; entries do not expire by age. Busted only by an explicit **Refresh Contacts** action — re-enrichment alone does not invalidate the cache. Outreach Audience classification and Job Poster merge run on every enrichment regardless of cache hit — only the Apify fetch is skipped. Empty or failed Apify fetches are never cached.
+A per-company store in the Job Tracker Database of the most recent raw Contact Sample, keyed by the normalized LinkedIn company slug (lowercase, trimmed, spaces and underscores to hyphens — the same transform used for Apify lookup). Reused across enrichments for jobs at the same company to avoid repeat Apify calls; entries do not expire by age. Busted only by an explicit **Refresh Contacts** action — re-enrichment alone does not invalidate the cache. Outreach Audience classification and Job Poster merge run on every enrichment regardless of cache hit — only the Apify fetch is skipped. Empty or failed Apify fetches are never cached. Cache hits and misses are logged to Task Logs; cache hits are also recorded in the job's Job Activity Log.
 _Avoid_: contact cache, outreach candidate cache, classified contact cache
 
 **Refresh Contacts**:
-A manual action in the job drawer that busts the Contact Sample Cache for the job's company, fetches a fresh Contact Sample via Apify, and re-runs classification and template generation. Distinct from ordinary enrichment or re-enrichment, which reuse a valid cache entry when one exists.
-_Avoid_: force refresh, bust cache, reload contacts
+The sole manual re-run action for contact sourcing on enriched jobs. Lives in the Outreach Contacts section header. Busts the Contact Sample Cache for the job's company, fetches a fresh Contact Sample via Apify, and re-runs classification and template generation. Not shown on sourced jobs — first fetch uses Enrich Job. There is no separate cache-preserving re-enrich action in the Kanban Dashboard; changing Outreach Settings on an already-enriched job requires Refresh Contacts.
+_Avoid_: force refresh, bust cache, reload contacts, re-enrich
 
 **Outreach Audience**:
 The classification assigned to a contact by the LLM: Russian Speaker, Recruiter, or both. Determines which Outreach Message Template is loaded and which badges the Kanban Dashboard shows. Badges follow classification flags only (`is_recruiter` → **HR** badge, `russian_speaker` → **RU** badge) — not title keyword matching. When a contact qualifies as both, the Recruiter template takes priority and the contact is grouped under Recruiters — but both audience badges are shown.
@@ -89,7 +97,7 @@ An LLM-based component that creates Connection Note Outreach Message Templates f
 _Avoid_: Letter generator, email writer
 
 **Enrichment**:
-The pipeline that sources a Contact Sample (from the Contact Sample Cache or via Apify), classifies Outreach Audience contacts, and generates Outreach Message Templates for a job. Triggered manually from the Kanban Dashboard or CLI. Always runs classification even when a Job Poster contact already exists or the Contact Sample is served from cache; merges results by LinkedIn profile URL and preserves identity flags.
+The pipeline that sources a Contact Sample (from the Contact Sample Cache or via Apify), classifies Outreach Audience contacts, and generates Outreach Message Templates for a job. First enrichment is triggered via Enrich Job on sourced listings. On enriched jobs, contact sourcing re-runs only via Refresh Contacts. Classification and Job Poster merge run on every enrichment; merges results by LinkedIn profile URL and preserves identity flags.
 _Avoid_: promote, contact sourcing, outreach generation
 
 **Enrichment Note**:
@@ -105,7 +113,7 @@ A global configuration panel in the Kanban Dashboard for toggling which Outreach
 _Avoid_: Outreach filters, enrichment config, audience popup
 
 **Job Activity Log**:
-A per-job append-only history of lifecycle events: lane moves, enrichment outcomes, contacts marked contacted, and job creation. Excludes comment edits, outreach template edits, and pipeline internals (Apify polling, LLM retries). Shown only in the job drawer — not on the Kanban card — directly below Job Info. Hidden until the first event exists. Collapsed by default with a chevron; collapsed view shows the latest event as a one-line preview (no timestamp); expand to reveal the full chronological list with smart-date timestamps (time only for today, date + time for older entries). Lane moves are logged separately from per-contact contacted toggles — marking a contact contacted does not log a lane move. Enrichment started is recorded separately from enrichment outcome; failures include the Enrichment Note text. Populated forward from rollout — no retroactive history for jobs already in the tracker. Retains at most 50 entries; oldest drop off. Distinct from the global Task Logs console.
+A per-job append-only history of lifecycle events: lane moves, enrichment outcomes, contacts marked contacted, job creation, and Contact Sample Cache hits during enrichment. Excludes comment edits, outreach template edits, and other pipeline internals (Apify polling, LLM retries, Pre-Evaluation Filter rejections). Shown only in the job drawer — not on the Kanban card — directly below Job Info. Hidden until the first event exists. Collapsed by default with a chevron; collapsed view shows the latest event as a one-line preview (no timestamp); expand to reveal the full chronological list with smart-date timestamps (time only for today, date + time for older entries). Lane moves are logged separately from per-contact contacted toggles — marking a contact contacted does not log a lane move. Enrichment started is recorded separately from enrichment outcome; failures include the Enrichment Note text. Populated forward from rollout — no retroactive history for jobs already in the tracker. Retains at most 50 entries; oldest drop off. Distinct from the global Task Logs console.
 _Avoid_: card history, audit trail, status log, event feed
 
 **Kanban Dashboard**:

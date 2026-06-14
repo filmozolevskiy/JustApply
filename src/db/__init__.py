@@ -12,4 +12,6 @@ from .jobs import (
     enrich_job,
     job_exists,
     update_outreach_template,
+    log_activity,
 )
+from .cache import get_contact_sample, set_contact_sample, delete_contact_sample

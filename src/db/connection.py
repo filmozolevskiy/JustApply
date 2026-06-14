@@ -91,6 +91,16 @@ def init_db(db_path=None):
     """)
     conn.commit()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contact_sample_cache (
+            company_slug TEXT PRIMARY KEY,
+            profiles TEXT NOT NULL,
+            fetched_at TEXT NOT NULL,
+            display_name TEXT DEFAULT ''
+        )
+    """)
+    conn.commit()
+
     cursor.execute("SELECT COUNT(*) FROM jobs")
     count = cursor.fetchone()[0]
     if count == 0:

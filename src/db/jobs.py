@@ -211,6 +211,17 @@ def enrich_job(
     return _parse_job_row(row) if row else None
 
 
+def log_activity(job_id: int, message: str, db_path=None) -> None:
+    """Append a message to the job's Job Activity Log."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    _append_activity_log(cursor, job_id, message)
+    conn.commit()
+    conn.close()
+
+
 def update_outreach_template(job_id, audience, template, db_path=None):
     if audience == "recruiter":
         column = "recruiterOutreachTemplate"
