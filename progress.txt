@@ -1,126 +1,29 @@
 # Ralph Loop Progress Log
 
-## Iteration 7 — Issue #29 follow-up: HTML structure tests for Outreach Settings UI
+## Iteration 1 — Issue #30: Always enrich via Apify with Job Poster classification
 
-Issue #29 was already implemented and closed in Iteration 6. This iteration adds 2 TDD tests to `tests/test_dashboard_outreach_settings.py` to formally verify the HTML structure:
-- `test_dashboard_html_contains_outreach_settings_panel` — asserts both toggle IDs, panel heading, and both JS functions are present in dashboard.html
-- `test_dashboard_html_outreach_panel_is_separate_from_board_controls` — asserts "Outreach Settings" and "Board Controls" appear at different positions in the file
+### What was implemented
 
-Full suite: 109 tests pass, no regressions.
+**`src/schemas.py`**
+- Added `is_job_poster: bool = False` field to `Contact` schema.
 
-## Iteration 6 — Issue #29: Outreach Settings UI panel
+**`src/core/scraper.py`**
+- `normalize_brightdata_job` now sets `is_job_poster: True` on contacts created from a Bright Data `job_poster` field. The poster is stored at scrape time with its identity flag.
 
-Added an Outreach Settings panel to `src/web/dashboard.html`, visually distinct from the existing Board Controls panel.
+**`src/core/outreach.py`**
+- Added `normalize_linkedin_url(url)` — canonicalizes any LinkedIn profile URL to `/in/{slug}`, stripping country subdomains, `www`, trailing slashes, and query params.
+- Added `_poster_to_apify_item(poster)` — converts a Job Poster contact dict to an Apify-compatible item dict for batch LLM classification.
+- Rewrote `source_contacts` to remove the early return that skipped Apify when existing contacts were present. New flow:
+  1. Always calls Apify for a fresh Contact Sample.
+  2. Extracts the Job Poster from existing contacts (`is_job_poster: True`).
+  3. Deduplicates poster against Apify results by normalized LinkedIn URL; injects as synthetic extra when absent.
+  4. Falls back to classifying the poster alone when Apify returns zero profiles.
+  5. Sets `is_job_poster: True` on any classified contact whose URL matches the poster.
+  6. Preserves `contacted: True` from previous contacts matched by normalized URL.
 
-Changes in `src/web/dashboard.html`:
-- Added CSS for `.toggle-switch` / `.toggle-slider` (pill-style checkbox toggle with cyan accent when checked).
-- Added the Outreach Settings panel HTML between Board Controls and the Kanban lanes. Uses `id="outreach-settings-panel"` with a cyan-tinted border to distinguish it from Board Controls. Contains two labeled toggles: `id="toggle-russian-speakers"` and `id="toggle-recruiters"`.
-- Added `async function loadOutreachSettings()` — fetches `GET /api/settings/outreach` on page load and sets both toggle states.
-- Added `async function saveOutreachSettings(key, value)` — reads current toggle state, merges the changed key, and sends `PUT /api/settings/outreach` immediately on any toggle change.
-- Called `loadOutreachSettings()` in the initialization block alongside `initBoardControls()`.
+**`docs/adr/0005-always-enrich-via-apify-with-job-poster-classification.md`**
+- New ADR documenting the decision to always run Apify on enrichment and include the Job Poster in the classification batch. Supersedes the "poster → skip Apify" shortcut from ADR 0002.
 
-All 5 existing tests in `tests/test_dashboard_outreach_settings.py` now pass (API round-trip tests were already passing; HTML structure test was the failing one). Full suite: 109 tests pass, no regressions.
-
-## Iteration 5 — Issue #28: source_contacts refactor + enrichment pipeline wiring
-
-Replaced the hardcoded `RUSSIAN_LANGUAGES` / `HR_TITLE_KEYWORDS` filtering in `source_contacts` with a call to `classify_contacts`.
-
-Changes in `src/core/outreach.py`:
-- Deleted `RUSSIAN_LANGUAGES` and `HR_TITLE_KEYWORDS` constants.
-- Updated `_normalize_apify_employee` to always set `russian_speaker: False` (LLM classification owns this now).
-- Updated `source_contacts` to accept `settings: OutreachSettings = None` and call `classify_contacts(items, settings)` instead of manual field/keyword filtering.
-
-Changes in `src/pipelines.py`:
-- Imported `OutreachSettings` from `..schemas`.
-- `run_enrichment_pipeline` now calls `database.get_outreach_settings()`, wraps the result in `OutreachSettings(...)`, and passes it as `settings=` to `source_contacts`.
-
-Tests updated in `tests/test_outreach.py`:
-- Removed 4 tests for the old language/keyword-based behavior.
-- Added 2 new tests (`test_source_contacts_delegates_to_classify_contacts_with_settings`, `test_source_contacts_uses_default_settings_when_none_provided`) that mock `_run_apify_actor` + `classify_contacts` and assert toggle behaviour.
-
-Existing tests in `tests/test_job_hunter.py` (added in this iteration) cover `run_enrichment_pipeline` settings wiring.
-
-Full suite: 107 tests pass, no regressions.
-
-## Iteration 4 — Issue #27: Audience-specific outreach message templates
-
-Replaced the single `build_outreach_prompt` function with two audience-specific template builders in `src/core/outreach.py`:
-- `build_russian_speaker_prompt` — English greeting, includes referral program ask and offer to share CV
-- `build_recruiter_prompt` — English greeting, direct connect/share-CV ask, no referral mention
-
-Updated `generate_outreach_message` to accept an `is_recruiter: bool = False` parameter and select the correct prompt builder (recruiter takes priority over russian_speaker when both are True). Removed all Cyrillic text from the fallback template (no more `Добрый день`).
-
-Updated `generate_outreach_for_job` to read `is_recruiter` from the primary contact and pass it through to `generate_outreach_message`.
-
-Updated 2 existing tests that asserted Cyrillic in output. Added 7 new tests (TDD red→green):
-- `test_build_russian_speaker_prompt_contains_referral_and_english_greeting`
-- `test_build_recruiter_prompt_no_referral_direct_connect`
-- `test_generate_outreach_message_fallback_no_cyrillic_for_russian_speaker`
-- `test_generate_outreach_message_gemini_uses_recruiter_prompt_when_is_recruiter`
-- `test_generate_outreach_message_gemini_uses_russian_speaker_prompt_when_is_russian`
-- `test_generate_outreach_message_recruiter_priority_over_russian_speaker`
-- `test_generate_outreach_for_job_passes_is_recruiter_flag`
-
-Full suite: 108 tests pass, no regressions.
-
-## Iteration 1 — Issue #24: Contact schema + Apify normalization extension
-
-Added `is_recruiter: bool = False` to the `Contact` model in `src/schemas.py`.
-
-Extended `_normalize_apify_employee` in `src/core/outreach.py` to extract two new fields from raw Apify profiles: `currentPosition` and `location` (defaulting to `""` when absent). Also initialises `is_recruiter: False` on every normalized contact.
-
-Added 4 new tests (TDD red→green):
-- `test_schemas.py`: `test_contact_schema_has_is_recruiter_field`
-- `test_outreach.py`: `test_normalize_extracts_current_position_and_location`, `test_normalize_handles_missing_current_position_and_location`, `test_contact_new_fields_persist_through_db_roundtrip`
-
-All 93 tests pass. No regressions.
-
-## Iteration 2 — Issue #25: Outreach Settings model + API
-
-Added `OutreachSettings` Pydantic model to `src/schemas.py` with `target_russian_speakers: bool = True` and `target_recruiters: bool = True`.
-
-Created `src/db/settings.py` with `get_outreach_settings` and `save_outreach_settings` functions using SQLite upsert (ON CONFLICT DO UPDATE).
-
-Updated `src/db/connection.py` to create the `outreach_settings` table in `init_db`.
-
-Updated `src/db/__init__.py` to export the two new functions.
-
-Added `GET /api/settings/outreach` and `PUT /api/settings/outreach` endpoints to `src/web/server.py`.
-
-All 3 new tests pass (TDD red→green). Full suite: 96 tests pass, no regressions.
-
-## Iteration 3 — Issue #26: Batch LLM contact classification (classify_contacts)
-
-Added `classify_contacts(items, settings)` async function to `src/core/outreach.py`.
-
-The function sends a single batch Gemini prompt with all raw Apify profiles formatted as numbered entries. Gemini returns a JSON array of classified contacts with `russian_speaker` and `is_recruiter` flags. Results are capped at 5 per audience type. Contacts matching neither type are excluded. Settings (`OutreachSettings`) control which audience types are included in the output.
-
-Added `import json` to `src/core/outreach.py`.
-
-Added 5 new tests (TDD red→green) to `tests/test_outreach.py`:
-- `test_classify_contacts_assigns_russian_speaker_flag`
-- `test_classify_contacts_assigns_recruiter_flag`
-- `test_classify_contacts_handles_dual_classified_contact`
-- `test_classify_contacts_caps_at_five_per_group`
-- `test_classify_contacts_returns_empty_when_llm_returns_no_matches`
-
-Full suite: 101 tests pass, no regressions.
-
-## Iteration 5 — Issue #28: source_contacts refactor + enrichment pipeline wiring
-
-Replaced hardcoded `RUSSIAN_LANGUAGES` / `HR_TITLE_KEYWORDS` filtering in `source_contacts` with a call to `classify_contacts`. The function now accepts `settings: OutreachSettings | None = None`; when None, defaults to `OutreachSettings()` (both toggles on). Results are whatever `classify_contacts` returns — up to 5 Russian Speaker + 5 Recruiter contacts controlled by toggle state.
-
-Removed `RUSSIAN_LANGUAGES` and `HR_TITLE_KEYWORDS` constants from `src/core/outreach.py`.
-
-Updated `_normalize_apify_employee` to no longer compute `russian_speaker` from language fields (always defaults to False); classification is now owned by `classify_contacts`.
-
-Updated `run_enrichment_pipeline` in `src/pipelines.py` to fetch `OutreachSettings` from the DB (`database.get_outreach_settings()`) and pass it to `source_contacts(settings=settings)`.
-
-TDD red→green cycles:
-- `test_source_contacts_delegates_to_classify_contacts_with_settings` — tracer bullet: `classify_contacts` called with raw Apify items + settings
-- `test_source_contacts_uses_default_settings_when_none_provided` — default `OutreachSettings()` used when not passed
-- `test_run_enrichment_pipeline_reads_settings_and_passes_to_source_contacts` — pipeline fetches settings from DB and passes `OutreachSettings` instance with correct values
-
-Removed 4 tests that tested the old language-based detection behavior (2 `source_contacts` tests, 2 `_normalize_apify_employee` tests). Updated 2 existing pipeline tests to mock `database.get_outreach_settings`.
-
-Full suite: 107 tests pass, no regressions.
+**Tests (13 new, 0 regressions — 122 total)**
+- `test_outreach.py`: 7 tests for `normalize_linkedin_url` (subdomain, www, trailing slash, query params, empty, non-LinkedIn), 1 test verifying Apify is always called even with existing poster, and 5 tests covering poster injection, no-duplicate injection, Apify-failure fallback, `contacted` preservation, and `is_job_poster` flag propagation.
+- `test_scraper.py`: 2 tests for `normalize_brightdata_job` — `is_job_poster: True` on poster contact, and no contacts when no poster.

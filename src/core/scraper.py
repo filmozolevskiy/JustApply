@@ -139,7 +139,7 @@ def normalize_brightdata_job(job: dict) -> dict:
     salary = job.get("salary") or job.get("salary_formatted") or ""
     description = job.get("job_summary") or job.get("description") or ""
     
-    # Preserve job_poster if it exists (useful for Issue 7)
+    # Preserve job_poster if it exists
     contacts = []
     job_poster = job.get("job_poster")
     if job_poster and isinstance(job_poster, dict):
@@ -148,7 +148,8 @@ def normalize_brightdata_job(job: dict) -> dict:
             "title": job_poster.get("title") or "Recruiter",
             "url": job_poster.get("url") or job_poster.get("profile_url") or "",
             "contacted": False,
-            "russian_speaker": False
+            "russian_speaker": False,
+            "is_job_poster": True,
         })
     
     return {
@@ -239,7 +240,8 @@ async def _scrape_linkedin_jobs_real(
     params = {
         "dataset_id": scraper_id,
         "include_errors": "true",
-        "discover_by": "keyword"
+        "type": "discover_new",
+        "discover_by": "keyword",
     }
     headers = {
         "Authorization": f"Bearer {api_key}",

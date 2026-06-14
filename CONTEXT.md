@@ -24,24 +24,80 @@ _Avoid_: Local scraper, browser automation, LinkedIn MCP server, silent mock fal
 A company employee classified by the LLM (using name, headline, languages, current position, and location) as likely having a Russian or CIS cultural background. Targeted for referral outreach because shared cultural background increases referral likelihood — not limited to HR or recruiting roles.
 _Avoid_: Russian HR contact, Russian recruiter, language filter
 
+**Job Poster**:
+The LinkedIn employee Bright Data identifies as the person who published a job listing (~11% of listings). Stored as a preliminary contact at sourcing time (`is_job_poster: true`) and visible on the Kanban immediately. Shows a **Poster** badge in the UI — retained permanently even after enrichment assigns an Outreach Audience. On enrichment, the Contact Sample is always fetched and classified; results are merged by LinkedIn profile URL, preserving `is_job_poster` on the matching contact. Dropped from the contact list only if they match neither active Outreach Audience toggle.
+_Avoid_: poster contact, job author, listing owner
+
+**Contact**:
+A person in a job's outreach list. Carries identity flags (`is_job_poster`) and Outreach Audience flags (`russian_speaker`, `is_recruiter`) set during enrichment classification. Identity flags are for display and tracking; audience flags control inclusion and message template selection. LinkedIn profile identity is matched by normalized `/in/{slug}` URL.
+_Avoid_: employee record, profile entry, lead
+
 **Contact Sample**:
-Up to 100 LinkedIn employee profiles fetched from a target company via Apify, passed as a batch to the LLM for Outreach Audience classification. Up to 5 contacts per Outreach Audience type are selected from the classified results.
+Up to 100 LinkedIn employee profiles fetched from a target company via Apify, passed as a batch to the LLM for Outreach Audience classification. The Job Poster is included in the same classification pass when present. Up to 5 contacts per Outreach Audience type are selected from the classified results.
 _Avoid_: Employee list, full company scrape
 
 **Outreach Audience**:
-The classification assigned to a contact by the LLM: Russian Speaker, Recruiter, or both. Determines which message template is used. When a contact qualifies as both, the Recruiter template takes priority.
+The classification assigned to a contact by the LLM: Russian Speaker, Recruiter, or both. Determines which Outreach Message Template is loaded and which badges the Kanban Dashboard shows. Badges follow classification flags only (`is_recruiter` → **HR** badge, `russian_speaker` → **RU** badge) — not title keyword matching. When a contact qualifies as both, the Recruiter template takes priority and the contact is grouped under Recruiters — but both audience badges are shown.
 _Avoid_: Contact type, outreach category, audience filter
 
+**Contact Group**:
+The visual section a contact appears under in the job drawer: **Recruiters**, **Russian Speakers**, or **Other** — in that order. Recruiters and Russian Speakers follow Outreach Audience flags; dual-classified contacts belong to Recruiters. Other holds contacts with neither audience flag. Empty groups are hidden.
+_Avoid_: contact bucket, audience section, contact category
+
+**Active Contact**:
+The contact currently selected in the job drawer whose Outreach Audience determines which Outreach Message Template is shown in the textarea. Clicking a contact row sets them as Active Contact and loads the matching template (Recruiter template when `is_recruiter` is true — including dual-classified contacts; otherwise Russian Speaker template). The Active Contact row is visually highlighted (e.g. cyan left border). The contacted checkbox is independent — it only toggles contacted status. When the drawer opens, Active Contact defaults to the first uncontacted contact in the list; if all contacts are already marked contacted, it falls back to the first contact in the list.
+_Avoid_: selected contact, focused contact, current contact
+
+**Outreach Message Template**:
+An audience-specific Connection Note draft stored on a job — either a Recruiter Outreach Template or a Russian Speaker Outreach Template. Generated at enrichment time only (at most two LLM calls); there is no Regenerate action in the Kanban Dashboard. The greeting uses a **Name Placeholder** instead of a contact name so the user can paste the same draft to multiple people and fill in the name manually. The Kanban Dashboard shows the template matching the Active Contact's Outreach Audience. User edits in the textarea are saved back to the corresponding audience template on the job.
+_Avoid_: outreach message, single draft, per-contact message
+
+**Recruiter Outreach Template**:
+The Outreach Message Template used for Recruiter contacts. Stored separately from the Russian Speaker Outreach Template on each job.
+_Avoid_: recruiter message, HR template
+
+**Russian Speaker Outreach Template**:
+The Outreach Message Template used for Russian Speaker contacts. Stored separately from the Recruiter Outreach Template on each job.
+_Avoid_: russian message, referral template
+
+**Legacy Outreach Message**:
+The single outreach draft stored on jobs enriched before the two-template model. On read, migrated into the Recruiter Outreach Template; the Russian Speaker Outreach Template remains empty until the job is re-enriched.
+_Avoid_: old outreachMessage, single draft migration
+
+**Minimal Fallback Template**:
+The hardcoded Connection Note used when LLM generation exceeds 200 characters after retry. Uses three `______` placeholders — contact name, company, and job title — plus the audience call to action. Recruiter ending: `I would be grateful to connect and share my CV.` Russian Speaker ending: `I'd be grateful if you could refer me for the role.`
+_Avoid_: fallback message, default template, truncate
+
+**Name Placeholder**:
+The literal `______` used where the user fills in text manually. In a normal Outreach Message Template, one placeholder appears in the greeting (e.g. `Hello ______,`) for the contact's first name. In a Minimal Fallback Template, three placeholders stand in for contact name, company, and job title.
+_Avoid_: first name, contact name, {firstName}
+
+**Connection Note**:
+A LinkedIn outreach message sent with a connection request, hard-limited to 200 characters. All Outreach Message Templates must fit this limit — no posting link, no bullet points, shortened company name and job title. Recruiter and Russian Speaker templates share the same shape; only the call to action differs. If generation exceeds 200 characters, the Outreach Generator retries once with stricter shortening instructions; if still over limit, it falls back to a **Minimal Fallback Template** — a fixed Connection Note with three Name Placeholders (greeting name, company, job title) and the audience-appropriate call to action.
+_Avoid_: connection message, invite note, short message, InMail
+
 **Outreach Generator**:
-An LLM-based component that creates personalized outreach messages using one of two audience-specific templates: a referral request (for Russian Speakers) or a direct introduction (for Recruiters). Both templates share the same structure — short, bullet-pointed strengths, and a link to the job posting — but differ in call to action.
+An LLM-based component that creates Connection Note Outreach Message Templates for each audience type present on a job. Both formats are ESL-friendly, use the Name Placeholder, and stay within 200 characters. The LLM shortens the company name and job title at its discretion to fit the limit. The body always includes the fixed fit line (`My experience align well with the requirements.`). The **Russian Speaker** template ends with a referral ask (`I'd be grateful if you could refer me for the role.`). The **Recruiter** template ends with a connect / share-CV ask (`I would be grateful to connect and share my CV.`). Generates whichever templates are needed based on classified contacts and Outreach Settings. On Enrichment Failure, generates both templates anyway.
 _Avoid_: Letter generator, email writer
+
+**Enrichment**:
+The pipeline that sources a Contact Sample via Apify, classifies Outreach Audience contacts, and generates Outreach Message Templates for a job. Triggered manually from the Kanban Dashboard or CLI. Always runs the full fetch-and-classify flow even when a Job Poster contact already exists; merges results by LinkedIn profile URL and preserves identity flags.
+_Avoid_: promote, contact sourcing, outreach generation
+
+**Enrichment Note**:
+A system-written status message on a job (`enrichmentNote`) recording the outcome of the most recent enrichment run. Set when an Enrichment Failure occurs; cleared on the next successful enrichment. Shown as a warning on the Kanban card and in full in the job drawer. Not user-editable — distinct from `comment`.
+_Avoid_: enrichment error, failure message, enrich status
+
+**Enrichment Failure**:
+An enrichment run that ends with zero Outreach Audience contacts or encounters an infrastructure error (Apify trigger failure, timeout, missing credentials, classification error). The job stays in the Enriched lane with an Enrichment Note explaining the reason. Even with zero contacts, the Outreach Generator still produces both Recruiter and Russian Speaker Outreach Templates so the user can cold-connect manually.
+_Avoid_: failed enrich, sourcing error, empty contacts
 
 **Outreach Settings**:
 A global configuration panel in the Kanban Dashboard for toggling which Outreach Audience types to target during enrichment (Russian Speakers, Recruiters, or both). Applies to all enrichments — not per-job.
 _Avoid_: Outreach filters, enrichment config, audience popup
 
 **Kanban Dashboard**:
-A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Enriching`, `Enriched`, `Contacted`, `Interviewing`, `Rejected`).
+A FastAPI-based single-page web application served locally on localhost `127.0.0.1:8000` to visualize application progress across status lanes (`Sourced`, `Enriching`, `Enriched`, `Contacted`, `Interviewing`, `Rejected`). Streams pipeline logs from background tasks (job search and enrichment) to an on-page console via Server-Sent Events. Enrichment completion logs match the outcome: success when contacts are found, error on Enrichment Failure. Contact Groups and audience badges appear in the job drawer only. The outreach textarea shows a live character counter (`142/200`) that turns red when the draft exceeds the Connection Note limit.
 _Avoid_: Sheets UI, Command Center
 
 **Board Controls**:

@@ -23,6 +23,7 @@ class Contact(BaseModel):
     contacted: bool = False
     russian_speaker: bool = False
     is_recruiter: bool = False
+    is_job_poster: bool = False
 
 
 class Job(BaseModel):

@@ -14,7 +14,7 @@ from src.web.server import app
 from fastapi.testclient import TestClient
 
 import src.core.outreach as outreach_module
-from src.core.outreach import source_contacts, _normalize_apify_employee, _run_apify_actor, ApifyTimeoutError, classify_contacts
+from src.core.outreach import source_contacts, _normalize_apify_employee, _run_apify_actor, ApifyTimeoutError, classify_contacts, normalize_linkedin_url
 from src.schemas import OutreachSettings
 
 client = TestClient(app)
@@ -29,17 +29,41 @@ def setup_test_db(tmp_path, monkeypatch):
     yield test_db_str
 
 
-# --- source_contacts: return existing ---
+# --- normalize_linkedin_url ---
+
+def test_normalize_linkedin_url_basic():
+    assert normalize_linkedin_url("https://linkedin.com/in/sarah-jenkins") == "/in/sarah-jenkins"
+
+def test_normalize_linkedin_url_strips_country_subdomain():
+    assert normalize_linkedin_url("https://ca.linkedin.com/in/sarah-jenkins") == "/in/sarah-jenkins"
+
+def test_normalize_linkedin_url_strips_www():
+    assert normalize_linkedin_url("https://www.linkedin.com/in/sarah-jenkins") == "/in/sarah-jenkins"
+
+def test_normalize_linkedin_url_strips_trailing_slash():
+    assert normalize_linkedin_url("https://linkedin.com/in/sarah-jenkins/") == "/in/sarah-jenkins"
+
+def test_normalize_linkedin_url_strips_query_params():
+    assert normalize_linkedin_url("https://linkedin.com/in/sarah-jenkins?trk=foo") == "/in/sarah-jenkins"
+
+def test_normalize_linkedin_url_returns_empty_for_non_linkedin():
+    assert normalize_linkedin_url("") == ""
+    assert normalize_linkedin_url("https://example.com/user/bob") == ""
+
+
+# --- source_contacts: always calls Apify ---
 
 @pytest.mark.asyncio
-async def test_source_contacts_returns_existing_contacts_when_present():
+async def test_source_contacts_always_calls_apify_even_with_existing_job_poster():
     job = {
         "title": "QA Engineer",
         "company": "Acme",
-        "contacts": [{"name": "Alice", "title": "Recruiter", "url": "https://linkedin.com/in/alice", "contacted": False, "russian_speaker": False}]
+        "contacts": [{"name": "Sarah", "title": "Recruiter", "url": "https://linkedin.com/in/sarah", "contacted": False, "is_job_poster": True}]
     }
-    result = await source_contacts(job)
-    assert result == job["contacts"]
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+        await source_contacts(job)
+    mock_apify.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -47,6 +71,111 @@ async def test_source_contacts_returns_empty_when_no_company_and_no_contacts():
     job = {"title": "QA Engineer", "company": "", "contacts": []}
     result = await source_contacts(job)
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_injects_poster_when_not_in_apify_sample():
+    poster_url = "https://linkedin.com/in/sarah-jenkins"
+    job = {
+        "title": "QA Engineer",
+        "company": "Acme",
+        "contacts": [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "contacted": False, "is_job_poster": True}]
+    }
+    employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": "https://linkedin.com/in/ivan"}]
+
+    classify_calls = []
+    async def mock_classify(items, settings):
+        classify_calls.append(items)
+        return []
+
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
+        await source_contacts(job)
+
+    assert len(classify_calls) == 1
+    assert len(classify_calls[0]) == 2  # 1 Apify + 1 injected poster
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_does_not_inject_poster_when_already_in_apify_sample():
+    poster_url = "https://linkedin.com/in/sarah-jenkins"
+    job = {
+        "title": "QA Engineer",
+        "company": "Acme",
+        "contacts": [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "contacted": False, "is_job_poster": True}]
+    }
+    employees = [{"firstName": "Sarah", "lastName": "Jenkins", "headline": "Recruiter", "linkedinUrl": poster_url}]
+
+    classify_calls = []
+    async def mock_classify(items, settings):
+        classify_calls.append(items)
+        return []
+
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
+        await source_contacts(job)
+
+    assert len(classify_calls[0]) == 1  # no synthetic extra injected
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_classifies_poster_alone_when_apify_returns_empty():
+    poster_url = "https://linkedin.com/in/sarah-jenkins"
+    job = {
+        "title": "QA Engineer",
+        "company": "Acme",
+        "contacts": [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "contacted": False, "is_job_poster": True}]
+    }
+    classified = [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "russian_speaker": False, "is_recruiter": True, "contacted": False, "currentPosition": "", "location": ""}]
+
+    classify_calls = []
+    async def mock_classify(items, settings):
+        classify_calls.append(items)
+        return classified
+
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
+        result = await source_contacts(job)
+
+    assert len(classify_calls) == 1
+    assert len(classify_calls[0]) == 1
+    assert result[0]["is_job_poster"] is True
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_preserves_contacted_status_by_normalized_url():
+    contact_url = "https://linkedin.com/in/ivan-petrov"
+    job = {
+        "title": "QA Engineer",
+        "company": "Acme",
+        "contacts": [{"name": "Ivan Petrov", "title": "Dev", "url": contact_url, "contacted": True, "is_job_poster": False}]
+    }
+    employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": contact_url}]
+    classified = [{"name": "Ivan Petrov", "title": "Dev", "url": contact_url, "russian_speaker": True, "is_recruiter": False, "contacted": False, "currentPosition": "", "location": ""}]
+
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)):
+        result = await source_contacts(job)
+
+    assert result[0]["contacted"] is True
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_sets_is_job_poster_on_matched_contact():
+    poster_url = "https://linkedin.com/in/sarah-jenkins"
+    job = {
+        "title": "QA Engineer",
+        "company": "Acme",
+        "contacts": [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "contacted": False, "is_job_poster": True}]
+    }
+    employees = [{"firstName": "Sarah", "lastName": "Jenkins", "headline": "Recruiter", "linkedinUrl": poster_url}]
+    classified = [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "russian_speaker": False, "is_recruiter": True, "contacted": False, "currentPosition": "", "location": ""}]
+
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)):
+        result = await source_contacts(job)
+
+    assert result[0]["is_job_poster"] is True
 
 
 # --- source_contacts: LLM-based classification via classify_contacts ---

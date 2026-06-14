@@ -16,7 +16,7 @@ from src.core.scraper import (
     normalize_brightdata_job, 
     match_company_size, 
     is_eastern_timezone,
-    matches_position_keywords
+    matches_position_keywords,
 )
 
 client = TestClient(app)
@@ -74,6 +74,38 @@ async def test_scraper_unset_mock_scraper_and_missing_api_key_raises_value_error
             location="New York",
         )
     assert "BRIGHTDATA_API_KEY" in str(excinfo.value)
+
+def test_normalize_brightdata_job_sets_is_job_poster_flag():
+    raw_job = {
+        "job_title": "Senior QA",
+        "company_name": "Acme",
+        "url": "https://linkedin.com/jobs/1234",
+        "job_location": "Remote",
+        "is_remote": True,
+        "job_poster": {
+            "name": "Sarah Jenkins",
+            "title": "Recruiting Director",
+            "url": "https://linkedin.com/in/sarah-jenkins"
+        }
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert len(result["contacts"]) == 1
+    contact = result["contacts"][0]
+    assert contact["is_job_poster"] is True
+    assert contact["name"] == "Sarah Jenkins"
+
+
+def test_normalize_brightdata_job_no_poster_yields_empty_contacts():
+    raw_job = {
+        "job_title": "Senior QA",
+        "company_name": "Acme",
+        "url": "https://linkedin.com/jobs/5678",
+        "job_location": "Remote",
+        "is_remote": True,
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert result["contacts"] == []
+
 
 def test_company_size_matching():
     assert match_company_size("1-50", ["small"]) is True
@@ -197,8 +229,12 @@ async def test_scraper_trigger_fails_immediately(monkeypatch):
             )
         # Verify the exception message contains "Failed to trigger scraper"
         assert "Failed to trigger scraper" in str(excinfo.value)
-        # Verify post was called once
+        # Verify post was called once with discovery params
         assert mock_post.call_count == 1
+        call_kwargs = mock_post.call_args.kwargs
+        assert call_kwargs["params"]["type"] == "discover_new"
+        assert call_kwargs["params"]["discover_by"] == "keyword"
+        assert call_kwargs["json"][0]["keyword"] == "QA Engineer"
 
 
 @pytest.mark.asyncio

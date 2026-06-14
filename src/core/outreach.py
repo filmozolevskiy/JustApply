@@ -1,6 +1,7 @@
 """Contact Sample sourcing and Outreach Generator for referral messages."""
 
 import os
+import re
 import json
 import time
 import httpx
@@ -107,13 +108,39 @@ def _normalize_apify_employee(item: dict) -> dict:
     }
 
 
+def normalize_linkedin_url(url: str) -> str:
+    """Return the canonical /in/{slug} path from any LinkedIn profile URL."""
+    if not url:
+        return ""
+    match = re.search(r'/in/([^/?#]+)', url)
+    if match:
+        return f"/in/{match.group(1)}"
+    return ""
+
+
+def _poster_to_apify_item(poster: dict) -> dict:
+    """Convert a Job Poster contact dict to an Apify-compatible item for batch classification."""
+    name_parts = (poster.get("name") or "").split(None, 1)
+    return {
+        "firstName": name_parts[0] if name_parts else "",
+        "lastName": name_parts[1] if len(name_parts) > 1 else "",
+        "headline": poster.get("title") or "",
+        "linkedinUrl": poster.get("url") or "",
+        "currentPosition": poster.get("title") or "",
+        "location": "",
+        "languages": [],
+    }
+
+
 async def source_contacts(job: dict, settings=None, log_func=None) -> list:
     """
     Return outreach contacts for a job using LLM classification.
 
-    1. If the job already has contacts, return them as-is.
-    2. Fetch up to CONTACT_SAMPLE_SIZE employees via Apify.
-    3. Classify via classify_contacts using the provided OutreachSettings.
+    Always calls Apify to fetch a fresh Contact Sample. The Job Poster from
+    existing contacts is included in the same classification batch — deduped
+    by normalized LinkedIn URL or injected as a synthetic extra when absent.
+    Falls back to classifying the poster alone if Apify returns nothing.
+    Preserves contacted:True from previous contacts matched by normalized URL.
     """
     from ..schemas import OutreachSettings
     if settings is None:
@@ -127,9 +154,12 @@ async def source_contacts(job: dict, settings=None, log_func=None) -> list:
                 log_func(msg, level)
 
     existing = job.get("contacts") or []
-    if existing:
-        await log(f"Using direct poster contact: {existing[0].get('name', 'Unknown')}", "info")
-        return existing
+    job_poster = next((c for c in existing if c.get("is_job_poster")), None)
+    contacted_by_slug = {
+        normalize_linkedin_url(c.get("url", "")): c.get("contacted", False)
+        for c in existing
+        if normalize_linkedin_url(c.get("url", ""))
+    }
 
     company = job.get("company") or ""
     if not company:
@@ -141,11 +171,37 @@ async def source_contacts(job: dict, settings=None, log_func=None) -> list:
         items = await _run_apify_actor(company, log_func=log_func)
     except ApifyTimeoutError as e:
         await log(f"Apify polling timed out: {e}", "error")
-        return []
-    if not items:
-        return []
+        items = []
 
-    contacts = await classify_contacts(items, settings)
+    poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
+
+    if items:
+        if job_poster and poster_slug:
+            apify_slugs = {
+                normalize_linkedin_url(
+                    item.get("linkedinUrl") or item.get("linkedInUrl") or
+                    item.get("profileUrl") or item.get("url") or ""
+                )
+                for item in items
+            }
+            if poster_slug not in apify_slugs:
+                await log("Job Poster not in Apify sample; injecting as synthetic profile.", "info")
+                items = items + [_poster_to_apify_item(job_poster)]
+        contacts = await classify_contacts(items, settings)
+    elif job_poster:
+        await log("Apify returned no profiles; classifying Job Poster alone.", "warning")
+        contacts = await classify_contacts([_poster_to_apify_item(job_poster)], settings)
+    else:
+        contacts = []
+
+    poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
+    for contact in contacts:
+        contact_slug = normalize_linkedin_url(contact.get("url", ""))
+        if poster_slug and contact_slug == poster_slug:
+            contact["is_job_poster"] = True
+        if contact_slug in contacted_by_slug:
+            contact["contacted"] = contacted_by_slug[contact_slug]
+
     await log(f"Found {len(contacts)} classified contact(s).", "info")
     return contacts
 
