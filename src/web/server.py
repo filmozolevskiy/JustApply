@@ -98,13 +98,36 @@ async def update_contact(job_id: int, contact_idx: int, update: ContactUpdate):
         return JSONResponse(status_code=404, content={"message": "Job or contact not found"})
     return updated
 
-async def run_enrichment_task(job_id: int):
-    job = get_job(job_id)
-    if not job:
+async def run_enrichment_task_with_logs(task_id: str, job_id: int):
+    state = active_tasks.get(task_id)
+    if not state:
         return
 
-    from ..pipelines import run_enrichment_pipeline
-    await run_enrichment_pipeline(job)
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        job = get_job(job_id)
+        if not job:
+            await log_callback(f"Job id={job_id} not found.", "error")
+            state.status = "failed"
+            return
+
+        from ..pipelines import run_enrichment_pipeline
+        updated = await run_enrichment_pipeline(job, log_func=log_callback)
+
+        if updated:
+            state.result = {"type": "result", "job": updated}
+            state.status = "completed"
+        else:
+            state.status = "failed"
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Enrichment task failed: {str(e)}", "error")
+    finally:
+        await state.queue.put(None)
 
 
 @app.post("/api/jobs/{job_id}/enrich")
@@ -113,8 +136,11 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
 
-    background_tasks.add_task(run_enrichment_task, job_id)
-    return {"status": "enriching", "job_id": job_id}
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    background_tasks.add_task(run_enrichment_task_with_logs, task_id, job_id)
+    return {"task_id": task_id, "job_id": job_id}
 
 
 @app.get("/")
@@ -131,6 +157,7 @@ class TaskState:
         self.logs = []
         self.queue = asyncio.Queue()
         self.jobs = []
+        self.result = None  # Generic result payload for non-search tasks
         self.status = "running"
 
 
@@ -292,7 +319,10 @@ async def logs_stream(task_id: str):
                 }
 
             if state.status == "completed":
-                yield {"data": json.dumps({"type": "result", "jobs": state.jobs})}
+                if state.result is not None:
+                    yield {"data": json.dumps(state.result)}
+                else:
+                    yield {"data": json.dumps({"type": "result", "jobs": state.jobs})}
                 yield {"data": json.dumps({"type": "done"})}
             else:
                 yield {

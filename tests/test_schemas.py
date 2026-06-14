@@ -82,3 +82,20 @@ def test_job_schema_seed_contacts_parse_as_contact_models(db):
     assert len(parsed.contacts) == 2
     assert parsed.contacts[0].name == "Jane Doe"
     assert parsed.contacts[0].role == "VP Engineering"
+
+
+def test_job_schema_enrichment_note_defaults_to_empty():
+    from src.schemas import Job
+    job = Job(title="QA", company="Acme")
+    assert job.enrichmentNote == ""
+
+
+def test_job_schema_enrichment_note_round_trip(db):
+    from src.schemas import Job
+    job_id = database.add_job(
+        {"title": "QA Engineer", "company": "Acme", "status": "sourced"},
+        db_path=db,
+    )
+    row = database.get_job(job_id, db_path=db)
+    job = Job(**row)
+    assert job.enrichmentNote == ""

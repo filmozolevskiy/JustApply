@@ -18,6 +18,7 @@ def _parse_job_row(row) -> dict:
             job[field] = []
     job["shouldProceed"] = bool(job["shouldProceed"])
     job["isRecruiter"] = bool(job.get("isRecruiter", 0))
+    job["enrichmentNote"] = job.get("enrichmentNote") or ""
     return job
 
 
@@ -120,7 +121,7 @@ def start_enrichment(job_id, db_path=None):
     return update_job_status(job_id, "enriching", db_path)
 
 
-def enrich_job(job_id, contacts, outreach_message, db_path=None):
+def enrich_job(job_id, contacts, outreach_message, enrichment_note="", db_path=None):
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
@@ -130,8 +131,8 @@ def enrich_job(job_id, contacts, outreach_message, db_path=None):
         conn.close()
         return None
     cursor.execute(
-        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'enriched' WHERE id = ?",
-        (json.dumps(contacts), outreach_message, job_id),
+        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'enriched', enrichmentNote = ? WHERE id = ?",
+        (json.dumps(contacts), outreach_message, enrichment_note, job_id),
     )
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))

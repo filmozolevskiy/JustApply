@@ -49,3 +49,4 @@ class Job(BaseModel):
     outreachMessage: str = ""
     comment: str = ""
     isRecruiter: bool = False
+    enrichmentNote: str = ""

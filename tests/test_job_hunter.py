@@ -183,7 +183,7 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
 
         assert result["status"] == "enriched"
         assert result["contacts"] == mock_contacts
-        mock_save.assert_called_once_with(10, mock_contacts, "Hello Jane")
+        mock_save.assert_called_once_with(10, mock_contacts, "Hello Jane", enrichment_note="")
 
 
 @pytest.mark.asyncio

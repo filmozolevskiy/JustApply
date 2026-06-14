@@ -1468,6 +1468,11 @@
                 <i class="fa-regular fa-comment-dots"></i> ${job.comment}
               </div>
             ` : ''}
+            ${job.enrichmentNote ? `
+              <div style="font-size: 0.72rem; color: #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #f59e0b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.enrichmentNote}">
+                <i class="fa-solid fa-triangle-exclamation"></i> ${job.enrichmentNote}
+              </div>
+            ` : ''}
             <div class="kanban-card-footer">
               <span style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">${job.resumeUsed}</span>
               <div class="kanban-card-actions" onclick="event.stopPropagation()">
@@ -1633,31 +1638,46 @@
 
     function enrichJob(id) {
       const job = masterJobs.find(j => j.id === id);
-      if (job) {
-        job.status = 'enriching';
-        addLogLine(`Initiating async enrichment for job [${job.title} @ ${job.company}]...`, 'warning');
-        renderActiveVariant();
-        startPollingEnrichingJobs();
+      if (!job) return;
 
-        fetch(`/api/jobs/${id}/enrich`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        })
+      job.status = 'enriching';
+      addLogLine(`Initiating enrichment for [${job.title} @ ${job.company}]...`, 'warning');
+      expandLogsConsole();
+      renderActiveVariant();
+
+      fetch(`/api/jobs/${id}/enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         .then(r => {
           if (!r.ok) throw new Error("HTTP error " + r.status);
           return r.json();
         })
-        .then(res => {
-          addLogLine(`Job [${job.title} @ ${job.company}] enrichment background process started.`, 'info');
+        .then(data => {
+          const task_id = data.task_id;
+          addLogLine(`Enrichment task started: ${task_id}`, 'info');
+
+          const es = new EventSource(`/api/logs/${task_id}`);
+          es.onmessage = function(event) {
+            const logData = JSON.parse(event.data);
+            if (logData.type === 'log') {
+              addLogLine(logData.message, logData.level);
+            } else if (logData.type === 'result' && logData.job) {
+              const idx = masterJobs.findIndex(j => j.id === logData.job.id);
+              if (idx !== -1) masterJobs[idx] = logData.job;
+              renderActiveVariant();
+            } else if (logData.type === 'done') {
+              es.close();
+              renderActiveVariant();
+            }
+          };
+          es.onerror = function() {
+            es.close();
+            addLogLine(`Enrichment SSE stream closed for job [${job.title}].`, 'warning');
+          };
         })
         .catch(err => {
           job.status = 'sourced';
           addLogLine(`Failed to trigger enrichment: ${err.message}. Reverted to 'sourced'.`, 'error');
           renderActiveVariant();
         });
-      }
     }
 
     function deleteJob(id) {
@@ -2165,6 +2185,16 @@
             <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="updateJobComment(${job.id}, this.value)">${job.comment || ''}</textarea>
           </div>
 
+          ${job.enrichmentNote ? `
+          <!-- Enrichment Status Section -->
+          <div>
+            <h4 style="font-size:0.8rem; color:var(--accent-amber); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Enrichment Status</h4>
+            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; color: #fbbf24;">
+              ${job.enrichmentNote}
+            </div>
+          </div>
+          ` : ''}
+
           <!-- Outreach Referral Checklist -->
           <div style="display:flex; flex-direction:column; gap:8px;">
             <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Outreach Contacts & Referral Status</h4>
@@ -2393,7 +2423,6 @@
             addLogLine("Backend returned empty job list. Board is empty.", 'info');
           }
           renderActiveVariant();
-          startPollingEnrichingJobs();
         })
         .catch(err => {
           addLogLine("Could not fetch jobs from backend. Using static fallback database.", 'info');

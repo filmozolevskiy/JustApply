@@ -95,13 +95,13 @@ def test_put_job_comment_nonexistent():
 
 
 def test_post_job_enrich_endpoint():
-    from unittest.mock import patch
-    
-    with patch("src.web.server.run_enrichment_task") as mock_enrich_task:
+    with patch("src.web.server.run_enrichment_task_with_logs") as mock_enrich_task:
         response = client.post("/api/jobs/1/enrich")
         assert response.status_code == 200
-        assert response.json() == {"status": "enriching", "job_id": 1}
-        
+        data = response.json()
+        assert "task_id" in data
+        assert data["job_id"] == 1
+
         # Verify status changed to enriching
         get_response = client.get("/api/jobs")
         jobs = get_response.json()
@@ -116,16 +116,22 @@ def test_post_job_enrich_nonexistent():
     assert response.json() == {"message": "Job not found"}
 
 
-# --- run_enrichment_task integration ---
+# --- run_enrichment_task_with_logs integration ---
 
 @pytest.mark.asyncio
-async def test_run_enrichment_task_writes_enriched_results(setup_test_db):
-    from src.web.server import run_enrichment_task
+async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_db):
+    from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
+    import uuid
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": 1})
+    active_tasks[task_id] = state
+
     mock_contacts = [{"name": "Test Contact", "url": "https://linkedin.com/in/test", "contacted": False, "russian_speaker": False}]
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
          patch("src.pipelines.generate_outreach_for_job", new=AsyncMock(return_value="Hello")), \
          patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
-        await run_enrichment_task(1)
+        await run_enrichment_task_with_logs(task_id, 1)
+
     job = database.get_job(1)
     assert job["status"] == "enriched"
     assert len(job["contacts"]) == 1
@@ -134,7 +140,11 @@ async def test_run_enrichment_task_writes_enriched_results(setup_test_db):
 
 
 @pytest.mark.asyncio
-async def test_run_enrichment_task_noop_for_missing_job():
-    from src.web.server import run_enrichment_task
-    # Should return without raising for a non-existent job ID
-    await run_enrichment_task(99999)
+async def test_run_enrichment_task_with_logs_noop_for_missing_job():
+    from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
+    import uuid
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": 99999})
+    active_tasks[task_id] = state
+    # Should complete without raising for a non-existent job ID
+    await run_enrichment_task_with_logs(task_id, 99999)

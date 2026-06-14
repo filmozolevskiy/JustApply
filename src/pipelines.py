@@ -131,16 +131,28 @@ async def run_enrichment_pipeline(job: dict, log_func=None) -> dict | None:
     company = job.get("company") or ""
     await log(f"Enriching '{title}' at '{company}'...")
 
-    settings = OutreachSettings(**database.get_outreach_settings())
-    contacts = await source_contacts(job, settings=settings, log_func=log_func)
-    if contacts:
-        await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
-    else:
+    enrichment_note = ""
+    contacts = []
+
+    try:
+        settings = OutreachSettings(**database.get_outreach_settings())
+        contacts = await source_contacts(job, settings=settings, log_func=log_func)
+    except Exception as exc:
+        enrichment_note = f"Enrichment failed: {exc}"
+        await log(enrichment_note, "error")
+
+    if not enrichment_note and not contacts:
+        enrichment_note = "No contacts matched active Outreach Settings."
         await log("No contacts found.", "warning")
+    elif contacts:
+        await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
 
     outreach_message = await generate_outreach_for_job(job, contacts)
 
-    enriched = database.enrich_job(job_id, contacts, outreach_message)
+    enriched = database.enrich_job(job_id, contacts, outreach_message, enrichment_note=enrichment_note)
     if enriched:
-        await log(f"Enrichment complete for job id={job_id}.", "success")
+        if enrichment_note:
+            await log(f"Enrichment failed for job id={job_id}: {enrichment_note}", "error")
+        else:
+            await log(f"Enrichment complete for job id={job_id}.", "success")
     return enriched

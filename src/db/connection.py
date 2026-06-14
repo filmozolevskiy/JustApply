@@ -44,13 +44,20 @@ def init_db(db_path=None):
             contacts TEXT,
             outreachMessage TEXT,
             comment TEXT,
-            isRecruiter INTEGER DEFAULT 0
+            isRecruiter INTEGER DEFAULT 0,
+            enrichmentNote TEXT DEFAULT ''
         )
     """)
     conn.commit()
 
     try:
         cursor.execute("ALTER TABLE jobs ADD COLUMN isRecruiter INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN enrichmentNote TEXT DEFAULT ''")
         conn.commit()
     except sqlite3.OperationalError:
         pass

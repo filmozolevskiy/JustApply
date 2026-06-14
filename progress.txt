@@ -27,3 +27,45 @@
 **Tests (13 new, 0 regressions — 122 total)**
 - `test_outreach.py`: 7 tests for `normalize_linkedin_url` (subdomain, www, trailing slash, query params, empty, non-LinkedIn), 1 test verifying Apify is always called even with existing poster, and 5 tests covering poster injection, no-duplicate injection, Apify-failure fallback, `contacted` preservation, and `is_job_poster` flag propagation.
 - `test_scraper.py`: 2 tests for `normalize_brightdata_job` — `is_job_poster: True` on poster contact, and no contacts when no poster.
+
+---
+
+## Iteration 2 — Issue #31: Stream enrichment logs to console and surface Enrichment Failures on cards
+
+### What was implemented
+
+**`src/schemas.py`**
+- Added `enrichmentNote: str = ""` field to the `Job` schema.
+
+**`src/db/connection.py`**
+- Added `enrichmentNote TEXT DEFAULT ''` column to `CREATE TABLE jobs`.
+- Added migration `ALTER TABLE jobs ADD COLUMN enrichmentNote TEXT DEFAULT ''` (no-op if already present).
+
+**`src/db/jobs.py`**
+- Updated `_parse_job_row` to normalize `enrichmentNote` to `""` when NULL.
+- Updated `enrich_job(job_id, contacts, outreach_message, enrichment_note="", db_path=None)` — persists `enrichmentNote` alongside contacts and outreach message.
+
+**`src/pipelines.py`**
+- `run_enrichment_pipeline` now wraps `source_contacts` in try/except to capture infrastructure errors.
+- Sets `enrichment_note` with a reason-specific message on failure (infrastructure error or zero contacts).
+- Passes `enrichment_note` to `database.enrich_job` — job always lands in `enriched` lane.
+- Final log line: `"success"` level when contacts found, `"error"` level on Enrichment Failure.
+
+**`src/web/server.py`**
+- Added `result` attribute to `TaskState` for generic non-search result payloads.
+- Added `run_enrichment_task_with_logs(task_id, job_id)` — runs enrichment pipeline with SSE log streaming via `TaskState.queue`; sets `state.result = {"type": "result", "job": updated}` on completion.
+- Updated `POST /api/jobs/{job_id}/enrich` to create a `TaskState`, store it in `active_tasks`, return `{"task_id": ..., "job_id": ...}`.
+- Updated `logs_stream` to yield `state.result` when present (enrichment result), falling back to `{"type": "result", "jobs": state.jobs}` for search tasks.
+
+**`src/web/dashboard.html`**
+- Replaced `enrichJob()` — now POSTs to enrich endpoint, receives `task_id`, opens `EventSource(/api/logs/{task_id})`, handles `log`/`result`/`done` SSE events. On `result`, merges the updated job into `masterJobs` and re-renders.
+- Removed `startPollingEnrichingJobs()` call from `enrichJob()` and `loadJobs()`.
+- `renderVariantB()`: added amber warning strip on card face when `job.enrichmentNote` is non-empty.
+- `openJobDetailsDrawer()`: added read-only **Enrichment Status** section (amber box with full note) when `job.enrichmentNote` is set.
+
+**Tests (13 new, 0 regressions — 135 total)**
+- `test_enrichment_pipeline.py` (new, 5 tests): zero-contacts failure sets note, infrastructure error sets note, success clears note, final log level `"error"` on failure, final log level `"success"` on success.
+- `test_schemas.py` (+2): `enrichmentNote` defaults to `""`, round-trips via DB.
+- `test_database.py` (+2): `enrich_job` persists enrichment note, clears it on success.
+- `test_dashboard_jobs.py` (updated): enrich endpoint returns `{task_id, job_id}`; `run_enrichment_task_with_logs` integration tests.
+- `test_dashboard_outreach_settings.py` (+4): HTML tests for SSE in `enrichJob`, no polling call, card warning strip, drawer Enrichment Status section.

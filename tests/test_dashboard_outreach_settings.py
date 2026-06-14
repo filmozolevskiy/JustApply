@@ -66,6 +66,56 @@ def test_dashboard_html_contains_outreach_settings_panel():
     assert "loadOutreachSettings" in content, "Missing loadOutreachSettings JS function"
 
 
+def test_dashboard_html_enrichment_uses_sse():
+    """enrichJob opens an EventSource using a task_id returned by the enrich endpoint."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    assert "task_id" in content, "enrichJob must use task_id from enrich endpoint"
+    enrich_job_start = content.find("function enrichJob(")
+    assert enrich_job_start != -1, "enrichJob function not found"
+    enrich_job_body = content[enrich_job_start:enrich_job_start + 2000]
+    assert "EventSource" in enrich_job_body, "enrichJob must open an EventSource for SSE"
+
+
+def test_dashboard_html_polling_loop_not_called_from_enrich():
+    """enrichJob must not start the polling loop (SSE replaces it)."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    enrich_job_start = content.find("function enrichJob(")
+    assert enrich_job_start != -1
+    enrich_job_body = content[enrich_job_start:enrich_job_start + 2000]
+    assert "startPollingEnrichingJobs" not in enrich_job_body, \
+        "enrichJob must not call startPollingEnrichingJobs; SSE handles card updates"
+
+
+def test_dashboard_html_card_warning_strip_for_enrichment_note():
+    """Kanban card rendering references enrichmentNote for the warning strip."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    render_start = content.find("function renderVariantB(")
+    assert render_start != -1, "renderVariantB function not found"
+    render_body = content[render_start:render_start + 6000]
+    assert "enrichmentNote" in render_body, \
+        "renderVariantB must render a warning strip for jobs with enrichmentNote"
+
+
+def test_dashboard_html_drawer_enrichment_status_section():
+    """Job drawer shows an Enrichment Status section when enrichmentNote is set."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    drawer_start = content.find("function openJobDetailsDrawer(")
+    assert drawer_start != -1, "openJobDetailsDrawer function not found"
+    drawer_body = content[drawer_start:drawer_start + 8000]
+    assert "Enrichment Status" in drawer_body, \
+        "openJobDetailsDrawer must include an Enrichment Status section"
+    assert "enrichmentNote" in drawer_body, \
+        "openJobDetailsDrawer must use enrichmentNote to conditionally show the section"
+
+
 def test_dashboard_html_outreach_panel_is_separate_from_board_controls():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:

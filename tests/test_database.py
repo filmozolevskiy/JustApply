@@ -202,7 +202,7 @@ def test_enrich_job_persists_contacts_and_message(tmp_path):
     contacts = [
         {"name": "Alice", "title": "Recruiter", "url": "https://linkedin.com/in/alice", "contacted": False, "russian_speaker": False}
     ]
-    updated = enrich_job(1, contacts, "Hello Alice", db_str)
+    updated = enrich_job(1, contacts, "Hello Alice", db_path=db_str)
 
     assert updated is not None
     assert updated["status"] == "enriched"
@@ -217,4 +217,22 @@ def test_enrich_job_persists_contacts_and_message(tmp_path):
 def test_enrich_job_nonexistent(tmp_path):
     db_str = str(tmp_path / "test_job_tracker.db")
     init_db(db_str)
-    assert enrich_job(999, [], "", db_str) is None
+    assert enrich_job(999, [], "", db_path=db_str) is None
+
+
+def test_enrich_job_persists_enrichment_note(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    updated = enrich_job(1, [], "msg", enrichment_note="Apify failed: HTTP 403", db_path=db_str)
+    assert updated is not None
+    assert updated["enrichmentNote"] == "Apify failed: HTTP 403"
+
+
+def test_enrich_job_clears_enrichment_note(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+    enrich_job(1, [], "msg", enrichment_note="Previous failure", db_path=db_str)
+    contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice", "contacted": False}]
+    updated = enrich_job(1, contacts, "Hello", enrichment_note="", db_path=db_str)
+    assert updated is not None
+    assert updated["enrichmentNote"] == ""
