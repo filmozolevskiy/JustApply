@@ -77,14 +77,19 @@ def _auto_archive_stale_jobs(cursor) -> None:
         _append_activity_log(cursor, job_id, "Auto-archived (rejected 14+ days)")
 
 
-def get_jobs(db_path=None):
+def get_jobs(db_path=None, archived_filter="active"):
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
     _auto_archive_stale_jobs(cursor)
     conn.commit()
-    cursor.execute("SELECT * FROM jobs WHERE archived = 0 ORDER BY id DESC")
+    if archived_filter == "archived":
+        cursor.execute("SELECT * FROM jobs WHERE archived = 1 ORDER BY id DESC")
+    elif archived_filter == "all":
+        cursor.execute("SELECT * FROM jobs ORDER BY id DESC")
+    else:
+        cursor.execute("SELECT * FROM jobs WHERE archived = 0 ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
     return [_parse_job_row(r) for r in rows]
@@ -271,21 +276,33 @@ def update_outreach_template(job_id, audience, template, db_path=None):
 
 
 def archive_job(job_id: int, db_path=None):
-    """Archive a Rejected job. Returns updated job dict or None if not found / not rejected."""
+    """Toggle archive state on a job.
+    - Archived → un-archive: sets archived=0, autoArchiveExempt=1
+    - Rejected non-archived → archive: sets archived=1
+    - Non-rejected non-archived → returns None (invalid)
+    """
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT status FROM jobs WHERE id = ?", (job_id,))
+    cursor.execute("SELECT status, archived FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
         return None
-    if row[0] != "rejected":
-        conn.close()
-        return None
-    cursor.execute("UPDATE jobs SET archived = 1 WHERE id = ?", (job_id,))
-    _append_activity_log(cursor, job_id, "Archived")
+    _status, current_archived = row
+    if current_archived:
+        cursor.execute(
+            "UPDATE jobs SET archived = 0, autoArchiveExempt = 1 WHERE id = ?",
+            (job_id,),
+        )
+        _append_activity_log(cursor, job_id, "Un-archived (auto-archive exempted)")
+    else:
+        if _status != "rejected":
+            conn.close()
+            return None
+        cursor.execute("UPDATE jobs SET archived = 1 WHERE id = ?", (job_id,))
+        _append_activity_log(cursor, job_id, "Archived")
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()

@@ -1,5 +1,38 @@
 # Ralph Loop Progress Log
 
+## Iteration 3 — Issue #54: Archived visibility filter and un-archive
+
+### Summary
+Implemented archived visibility filter and un-archive toggle (Parent PRD #51).
+
+**DB logic** (`src/db/jobs.py`):
+- `get_jobs`: added `archived_filter="active"` param (second positional, default unchanged) — `"active"` keeps existing behavior (`archived = 0`), `"archived"` returns only archived jobs, `"all"` returns both. Auto-archive sweep still runs first. Existing callers (`get_jobs(db_str)`) pass `db_str` as `db_path` positionally and are unaffected.
+- `archive_job`: now a toggle — if job is already archived, un-archives it (`archived = 0`, `autoArchiveExempt = 1`, logs "Un-archived (auto-archive exempted)"). If not archived and rejected, archives as before. Non-rejected non-archived jobs still return None.
+
+**API** (`src/web/server.py`):
+- `GET /api/jobs`: accepts `?archived=active|archived|all` query param (default `active`), passes value to `get_jobs(archived_filter=...)`.
+
+**Dashboard** (`src/web/dashboard.html`):
+- **Board Controls**: added three-way Archived select (`Active` / `Archived` / `All`); persists in `localStorage['boardFilterArchived']`; triggers `updateArchiveVisibility()` which calls `loadJobs()` (server re-fetch needed for this filter).
+- `loadJobs()`: reads `getArchivedFilter()` and fetches `?archived=<value>`; resets `masterJobs = []` on empty response.
+- `getKanbanCardMovementButtons`: archived cards show a green box-open un-archive button instead of archive/reject buttons.
+- `archiveJob`: after archive or un-archive, calls `loadJobs()` to refresh from server; log message says "Archived" or "Un-archived" depending on server response.
+- Card rendering: archived cards get `.kanban-card--archived` class (opacity 0.6) and an **Archived** badge (`.archived-badge` CSS class) in the company row.
+
+**Tests** (`tests/test_unarchive.py`): 14 new TDD tests covering:
+1. Tracer bullet: default `get_jobs` still hides archived jobs
+2. `archived_filter="archived"` returns only archived jobs
+3. `archived_filter="all"` returns both
+4. `archive_job` on archived job → un-archives
+5. Un-archive sets `autoArchiveExempt=True`
+6. Un-archive logs correct message
+7. Un-archived job visible in active board
+8. Un-archived job absent from archived filter
+9. Exemption survives auto-archive sweep (job with old rejectedAt stays active)
+10-14. API-layer: `GET /api/jobs` default/archived/all params; archive endpoint un-archive behavior
+
+All 363 tests pass.
+
 ## Iteration 1 — Issue #52: Manual archive on Rejected cards
 
 ### Summary

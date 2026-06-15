@@ -59,8 +59,8 @@ async def put_settings_outreach(settings: OutreachSettings):
 
 
 @app.get("/api/jobs", response_model=list[Job])
-async def get_all_jobs():
-    return get_jobs()
+async def get_all_jobs(archived: str = Query("active")):
+    return get_jobs(archived_filter=archived)
 
 
 class StatusUpdate(BaseModel):

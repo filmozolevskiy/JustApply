@@ -716,6 +716,17 @@
     .kanban-action-btn.archive-btn:hover {
       color: #a78bfa;
     }
+    .kanban-action-btn.unarchive-btn:hover {
+      color: #34d399;
+    }
+    .kanban-card--archived {
+      opacity: 0.6;
+    }
+    .archived-badge {
+      font-size:0.6rem; background:rgba(100,116,139,0.2); color:#94a3b8;
+      border:1px solid rgba(100,116,139,0.3); padding:1px 5px;
+      border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;
+    }
 
     .hover-reject {
       opacity: 0;
@@ -1149,6 +1160,14 @@
                 <option value="only">Recruiters Only</option>
               </select>
             </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label for="board-filter-archived" style="font-size: 0.8rem; color: var(--text-muted);">Archived:</label>
+              <select id="board-filter-archived" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateArchiveVisibility()">
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+                <option value="all">All</option>
+              </select>
+            </div>
           </div>
           <div class="panel-header-right">
             <i class="fa-solid fa-arrow-down-wide-short" style="color: var(--accent-indigo); font-size: 0.9rem;"></i>
@@ -1534,7 +1553,7 @@
 
         jobsInLane.forEach(job => {
           const card = document.createElement('div');
-          card.className = 'kanban-card';
+          card.className = 'kanban-card' + (job.archived ? ' kanban-card--archived' : '');
           card.setAttribute('onclick', `openJobDetailsDrawer(${job.id})`);
           card.setAttribute('draggable', 'true');
           card.addEventListener('dragstart', (e) => {
@@ -1563,7 +1582,10 @@
             </div>
             <div class="kanban-card-company" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
               <span><i class="fa-regular fa-building"></i> ${job.company}</span>
-              ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
+              <div style="display:flex; align-items:center; gap:4px;">
+                ${job.archived ? `<span class="archived-badge">Archived</span>` : ''}
+                ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
+              </div>
             </div>
             <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
               <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
@@ -1632,24 +1654,40 @@
       renderActiveVariant();
     }
 
+    function getArchivedFilter() {
+      return document.getElementById('board-filter-archived')?.value || localStorage.getItem('boardFilterArchived') || 'active';
+    }
+
     function initBoardControls() {
       const remoteFilter = localStorage.getItem('boardFilterRemote') || 'all';
       const sizeFilter = localStorage.getItem('boardFilterSize') || 'all';
       const recruiterFilter = localStorage.getItem('boardFilterRecruiter') || 'exclude';
       const sortBy = localStorage.getItem('boardSortBy') || 'match_desc';
+      const archivedFilter = localStorage.getItem('boardFilterArchived') || 'active';
 
       const remoteEl = document.getElementById('board-filter-remote');
       const sizeEl = document.getElementById('board-filter-size');
       const recruiterEl = document.getElementById('board-filter-recruiter');
       const sortEl = document.getElementById('board-sort-by');
+      const archivedEl = document.getElementById('board-filter-archived');
 
       if (remoteEl) remoteEl.value = remoteFilter;
       if (sizeEl) sizeEl.value = sizeFilter;
       if (recruiterEl) recruiterEl.value = recruiterFilter;
       if (sortEl) sortEl.value = sortBy;
+      if (archivedEl) archivedEl.value = archivedFilter;
+    }
+
+    function updateArchiveVisibility() {
+      const archivedFilter = document.getElementById('board-filter-archived')?.value || 'active';
+      localStorage.setItem('boardFilterArchived', archivedFilter);
+      loadJobs();
     }
 
     function getKanbanCardMovementButtons(job) {
+      if (job.archived) {
+        return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
+      }
       if (job.status === 'rejected') {
         return `<button class="kanban-action-btn archive-btn hover-reject" onclick="archiveJob(${job.id})" title="Archive Job"><i class="fa-solid fa-box-archive"></i></button>`;
       }
@@ -1662,11 +1700,12 @@
       try {
         const r = await fetch(`/api/jobs/${id}/archive`, { method: 'POST' });
         if (!r.ok) throw new Error('HTTP error ' + r.status);
-        masterJobs = masterJobs.filter(j => j.id !== id);
-        addLogLine(`Archived [${job.title}] at ${job.company}`, 'info');
-        renderActiveVariant();
+        const updated = await r.json();
+        const action = updated.archived ? 'Archived' : 'Un-archived';
+        addLogLine(`${action} [${job.title}] at ${job.company}`, 'info');
+        await loadJobs();
       } catch (err) {
-        addLogLine(`Failed to archive [${job.title}]: ${err.message}`, 'warning');
+        addLogLine(`Failed to toggle archive for [${job.title}]: ${err.message}`, 'warning');
       }
     }
 
@@ -2888,7 +2927,8 @@
     }
 
     function loadJobs() {
-      return fetch('/api/jobs')
+      const archivedFilter = getArchivedFilter();
+      return fetch(`/api/jobs?archived=${archivedFilter}`)
         .then(r => {
           if (!r.ok) throw new Error("HTTP error " + r.status);
           return r.json();
@@ -2898,6 +2938,7 @@
             masterJobs = data;
             addLogLine(`Loaded ${data.length} jobs dynamically from /api/jobs`, 'success');
           } else {
+            masterJobs = [];
             addLogLine("Backend returned empty job list. Board is empty.", 'info');
           }
           renderActiveVariant();
