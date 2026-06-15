@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.db.connection as _db_connection
-import src.core.outreach as outreach_module
+import src.core.enrichment.source as source_module
 from src import db as database
 from src.db.cache import get_contact_sample, set_contact_sample, delete_contact_sample
 from src.core.outreach import source_contacts
@@ -79,8 +79,8 @@ def test_delete_contact_sample_nonexistent_is_noop(db):
 async def test_source_contacts_calls_apify_on_cache_miss(db):
     """On cache miss, source_contacts fetches via Apify."""
     job = {"title": "QA", "company": "Acme", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     mock_apify.assert_called_once()
 
@@ -91,8 +91,8 @@ async def test_source_contacts_skips_apify_on_cache_hit(db):
     profiles = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     set_contact_sample("acme", profiles, display_name="Acme", db_path=db)
     job = {"title": "QA", "company": "Acme", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     mock_apify.assert_not_called()
 
@@ -102,8 +102,8 @@ async def test_source_contacts_populates_cache_after_apify_fetch(db):
     """Non-empty Apify result is written to cache."""
     profiles = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     job = {"title": "QA", "company": "Acme", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=profiles)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=profiles)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     cached = get_contact_sample("acme", db_path=db)
     assert cached is not None
@@ -114,8 +114,8 @@ async def test_source_contacts_populates_cache_after_apify_fetch(db):
 async def test_source_contacts_empty_apify_not_cached(db):
     """Empty Apify result is not written to cache."""
     job = {"title": "QA", "company": "Acme", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     assert get_contact_sample("acme", db_path=db) is None
 
@@ -126,8 +126,8 @@ async def test_source_contacts_classify_runs_on_cache_hit(db):
     profiles = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     set_contact_sample("acme", profiles, display_name="Acme", db_path=db)
     job = {"title": "QA", "company": "Acme", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
         await source_contacts(job)
     mock_classify.assert_called_once()
 
@@ -143,8 +143,8 @@ async def test_source_contacts_cache_hit_logs_company_and_fetch_date(db):
     async def capture_log(msg, level="info"):
         log_records.append(msg)
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job, log_func=capture_log)
 
     joined = " ".join(log_records)
@@ -168,8 +168,8 @@ async def test_source_contacts_cache_hit_appends_activity_log(db):
     job = dict(job)
     job["company"] = "Acme"
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
 
     updated = database.get_job(1, db_path=db)
@@ -186,8 +186,8 @@ async def test_source_contacts_bust_cache_deletes_and_refetches(db):
 
     new_profiles = [{"firstName": "New", "lastName": "Employee", "headline": "Dev", "linkedinUrl": ""}]
     job = {"title": "QA", "company": "Acme", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job, bust_cache=True)
 
     mock_apify.assert_called_once()
@@ -203,8 +203,8 @@ async def test_source_contacts_slug_normalization(db):
     set_contact_sample("my-company", profiles, display_name="My Company", db_path=db)
 
     job = {"title": "QA", "company": "My Company", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
 
     # "My Company" → "my-company" → cache hit → Apify not called

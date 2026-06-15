@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch, MagicMock, call
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import src.core.outreach as outreach_module
-from src.core.outreach import (
+import src.core.enrichment.connection_note as connection_note_module
+from src.core.enrichment.connection_note import (
     minimal_fallback_template,
     generate_connection_note_template,
     generate_outreach_templates,
@@ -42,7 +42,7 @@ def test_minimal_fallback_contains_name_placeholder():
 
 
 def test_minimal_fallback_contains_fit_line():
-    from src.core.outreach import FIT_LINE
+    from src.core.enrichment.connection_note import FIT_LINE
     for audience in ("recruiter", "russian_speaker"):
         assert FIT_LINE in minimal_fallback_template(audience)
 
@@ -52,7 +52,7 @@ def test_minimal_fallback_contains_fit_line():
 @pytest.mark.asyncio
 async def test_generate_connection_note_falls_back_without_api_key():
     job = {"title": "QA Lead", "company": "Acme"}
-    with patch("src.core.outreach.load_dotenv"), \
+    with patch("src.core.enrichment.connection_note.load_dotenv"), \
          patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         result = await generate_connection_note_template(job, "recruiter")
     assert result == minimal_fallback_template("recruiter")
@@ -142,7 +142,7 @@ async def test_generate_outreach_templates_generates_both_on_empty_contacts():
     async def mock_gen(j, audience, log_func=None):
         return recruiter_note if audience == "recruiter" else russian_note
 
-    with patch.object(outreach_module, "generate_connection_note_template", side_effect=mock_gen):
+    with patch.object(connection_note_module, "generate_connection_note_template", side_effect=mock_gen):
         result = await generate_outreach_templates(job, contacts=[])
 
     assert result["recruiter"] == recruiter_note
@@ -158,7 +158,7 @@ async def test_generate_outreach_templates_generates_only_recruiter_when_only_re
     async def mock_gen(j, audience, log_func=None):
         return recruiter_note if audience == "recruiter" else "russian template"
 
-    with patch.object(outreach_module, "generate_connection_note_template", side_effect=mock_gen) as mock_fn:
+    with patch.object(connection_note_module, "generate_connection_note_template", side_effect=mock_gen) as mock_fn:
         result = await generate_outreach_templates(job, contacts=contacts)
 
     assert result["recruiter"] == recruiter_note
@@ -177,7 +177,7 @@ async def test_generate_outreach_templates_generates_only_russian_when_only_russ
     async def mock_gen(j, audience, log_func=None):
         return russian_note if audience == "russian_speaker" else "recruiter template"
 
-    with patch.object(outreach_module, "generate_connection_note_template", side_effect=mock_gen) as mock_fn:
+    with patch.object(connection_note_module, "generate_connection_note_template", side_effect=mock_gen) as mock_fn:
         result = await generate_outreach_templates(job, contacts=contacts)
 
     assert result["russian_speaker"] == russian_note
@@ -198,7 +198,7 @@ async def test_generate_outreach_templates_generates_both_for_mixed_contacts():
     async def mock_gen(j, audience, log_func=None):
         return f"{audience} template"
 
-    with patch.object(outreach_module, "generate_connection_note_template", side_effect=mock_gen):
+    with patch.object(connection_note_module, "generate_connection_note_template", side_effect=mock_gen):
         result = await generate_outreach_templates(job, contacts=contacts)
 
     assert result["recruiter"] == "recruiter template"

@@ -13,7 +13,8 @@ import src.web.server as server_module
 from src.web.server import app
 from fastapi.testclient import TestClient
 
-import src.core.outreach as outreach_module
+import src.core.enrichment.source as source_module
+import src.core.enrichment.contact_sample as contact_sample_module
 from src.core.outreach import (
     source_contacts,
     _normalize_apify_employee,
@@ -72,8 +73,8 @@ async def test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poste
         "company": "Acme",
         "contacts": [{"name": "Sarah", "title": "Recruiter", "url": "https://linkedin.com/in/sarah", "contacted": False, "is_job_poster": True}]
     }
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     mock_apify.assert_called_once()
 
@@ -100,8 +101,8 @@ async def test_source_contacts_injects_poster_when_not_in_apify_sample():
         classify_calls.append(items)
         return []
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
         await source_contacts(job)
 
     assert len(classify_calls) == 1
@@ -123,8 +124,8 @@ async def test_source_contacts_does_not_inject_poster_when_already_in_apify_samp
         classify_calls.append(items)
         return []
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
         await source_contacts(job)
 
     assert len(classify_calls[0]) == 1  # no synthetic extra injected
@@ -145,8 +146,8 @@ async def test_source_contacts_classifies_poster_alone_when_apify_returns_empty(
         classify_calls.append(items)
         return classified
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
         result = await source_contacts(job)
 
     assert len(classify_calls) == 1
@@ -165,8 +166,8 @@ async def test_source_contacts_preserves_contacted_status_by_normalized_url():
     employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": contact_url}]
     classified = [{"name": "Ivan Petrov", "title": "Dev", "url": contact_url, "russian_speaker": True, "is_recruiter": False, "contacted": False, "currentPosition": "", "location": ""}]
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)):
         result = await source_contacts(job)
 
     assert result[0]["contacted"] is True
@@ -183,8 +184,8 @@ async def test_source_contacts_sets_is_job_poster_on_matched_contact():
     employees = [{"firstName": "Sarah", "lastName": "Jenkins", "headline": "Recruiter", "linkedinUrl": poster_url}]
     classified = [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "russian_speaker": False, "is_recruiter": True, "contacted": False, "currentPosition": "", "location": ""}]
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)):
         result = await source_contacts(job)
 
     assert result[0]["is_job_poster"] is True
@@ -200,8 +201,8 @@ async def test_source_contacts_delegates_to_classify_contacts_with_settings():
                    "russian_speaker": True, "is_recruiter": False, "currentPosition": "", "location": ""}]
     job = {"title": "QA", "company": "TechCorp", "contacts": []}
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)) as mock_classify:
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)) as mock_classify:
         result = await source_contacts(job, settings=settings)
 
     mock_classify.assert_called_once_with(employees, settings)
@@ -213,8 +214,8 @@ async def test_source_contacts_uses_default_settings_when_none_provided():
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Dev", "linkedinUrl": ""}]
     job = {"title": "QA", "company": "Corp", "contacts": []}
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
         await source_contacts(job)
 
     mock_classify.assert_called_once()
@@ -378,8 +379,8 @@ async def test_run_apify_actor_uses_company_url_before_slug_variants():
     company_page = "https://www.linkedin.com/company/tranetechnologies?trk=x"
     employees = [{"firstName": "Jane", "lastName": "Doe", "linkedinUrl": ""}]
 
-    with patch.object(outreach_module, "_run_apify_for_company_page", new=AsyncMock(return_value=employees)) as mock_url, \
-         patch.object(outreach_module, "_run_apify_for_slug", new=AsyncMock(return_value=[])) as mock_slug:
+    with patch.object(contact_sample_module, "_run_apify_for_company_page", new=AsyncMock(return_value=employees)) as mock_url, \
+         patch.object(contact_sample_module, "_run_apify_for_slug", new=AsyncMock(return_value=[])) as mock_slug:
         result = await _run_apify_actor("Trane Technologies", company_url=company_page)
 
     assert result == employees
@@ -394,7 +395,7 @@ async def test_run_apify_actor_tries_slug_variants_until_profiles_found():
             return [{"firstName": "Jane", "lastName": "Doe", "linkedinUrl": "https://linkedin.com/in/jane"}]
         return []
 
-    with patch.object(outreach_module, "_run_apify_for_slug", new=AsyncMock(side_effect=mock_for_slug)) as mock_run:
+    with patch.object(contact_sample_module, "_run_apify_for_slug", new=AsyncMock(side_effect=mock_for_slug)) as mock_run:
         items = await _run_apify_actor("Trane Technologies")
 
     assert len(items) == 1
@@ -413,8 +414,8 @@ async def test_source_contacts_passes_company_url_to_apify():
     classified = [{"name": "Jane Doe", "title": "Recruiter", "url": "", "contacted": False,
                    "russian_speaker": False, "is_recruiter": True, "currentPosition": "", "location": ""}]
 
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)) as mock_apify, \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)) as mock_apify, \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)):
         await source_contacts(job)
 
     mock_apify.assert_called_once()
@@ -425,7 +426,7 @@ async def test_source_contacts_passes_company_url_to_apify():
 async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
     job = {"title": "QA Engineer", "company": "Trane Technologies", "contacts": []}
     meta = {}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])):
         result = await source_contacts(job, meta=meta)
     assert result == []
     assert meta["empty_reason"] == "no_employees"
@@ -436,8 +437,8 @@ async def test_source_contacts_sets_meta_no_audience_match_when_classified_empty
     job = {"title": "QA Engineer", "company": "Acme", "contacts": []}
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Engineer", "linkedinUrl": ""}]
     meta = {}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
-         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         result = await source_contacts(job, meta=meta)
     assert result == []
     assert meta["empty_reason"] == "no_audience_match"
@@ -474,7 +475,7 @@ async def test_run_apify_actor_raises_apify_timeout_error():
 async def test_source_contacts_returns_empty_on_apify_timeout():
     """source_contacts returns [] when _run_apify_actor raises ApifyTimeoutError."""
     job = {"title": "QA Engineer", "company": "TestCorp", "contacts": []}
-    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(side_effect=ApifyTimeoutError("timed out"))):
+    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(side_effect=ApifyTimeoutError("timed out"))):
         result = await source_contacts(job)
     assert result == []
 
