@@ -482,6 +482,30 @@
       border: 1px solid var(--border-color);
     }
 
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+    }
+    .panel-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .panel-header-left i {
+      color: var(--accent-cyan);
+      font-size: 0.95rem;
+    }
+    .panel-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .toggle-switch {
       position: relative;
       display: inline-block;
@@ -880,177 +904,178 @@
          VARIANT B: THE KANBAN PIPELINE
          ---------------------------------------------------- -->
     <section id="variant-b">
-      <!-- Quick run bar at top -->
-      <div class="glass-panel" style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <div style="display: flex; gap: 16px; align-items: center;">
-          <h2 style="font-size: 1.2rem; color: var(--text-primary);">Pipeline Tracker</h2>
-          <span style="font-size: 0.85rem; color: var(--text-secondary);">Manage applications by status lanes</span>
+      <!-- Pipeline Tracker panel (shared header chrome) -->
+      <div class="glass-panel" id="pipeline-tracker-panel" style="margin-bottom: 8px;">
+        <div class="panel-header">
+          <div class="panel-header-left">
+            <i class="fa-solid fa-chart-gantt"></i>
+            <span>Pipeline Tracker</span>
+            <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 400;">Manage applications by status lanes</span>
+          </div>
+          <div class="panel-header-right">
+            <button class="btn btn-secondary" onclick="toggleScraperSettings()" id="scraper-settings-toggle">
+              <i class="fa-solid fa-sliders"></i> Scraper Settings <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i>
+            </button>
+          </div>
         </div>
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <button class="btn btn-secondary" onclick="toggleScraperSettings()" id="scraper-settings-toggle">
-            <i class="fa-solid fa-sliders"></i> Scraper Settings <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i>
-          </button>
+        <!-- Foldable Scraper Settings body -->
+        <div class="scraper-settings-panel" id="scraper-settings-panel" data-collapse-key="panel-scraper-settings-collapsed">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+            <div class="form-group">
+              <label>Position / Query</label>
+              <input type="text" id="kb-filter-position" value="Senior QA Automation">
+            </div>
+            <div class="form-group">
+              <label>Location</label>
+              <input type="text" id="kb-filter-location" value="Remote">
+            </div>
+            <div class="form-group">
+              <label>Remote Type</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="remote" checked> Remote</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="hybrid"> Hybrid</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="in_office"> In Office</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Seniority (Optional)</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="junior"> Junior</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="mid"> Mid-level</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="senior" checked> Senior</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Salary Min (Optional)</label>
+              <input type="text" id="kb-filter-salary" placeholder="e.g. $120k">
+            </div>
+            <div class="form-group">
+              <label>Company Size (Optional)</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="small"> Small (1-50)</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="medium"> Medium (50-500)</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="large"> Large (500+)</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Source Platform</label>
+              <select id="kb-filter-platform" style="width: 100%;">
+                <option value="brightdata_linkedin" selected>LinkedIn (Bright Data)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Target Countries</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="us" checked> US</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="ca"> Canada</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="gb"> UK</label>
+                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="de"> Germany</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Time Range</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="any" checked> Anytime</label>
+                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_24_hours"> Past 24h</label>
+                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_week"> Past Week</label>
+                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_month"> Past Month</label>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px; border-top: 1px solid var(--border-color); padding-top:12px;">
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="resetKbFilters()"><i class="fa-solid fa-undo"></i> Reset Filters</button>
+            <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()"><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
+          </div>
         </div>
       </div>
 
-      <!-- Foldable Scraper Settings Panel -->
-      <div class="scraper-settings-panel" id="scraper-settings-panel">
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-          <div class="form-group">
-            <label>Position / Query</label>
-            <input type="text" id="kb-filter-position" value="Senior QA Automation">
+      <!-- Task Logs panel (shared header chrome, collapsed by default) -->
+      <div class="glass-panel" id="kb-logs-panel" style="margin-bottom: 16px;">
+        <div class="panel-header">
+          <div class="panel-header-left">
+            <i class="fa-solid fa-terminal"></i>
+            <span>Task Logs</span>
           </div>
-          <div class="form-group">
-            <label>Location</label>
-            <input type="text" id="kb-filter-location" value="Remote">
-          </div>
-          <div class="form-group">
-            <label>Remote Type</label>
-            <div class="checkbox-group">
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="remote" checked> Remote</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="hybrid"> Hybrid</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="in_office"> In Office</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Seniority (Optional)</label>
-            <div class="checkbox-group">
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="junior"> Junior</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="mid"> Mid-level</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="senior" checked> Senior</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Salary Min (Optional)</label>
-            <input type="text" id="kb-filter-salary" placeholder="e.g. $120k">
-          </div>
-          <div class="form-group">
-            <label>Company Size (Optional)</label>
-            <div class="checkbox-group">
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="small"> Small (1-50)</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="medium"> Medium (50-500)</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="large"> Large (500+)</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Source Platform</label>
-            <select id="kb-filter-platform" style="width: 100%;">
-              <option value="brightdata_linkedin" selected>LinkedIn (Bright Data)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Target Countries</label>
-            <div class="checkbox-group">
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="us" checked> US</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="ca"> Canada</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="gb"> UK</label>
-              <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="de"> Germany</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Time Range</label>
-            <div class="checkbox-group">
-              <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="any" checked> Anytime</label>
-              <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_24_hours"> Past 24h</label>
-              <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_week"> Past Week</label>
-              <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_month"> Past Month</label>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px; border-top: 1px solid var(--border-color); padding-top:12px;">
-          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="resetKbFilters()"><i class="fa-solid fa-undo"></i> Reset Filters</button>
-          <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()"><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
-        </div>
-      </div>
-
-      <!-- Logs Console for Kanban View -->
-      <div class="glass-panel" id="kb-logs-panel" style="margin-bottom: 16px; padding: 16px 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 style="margin: 0; border: none; padding: 0; font-size: 1.1rem; color: var(--text-primary);"><i class="fa-solid fa-terminal"></i> Task Logs</h3>
-          <div style="display: flex; gap: 8px;">
+          <div class="panel-header-right">
             <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="clearLogs()">Clear</button>
-            <button class="btn btn-secondary" id="toggle-logs-btn" style="padding: 4px 8px; font-size: 0.75rem;" onclick="toggleLogsHeight()"><i class="fa-solid fa-chevron-up"></i> Collapse</button>
+            <button class="btn btn-secondary" id="toggle-logs-btn" style="padding: 4px 8px; font-size: 0.75rem;" onclick="toggleLogsHeight()"><i class="fa-solid fa-chevron-down"></i> Expand</button>
           </div>
         </div>
-        <div class="terminal-console" id="kb-logs-console">
+        <div class="terminal-console shrunk" id="kb-logs-console" data-collapse-key="panel-task-logs-collapsed" style="margin: 0 20px 16px;">
           <div class="terminal-line"><span class="terminal-time">13:10:00</span><span class="terminal-text">System initialized. Ready to trigger.</span></div>
         </div>
       </div>
 
-      <!-- Board Controls (Filters & Sorting) -->
-      <div class="glass-panel" style="padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; background: rgba(20, 26, 48, 0.3);">
-        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-filter" style="color: var(--accent-cyan); font-size: 0.9rem;"></i>
-            <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Filters:</span>
+      <!-- Outreach Settings panel (shared header chrome, always visible) -->
+      <div class="glass-panel" id="outreach-settings-panel" style="margin-bottom: 16px;">
+        <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
+          <div class="panel-header-left">
+            <i class="fa-solid fa-bullhorn"></i>
+            <span>Outreach Settings</span>
           </div>
-          
-          <!-- Remote Type Filter -->
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label for="board-filter-remote" style="font-size: 0.8rem; color: var(--text-muted);">Remote:</label>
-            <select id="board-filter-remote" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-              <option value="all">All Types</option>
-              <option value="remote">Remote Only</option>
-              <option value="hybrid">Hybrid Only</option>
-              <option value="in_office">In Office Only</option>
-            </select>
+          <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
+            </label>
           </div>
-          
-          <!-- Company Size Filter -->
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label for="board-filter-size" style="font-size: 0.8rem; color: var(--text-muted);">Company Size:</label>
-            <select id="board-filter-size" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-              <option value="all">All Sizes</option>
-              <option value="small">Small (1-50)</option>
-              <option value="medium">Medium (50-500)</option>
-              <option value="large">Large (500+)</option>
-            </select>
-          </div>
-
-          <!-- Recruiter Filter -->
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label for="board-filter-recruiter" style="font-size: 0.8rem; color: var(--text-muted);">Recruiter:</label>
-            <select id="board-filter-recruiter" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-              <option value="all">Show All</option>
-              <option value="exclude" selected>Hide Recruiters</option>
-              <option value="only">Recruiters Only</option>
-            </select>
-          </div>
-        </div>
-        
-        <!-- Sorting -->
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <i class="fa-solid fa-arrow-down-wide-short" style="color: var(--accent-indigo); font-size: 0.9rem;"></i>
-          <label for="board-sort-by" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Sort By:</label>
-          <select id="board-sort-by" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-            <option value="match_desc">Match Score: High to Low</option>
-            <option value="match_asc">Match Score: Low to High</option>
-            <option value="novelty_desc">Novelty: Newest First</option>
-            <option value="novelty_asc">Novelty: Oldest First</option>
-          </select>
         </div>
       </div>
 
-      <!-- Outreach Settings -->
-      <div class="glass-panel" id="outreach-settings-panel" style="padding: 12px 20px; display: flex; align-items: center; gap: 24px; margin-bottom: 16px; background: rgba(6, 182, 212, 0.04); border-color: rgba(6, 182, 212, 0.2); flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <i class="fa-solid fa-bullhorn" style="color: var(--accent-cyan); font-size: 0.9rem;"></i>
-          <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Outreach Settings:</span>
+      <!-- Board Controls panel (shared header chrome, always visible, directly above kanban) -->
+      <div class="glass-panel" id="board-controls-panel" style="margin-bottom: 16px;">
+        <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
+          <div class="panel-header-left" style="flex-wrap: wrap; gap: 12px;">
+            <i class="fa-solid fa-filter"></i>
+            <span style="color: var(--text-secondary); font-weight: 500; font-size: 0.9rem;">Filters:</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label for="board-filter-remote" style="font-size: 0.8rem; color: var(--text-muted);">Remote:</label>
+              <select id="board-filter-remote" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+                <option value="all">All Types</option>
+                <option value="remote">Remote Only</option>
+                <option value="hybrid">Hybrid Only</option>
+                <option value="in_office">In Office Only</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label for="board-filter-size" style="font-size: 0.8rem; color: var(--text-muted);">Company Size:</label>
+              <select id="board-filter-size" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+                <option value="all">All Sizes</option>
+                <option value="small">Small (1-50)</option>
+                <option value="medium">Medium (50-500)</option>
+                <option value="large">Large (500+)</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label for="board-filter-recruiter" style="font-size: 0.8rem; color: var(--text-muted);">Recruiter:</label>
+              <select id="board-filter-recruiter" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+                <option value="all">Show All</option>
+                <option value="exclude" selected>Hide Recruiters</option>
+                <option value="only">Recruiters Only</option>
+              </select>
+            </div>
+          </div>
+          <div class="panel-header-right">
+            <i class="fa-solid fa-arrow-down-wide-short" style="color: var(--accent-indigo); font-size: 0.9rem;"></i>
+            <label for="board-sort-by" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Sort By:</label>
+            <select id="board-sort-by" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
+              <option value="match_desc">Match Score: High to Low</option>
+              <option value="match_asc">Match Score: Low to High</option>
+              <option value="novelty_desc">Novelty: Newest First</option>
+              <option value="novelty_asc">Novelty: Oldest First</option>
+            </select>
+          </div>
         </div>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
-            <span class="toggle-slider"></span>
-          </label>
-          <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
-            <span class="toggle-slider"></span>
-          </label>
-          <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
-        </label>
       </div>
 
       <!-- Kanban lanes -->
@@ -2177,10 +2202,10 @@
         const isShrunk = consoleEl.classList.toggle('shrunk');
         if (isShrunk) {
           btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Expand';
-          localStorage.setItem('logsConsoleShrunk', 'true');
+          localStorage.setItem('panel-task-logs-collapsed', 'true');
         } else {
           btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
-          localStorage.setItem('logsConsoleShrunk', 'false');
+          localStorage.setItem('panel-task-logs-collapsed', 'false');
         }
       }
     }
@@ -2191,17 +2216,23 @@
       if (consoleEl && consoleEl.classList.contains('shrunk') && btn) {
         consoleEl.classList.remove('shrunk');
         btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
-        localStorage.setItem('logsConsoleShrunk', 'false');
+        localStorage.setItem('panel-task-logs-collapsed', 'false');
       }
     }
 
     function initLogsConsoleState() {
-      const isShrunk = localStorage.getItem('logsConsoleShrunk') === 'true';
+      const stored = localStorage.getItem('panel-task-logs-collapsed');
+      // default collapsed (shrunk) unless explicitly set to 'false'
+      const isShrunk = stored !== 'false';
       const consoleEl = document.getElementById('kb-logs-console');
       const btn = document.getElementById('toggle-logs-btn');
-      if (consoleEl && btn && isShrunk) {
+      if (!consoleEl || !btn) return;
+      if (isShrunk) {
         consoleEl.classList.add('shrunk');
         btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Expand';
+      } else {
+        consoleEl.classList.remove('shrunk');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
       }
     }
 
@@ -2620,11 +2651,9 @@
       const panel = document.getElementById('scraper-settings-panel');
       const chevron = document.getElementById('settings-chevron');
       panel.classList.toggle('expanded');
-      if (panel.classList.contains('expanded')) {
-        chevron.style.transform = 'rotate(180deg)';
-      } else {
-        chevron.style.transform = 'rotate(0deg)';
-      }
+      const isExpanded = panel.classList.contains('expanded');
+      chevron.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+      localStorage.setItem('panel-scraper-settings-collapsed', isExpanded ? 'false' : 'true');
     }
 
     function resetKbFilters() {

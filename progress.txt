@@ -15,3 +15,29 @@ Removed three dead UI controls from the Kanban Dashboard per PRD #45 Issue #46.
 - `#connection-mode` CSS block
 
 **Tests added:** `tests/test_dashboard_dead_ui.py` — 8 HTML contract tests asserting absent controls and retained Pipeline Tracker header. All 280 tests pass.
+
+## Iteration: 2026-06-14 — Issue #47: Unify dashboard utility panel chrome and layout
+
+### Summary
+Refactored the four utility panels above the kanban board to use a shared header style and corrected their DOM order per PRD #45 Issue #47.
+
+**Panel order (before → after):**
+- Before: Pipeline Tracker → Task Logs → Board Controls → Outreach Settings → Kanban
+- After: Pipeline Tracker → Task Logs → Outreach Settings → Board Controls → Kanban
+
+**Shared chrome:**
+- Added `.panel-header`, `.panel-header-left`, `.panel-header-right` CSS classes used consistently across all four panels (icon + title left, actions/chevron right)
+- Removed per-panel ad-hoc inline styles from Pipeline Tracker header and Outreach Settings
+
+**Outreach Settings cleaned up:**
+- Removed cyan background tint (`rgba(6, 182, 212, 0.04)`) and cyan border (`rgba(6, 182, 212, 0.2)`) inline styles
+
+**Board Controls:**
+- Added `id="board-controls-panel"` and placed it directly above the kanban lane container
+
+**Collapse state with local storage:**
+- Task Logs console starts collapsed (`shrunk` class in static HTML); state persists via `panel-task-logs-collapsed` key
+- Scraper Settings already started collapsed; now persists via `panel-scraper-settings-collapsed` key
+- Updated `toggleLogsHeight()`, `expandLogsConsole()`, `initLogsConsoleState()`, and `toggleScraperSettings()` to use the new keys; `initLogsConsoleState()` now defaults to collapsed when no key is present
+
+**Tests added:** `tests/test_dashboard_panel_chrome.py` — 10 HTML contract tests covering panel order, shared header markup, collapse keys, and default collapsed state. All 290 tests pass.
