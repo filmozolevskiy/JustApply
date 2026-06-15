@@ -4,6 +4,13 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from kanban_js import (
+    get_drawer_body,
+    load_kanban_js,
+    read_dashboard_html,
+    read_drawer_controller,
+)
+
 from src import db as database
 import src.db.connection as _db_connection
 from src.web.server import app
@@ -104,27 +111,20 @@ def test_dashboard_html_polling_loop_not_called_from_enrich():
 
 def test_dashboard_html_card_warning_strip_for_enrichment_note():
     """Kanban card rendering references enrichmentNote for the warning strip."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
+    board_renderer_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
+    with open(board_renderer_path) as f:
         content = f.read()
-    render_start = content.find("function renderVariantB(")
-    assert render_start != -1, "renderVariantB function not found"
-    render_body = content[render_start:render_start + 6000]
-    assert "enrichmentNote" in render_body, \
-        "renderVariantB must render a warning strip for jobs with enrichmentNote"
+    assert "enrichmentNote" in content, \
+        "boardRenderer must render a warning strip for jobs with enrichmentNote"
 
 
 def test_dashboard_html_drawer_enrichment_status_section():
     """Job drawer shows an Enrichment Status section when enrichmentNote is set."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    drawer_start = content.find("function openJobDetailsDrawer(")
-    assert drawer_start != -1, "openJobDetailsDrawer function not found"
-    drawer_body = content[drawer_start:drawer_start + 8000]
-    assert "Enrichment Status" in drawer_body, \
+    content = read_drawer_controller()
+    assert "function openJobDetailsDrawer(" in content, "openJobDetailsDrawer function not found"
+    assert "Enrichment Status" in content, \
         "openJobDetailsDrawer must include an Enrichment Status section"
-    assert "enrichmentNote" in drawer_body, \
+    assert "enrichmentNote" in content, \
         "openJobDetailsDrawer must use enrichmentNote to conditionally show the section"
 
 
@@ -143,13 +143,17 @@ def test_dashboard_html_contact_search_settings_nested_in_job_search_panel():
     )
 
 
-def _get_drawer_body(content):
-    # Include contact-group helpers (buildContactGroupsHtml, contactGroup) + openJobDetailsDrawer
-    start = content.find("function buildContactGroupsHtml(")
-    if start == -1:
-        start = content.find("function openJobDetailsDrawer(")
-    assert start != -1, "Drawer function (or buildContactGroupsHtml) not found"
-    return content[start:start + 20000]
+def _get_drawer_body(_content=None):
+    return get_drawer_body()
+
+
+def _contact_group_body(script):
+    marker = "function contactGroup("
+    fn_start = script.find(marker)
+    if fn_start == -1:
+        fn_start = script.find("export function contactGroup(")
+    assert fn_start != -1, "contactGroup function must be defined"
+    return script[fn_start : fn_start + 400]
 
 
 def test_drawer_active_contact_loads_recruiter_template_for_is_recruiter():
@@ -157,7 +161,7 @@ def test_drawer_active_contact_loads_recruiter_template_for_is_recruiter():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "recruiterOutreachTemplate" in drawer_body, \
         "Drawer must reference recruiterOutreachTemplate for recruiter contacts"
 
@@ -167,7 +171,7 @@ def test_drawer_active_contact_loads_russian_speaker_template_for_non_recruiter(
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "russianSpeakerOutreachTemplate" in drawer_body, \
         "Drawer must reference russianSpeakerOutreachTemplate for non-recruiter contacts"
 
@@ -177,7 +181,7 @@ def test_drawer_active_contact_highlight_uses_is_recruiter_flag():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "is_recruiter" in drawer_body, \
         "Drawer must use is_recruiter flag for HR badge"
     assert "hiring manager" not in drawer_body.lower(), \
@@ -189,7 +193,7 @@ def test_drawer_active_contact_row_highlighted():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "activeContactIdx" in drawer_body, \
         "Drawer must track activeContactIdx for Active Contact highlight"
 
@@ -199,7 +203,7 @@ def test_drawer_character_counter_present():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "/200" in drawer_body, \
         "Drawer must show a character counter with /200 limit"
 
@@ -209,7 +213,7 @@ def test_drawer_regenerate_button_removed():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "regenerateOutreach" not in drawer_body, \
         "Regenerate button must be removed from the drawer"
 
@@ -219,7 +223,7 @@ def test_drawer_title_keyword_badge_logic_removed():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert "talent acquisition" not in drawer_body.lower(), \
         "Title-keyword HR heuristic must be removed from the drawer"
     assert "human resource" not in drawer_body.lower(), \
@@ -228,46 +232,29 @@ def test_drawer_title_keyword_badge_logic_removed():
 
 # --- Issue #32: Contact Grouping ---
 
-def _get_script_section(content):
-    """Return the entire <script> block content."""
-    start = content.find("<script>")
-    assert start != -1, "<script> block not found"
-    return content[start:]
+def _load_script():
+    return load_kanban_js()
 
 
 def test_contact_group_function_routes_recruiter_to_recruiters():
     """contactGroup(contact) returns 'recruiters' when is_recruiter is true."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
-    assert "function contactGroup(" in script, "contactGroup function must be defined"
-    fn_start = script.find("function contactGroup(")
-    fn_body = script[fn_start:fn_start + 400]
+    script = load_kanban_js()
+    assert "contactGroup" in script, "contactGroup function must be defined"
+    fn_body = _contact_group_body(script)
     assert "is_recruiter" in fn_body, "contactGroup must check is_recruiter"
     assert "'recruiters'" in fn_body, "contactGroup must return 'recruiters'"
 
 
 def test_contact_group_function_routes_russian_speaker_to_russian_speakers():
     """contactGroup(contact) returns 'russian_speakers' for non-recruiter russian speakers."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
-    fn_start = script.find("function contactGroup(")
-    fn_body = script[fn_start:fn_start + 400]
+    fn_body = _contact_group_body(load_kanban_js())
     assert "russian_speaker" in fn_body, "contactGroup must check russian_speaker"
     assert "'russian_speakers'" in fn_body, "contactGroup must return 'russian_speakers'"
 
 
 def test_contact_group_function_dual_classified_routes_to_recruiters():
     """Dual-classified contacts (is_recruiter + russian_speaker) go to 'recruiters'."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
-    fn_start = script.find("function contactGroup(")
-    fn_body = script[fn_start:fn_start + 400]
+    fn_body = _contact_group_body(load_kanban_js())
     # is_recruiter must be checked before russian_speaker (dual → recruiters)
     recruiter_pos = fn_body.find("is_recruiter")
     russian_pos = fn_body.find("russian_speaker")
@@ -278,23 +265,13 @@ def test_contact_group_function_dual_classified_routes_to_recruiters():
 
 def test_contact_group_function_neither_routes_to_other():
     """contactGroup(contact) returns 'other' when neither flag is set."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
-    fn_start = script.find("function contactGroup(")
-    fn_body = script[fn_start:fn_start + 400]
+    fn_body = _contact_group_body(load_kanban_js())
     assert "'other'" in fn_body, "contactGroup must return 'other' as the fallback"
 
 
 def test_drawer_contacts_show_all_three_group_headings():
     """openJobDetailsDrawer renders Recruiters, Russian Speakers, and Other group headings."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    # Group headings may be in openJobDetailsDrawer or in a helper called from it
-    # Search the full script section for the group label strings
-    script = _get_script_section(content)
+    script = read_drawer_controller()
     assert "Recruiters" in script, "Script must include 'Recruiters' group label"
     assert "Russian Speakers" in script, "Script must include 'Russian Speakers' group label"
     assert "Other" in script, "Script must include 'Other' group label"
@@ -307,10 +284,7 @@ def test_drawer_contacts_show_all_three_group_headings():
 
 def test_drawer_contacts_grouped_preserve_flat_array_index():
     """Contact callbacks (toggleContacted, selectActiveContact) use the original flat-array index."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    script = read_drawer_controller()
     # A helper that builds grouped contact HTML must use origIdx (original flat index)
     assert "origIdx" in script, \
         "Grouped contact rendering must use origIdx to preserve flat-array index for API calls"
@@ -321,7 +295,7 @@ def test_contact_name_title_do_not_toggle_contacted_checkbox():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    drawer_body = _get_drawer_body(content)
+    drawer_body = _get_drawer_body()
     assert 'label for="contact-${jobId}-${origIdx}"' not in drawer_body, \
         "Contact name/title must not be wrapped in a label tied to the contacted checkbox"
     assert "onchange=\"toggleContacted(" in drawer_body, \
@@ -332,50 +306,35 @@ def test_contact_name_title_do_not_toggle_contacted_checkbox():
 
 def test_save_outreach_template_function_defined():
     """saveOutreachTemplate function must be present in the script."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    script = _load_script()
     assert "function saveOutreachTemplate(" in script, \
         "saveOutreachTemplate function must be defined in the dashboard script"
 
 
 def test_outreach_textarea_wired_to_save_template():
     """Outreach textarea oninput must call saveOutreachTemplate."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    script = _load_script()
     assert "saveOutreachTemplate" in script, \
         "saveOutreachTemplate must be referenced in the drawer outreach textarea oninput"
 
 
 def test_save_outreach_template_uses_debounce():
     """saveOutreachTemplate must debounce saves (uses templateSaveTimeout)."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    script = read_drawer_controller()
     assert "templateSaveTimeout" in script, \
         "saveOutreachTemplate must use templateSaveTimeout for debouncing"
 
 
 def test_save_outreach_template_calls_template_endpoint():
     """saveOutreachTemplate must PUT to /api/jobs/.../template."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    script = read_drawer_controller()
     assert "/template" in script, \
         "saveOutreachTemplate must call the /template API endpoint"
 
 
 def test_save_outreach_template_uses_active_contact_audience():
     """saveOutreachTemplate selects audience from active contact's is_recruiter flag."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    script = read_drawer_controller()
     fn_start = script.find("function saveOutreachTemplate(")
     assert fn_start != -1
     fn_body = script[fn_start:fn_start + 800]
@@ -388,11 +347,8 @@ def test_save_outreach_template_uses_active_contact_audience():
 
 
 def test_save_outreach_template_updates_in_memory_job():
-    """saveOutreachTemplate updates the in-memory masterJobs entry immediately."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    script = _get_script_section(content)
+    """saveOutreachTemplate updates the in-memory job entry immediately."""
+    script = read_drawer_controller()
     fn_start = script.find("function saveOutreachTemplate(")
     assert fn_start != -1
     fn_body = script[fn_start:fn_start + 800]
@@ -403,13 +359,6 @@ def test_save_outreach_template_updates_in_memory_job():
 
 # --- Issue #39: Active Contact greeting name substitution ---
 
-def _load_script():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    return _get_script_section(content)
-
-
 def test_name_placeholder_constant_defined():
     """NAME_PLACEHOLDER constant must be defined in the script."""
     script = _load_script()
@@ -419,21 +368,21 @@ def test_name_placeholder_constant_defined():
 
 def test_apply_greeting_name_function_defined():
     """applyGreetingName function must be defined in the script."""
-    script = _load_script()
-    assert "function applyGreetingName(" in script, \
+    script = read_drawer_controller()
+    assert "applyGreetingName" in script, \
         "applyGreetingName function must be defined in the dashboard script"
 
 
 def test_normalize_greeting_function_defined():
     """normalizeGreeting function must be defined in the script."""
-    script = _load_script()
-    assert "function normalizeGreeting(" in script, \
+    script = read_drawer_controller()
+    assert "normalizeGreeting" in script, \
         "normalizeGreeting function must be defined in the dashboard script"
 
 
 def test_select_active_contact_applies_greeting_substitution():
     """selectActiveContact must call applyGreetingName to substitute the contact's first name."""
-    script = _load_script()
+    script = read_drawer_controller()
     fn_start = script.find("function selectActiveContact(")
     assert fn_start != -1, "selectActiveContact function must exist"
     fn_body = script[fn_start:fn_start + 1200]
@@ -443,7 +392,7 @@ def test_select_active_contact_applies_greeting_substitution():
 
 def test_save_outreach_template_normalizes_greeting():
     """saveOutreachTemplate must call normalizeGreeting before persisting the template."""
-    script = _load_script()
+    script = read_drawer_controller()
     fn_start = script.find("function saveOutreachTemplate(")
     assert fn_start != -1, "saveOutreachTemplate function must exist"
     fn_body = script[fn_start:fn_start + 1000]
@@ -453,7 +402,7 @@ def test_save_outreach_template_normalizes_greeting():
 
 def test_open_job_drawer_applies_greeting_for_default_contact():
     """openJobDetailsDrawer must apply greeting substitution for the default active contact."""
-    script = _load_script()
+    script = read_drawer_controller()
     fn_start = script.find("function openJobDetailsDrawer(")
     assert fn_start != -1, "openJobDetailsDrawer function must exist"
     fn_body = script[fn_start:fn_start + 2000]

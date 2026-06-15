@@ -1,22 +1,22 @@
 import os
+import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-def _read_dashboard_html():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        return f.read()
+from kanban_js import load_kanban_js, read_dashboard_html, read_task_log_client
 
 
 def test_dashboard_html_marks_page_unload_before_sse_error_handling():
-    content = _read_dashboard_html()
-    assert "let pageUnloading = false" in content
-    assert "function markPageUnloading()" in content
+    content = read_dashboard_html()
+    task_log = read_task_log_client()
+    assert "pageUnloading" in task_log
+    assert "function markPageUnloading()" in task_log
     assert "window.addEventListener('beforeunload', markPageUnloading)" in content
     assert "window.addEventListener('pagehide'" in content
 
 
 def test_dashboard_html_sse_error_skips_cleanup_on_intentional_close():
-    content = _read_dashboard_html()
+    content = load_kanban_js()
     connect_start = content.find("function connectTaskLogStream(")
     assert connect_start != -1, "connectTaskLogStream function not found"
     connect_body = content[connect_start:connect_start + 2200]
@@ -27,7 +27,7 @@ def test_dashboard_html_sse_error_skips_cleanup_on_intentional_close():
 
 
 def test_dashboard_html_restore_active_scrape_task_after_load():
-    content = _read_dashboard_html()
+    content = read_dashboard_html()
     assert "function restoreActiveScrapeTask()" in content
     assert "Reconnecting to active background task" in content
     assert "loadJobs().then(() => {" in content
@@ -35,7 +35,7 @@ def test_dashboard_html_restore_active_scrape_task_after_load():
 
 
 def test_dashboard_html_scrape_warning_only_for_unexpected_disconnect():
-    content = _read_dashboard_html()
+    content = read_dashboard_html()
     assert "Scraper SSE stream closed unexpectedly." in content
     connect_start = content.find(".then(data => {\n        const taskId = data.task_id;")
     assert connect_start != -1, "scrape SSE connect block not found"

@@ -108,9 +108,11 @@ def _load_script():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    start = content.find("<script>")
-    assert start != -1
-    return content[start:]
+    for marker in ('<script type="module">', '<script>'):
+        start = content.find(marker)
+        if start != -1:
+            return content[start:]
+    raise AssertionError("<script> block not found")
 
 
 def test_dashboard_html_refresh_contacts_function_defined():
@@ -138,9 +140,9 @@ def test_dashboard_html_refresh_contacts_uses_sse():
 
 
 def test_dashboard_html_refresh_contacts_button_shown_for_enriched_job():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
+    from kanban_js import read_drawer_controller
+
+    content = read_drawer_controller()
     drawer_start = content.find("function openJobDetailsDrawer(")
     assert drawer_start != -1
     drawer_body = content[drawer_start:drawer_start + 14000]
@@ -152,9 +154,9 @@ def test_dashboard_html_refresh_contacts_button_shown_for_enriched_job():
 
 def test_dashboard_html_refresh_contacts_not_shown_on_sourced_job():
     """Sourced job drawer shows Enrich Job; Refresh Contacts is gated on enriched/enriching status."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
+    from kanban_js import read_drawer_controller
+
+    content = read_drawer_controller()
     drawer_start = content.find("function openJobDetailsDrawer(")
     assert drawer_start != -1
     drawer_body = content[drawer_start:drawer_start + 14000]

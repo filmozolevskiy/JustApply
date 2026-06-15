@@ -1272,373 +1272,63 @@
   </div>
 
   <!-- JavaScript logic -->
-  <script>
-    // ----------------------------------------------------
-    // MOCK DATA SYSTEM (Synchronized master state)
-    // ----------------------------------------------------
-    let masterJobs = [
-      {
-        id: 1,
-        title: "Senior QA Automation Engineer",
-        company: "TechCorp",
-        size: "100-500",
-        link: "https://linkedin.com/jobs/123",
-        date: "2026-06-05",
-        location: "Remote",
-        remoteType: "remote",
-        seniority: "senior",
-        salary: "$130k - $160k",
-        description: "We are looking for a Senior QA Automation Engineer to build and execute end-to-end testing strategies. You will design automation frameworks using Python and Pytest, integration into GitHub actions, and lead testing standards.",
-        matchScore: 94,
-        matchType: "match",
-        shouldProceed: true,
-        status: "sourced",
-        resumeUsed: "qa.md",
-        strengths: ["Highly proficient in Python & Pytest", "Extensive CI/CD pipeline automation", "Playwright & Selenium Frameworks"],
-        gaps: ["No direct experience with WebUSB", "AWS Cloud Practitioner certification preferred"],
-        contacts: [
-          { name: "Jane Doe", role: "VP Engineering", linkedin: "https://linkedin.com/in/janedoe", contacted: false },
-          { name: "John Smith", role: "Recruiting Coordinator", linkedin: "https://linkedin.com/in/johnsmith", contacted: false }
-        ],
-        outreachMessage: "Hi Jane,\n\nI saw your listing for a Senior QA Automation Engineer at TechCorp. With my deep background in building Python/Pytest framework architectures and setting up robust CI/CD pipelines, I believe I can hit the ground running. I'd love to learn more about TechCorp's engineering goals.\n\nBest,\nCandidate",
-        comment: "Excellent match. Framework matches 100%."
-      },
-      {
-        id: 2,
-        title: "Technical Project & Delivery Manager",
-        company: "InnovateHQ",
-        size: "50-200",
-        link: "https://linkedin.com/jobs/124",
-        date: "2026-06-04",
-        location: "New York, NY",
-        remoteType: "hybrid",
-        seniority: "senior",
-        salary: "$140k - $170k",
-        description: "InnovateHQ is seeking a Technical Project Manager to coordinate cross-functional agile sprints, manage stakeholder delivery milestones, and ensure tight integration of engineering and product roadmaps.",
-        matchScore: 88,
-        matchType: "match",
-        shouldProceed: true,
-        status: "sourced",
-        resumeUsed: "project_manager.md",
-        strengths: ["Expert Scrum Master with 5+ years experience", "Strong technical background in Python systems", "Stakeholder communications"],
-        gaps: ["Prior experience at Series A startups is not documented"],
-        contacts: [
-          { name: "Marcus Vance", role: "Director of Product", linkedin: "https://linkedin.com/in/marcusvance", contacted: false },
-          { name: "Alice Adams", role: "Talent Lead", linkedin: "https://linkedin.com/in/aliceadams", contacted: false }
-        ],
-        outreachMessage: "Dear Marcus,\n\nI noticed InnovateHQ is hiring a Technical Project Manager. Given my extensive delivery management experience aligning engineering teams with product milestones, I'm excited about this opportunity. Let's connect!\n\nBest regards,\nCandidate",
-        comment: "Need to verify Series A startup history before applying."
-      },
-      {
-        id: 3,
-        title: "Data & BI Analyst",
-        company: "FinanceFlow",
-        size: "1000+",
-        link: "https://linkedin.com/jobs/125",
-        date: "2026-06-03",
-        location: "Charlotte, NC",
-        remoteType: "in office",
-        seniority: "mid",
-        salary: "$100k - $120k",
-        description: "FinanceFlow is hiring a Data Analyst to compile SQL reporting queries, construct Tableau dashboards, and deliver weekly metrics to financial compliance executives.",
-        matchScore: 75,
-        matchType: "match",
-        shouldProceed: true,
-        status: "enriched",
-        resumeUsed: "data_analyst.md",
-        strengths: ["Excellent SQL database experience", "Experienced with Tableau and PowerBI", "Detail-oriented financial analysis"],
-        gaps: ["No direct experience with FinTech compliance frameworks"],
-        contacts: [
-          { name: "Sophia Patel", role: "Data Analytics Lead", linkedin: "https://linkedin.com/in/sophiapatel", contacted: true },
-          { name: "Robert Miller", role: "FinTech Recruiter", linkedin: "https://linkedin.com/in/robertmiller", contacted: false }
-        ],
-        outreachMessage: "Hi Sophia,\n\nI'm reaching out regarding the Data & BI Analyst vacancy. I have a proven track record creating high-impact SQL/Tableau dashboards. I'd love to help FinanceFlow drive metrics.\n\nThanks,\nCandidate",
-        comment: "Sophia responded! Phone screen scheduled next week."
-      },
-      {
-        id: 4,
-        title: "QA Automation Specialist",
-        company: "GameStudio",
-        size: "200-500",
-        link: "https://linkedin.com/jobs/126",
-        date: "2026-06-01",
-        location: "Austin, TX",
-        remoteType: "remote",
-        seniority: "mid",
-        salary: "$90k - $110k",
-        description: "Join our game build testing team. You will automate functional regression testing for web services and gameplay configurations using Python scripts.",
-        matchScore: 92,
-        matchType: "match",
-        shouldProceed: true,
-        status: "interviewing",
-        resumeUsed: "qa.md",
-        strengths: ["Automation framework expert", "Fast debugging of Python regression scripts"],
-        gaps: ["No experience with specific Game engines (Unreal/Unity)"],
-        contacts: [
-          { name: "Alex Mercer", role: "QA Manager", linkedin: "https://linkedin.com/in/alexmercer", contacted: true },
-          { name: "Emma Stone", role: "HR Business Partner", linkedin: "https://linkedin.com/in/emmastone", contacted: true }
-        ],
-        outreachMessage: "Hi Alex,\n\nI'd love to join GameStudio as a QA Automation Specialist. My scripting experience with Python makes me an excellent fit for your functional regression goals.\n\nBest,\nCandidate",
-        comment: "Completed round 1 interview. Focus was Python scripting."
-      },
-      {
-        id: 5,
-        title: "Agile Scrum Master",
-        company: "GlobalSystems",
-        size: "5000+",
-        link: "https://linkedin.com/jobs/127",
-        date: "2026-05-28",
-        location: "Remote",
-        remoteType: "remote",
-        seniority: "senior",
-        salary: "$120k - $140k",
-        description: "Seeking a senior scrum master to facilitate agile practices across 4 distributed software teams. Enterprise scale delivery planning required.",
-        matchScore: 68,
-        matchType: "no-match",
-        shouldProceed: false,
-        status: "rejected",
-        resumeUsed: "project_manager.md",
-        strengths: ["Scrum Master Certified"],
-        gaps: ["No experience with SAFe framework at enterprise scale"],
-        contacts: [
-          { name: "Evelyn Ross", role: "HR Partner", linkedin: "https://linkedin.com/in/evelynross", contacted: false }
-        ],
-        outreachMessage: "",
-        comment: "Enterprise SAFe requirement is a hard blocker."
-      },
-      {
-        id: 6,
-        title: "QA Lead",
-        company: "AppStart",
-        size: "10-50",
-        link: "https://linkedin.com/jobs/128",
-        date: "2026-06-06",
-        location: "San Francisco, CA",
-        remoteType: "remote",
-        seniority: "senior",
-        salary: "$150k - $180k",
-        description: "AppStart is seeking our first QA Lead to establish our test pipeline. You will be responsible for defining automation protocols, running manual exploratory testing, and implementing CI tools.",
-        matchScore: 91,
-        matchType: "match",
-        shouldProceed: true,
-        status: "sourced",
-        resumeUsed: "qa.md",
-        strengths: ["Startup experience (first QA hire)", "Established full-suite testing protocols from scratch", "Fast API testing"],
-        gaps: ["No mobile testing experience mentioned"],
-        contacts: [
-          { name: "Tariq Mahmood", role: "Co-Founder / CTO", linkedin: "https://linkedin.com/in/tariqmahmood", contacted: false },
-          { name: "Liam Neeson", role: "Talent Specialist", linkedin: "https://linkedin.com/in/liamneeson", contacted: false }
-        ],
-        outreachMessage: "Hi Tariq,\n\nCongratulations on expanding your engineering team. As a QA Lead who has previously built testing infrastructures for early stage startups, I would love to help AppStart structure its automation strategy.\n\nBest,\nCandidate",
-        comment: "Tariq is active on LinkedIn posting engineering updates."
-      },
-      {
-        id: 7,
-        title: "QA Automation Contractor",
-        company: "Fuze HR Solutions",
-        size: "50-200",
-        link: "https://linkedin.com/jobs/129",
-        date: "2026-06-07",
-        location: "Toronto, ON",
-        remoteType: "hybrid",
-        seniority: "mid",
-        salary: "$70 - $80 / hr",
-        description: "Our client, a leading financial institution, is seeking a QA Automation Contractor to join their digital banking testing team. You will write automated test scripts in Python and execute regressions.",
-        matchScore: 65,
-        matchType: "no-match",
-        shouldProceed: false,
-        status: "sourced",
-        resumeUsed: "qa.md",
-        strengths: ["Python scripting background", "Experience with QA regression testing"],
-        gaps: ["Posted by a recruiting agency/staffing firm"],
-        contacts: [],
-        outreachMessage: "",
-        comment: "Recruiter company. 15-point penalty applied.",
-        isRecruiter: true
-      }
-    ];
+  <script type="module">
+    import {
+      getJobs, setJobs, findJob, updateJob, removeJob, addJob, hasJobMatching,
+    } from '/static/js/jobStore.js';
+    import {
+      renderBoard, getBoardFiltersFromDom,
+    } from '/static/js/boardRenderer.js';
+    import {
+      createTaskLogClient,
+      ACTIVE_SCRAPE_TASK_KEY,
+      ACTIVE_SCRAPE_LOG_SKIP_KEY,
+      ACTIVE_ENRICH_TASK_KEY,
+      ACTIVE_ENRICH_LOG_SKIP_KEY,
+    } from '/static/js/taskLogClient.js';
+    import { createDrawerController } from '/static/js/drawerController.js';
 
-    let mockResumes = {
-      "qa.md": `# QA Engineer / Automation Specialist Profile\n\n**SUMMARY**\nPassionate QA Automation Engineer with 5+ years experience building automated testing frameworks. Expert in Python, Pytest, Playwright, and Selenium. Proven success implementing CI/CD testing gates in GitHub Actions.\n\n**KEY SKILLS**\n- Programming Languages: Python, JavaScript, Bash\n- Testing Frameworks: Pytest, Playwright, Selenium, Postman\n- DevOps & CI/CD: GitHub Actions, Docker, Linux\n- Databases: SQL, SQLite, PostgreSQL\n- Methodologies: TDD, Agile/Scrum, BDD\n\n**EXPERIENCE**\n- **Lead QA Automator @ TechForge (2024-Present)**: Reduced production release bugs by 45% by automating regression suites.\n- **QA Engineer @ ByteSize (2021-2024)**: Designed REST API testing suite covering 150+ endpoints.`,
-      
-      "project_manager.md": `# Technical Project & Delivery Manager Profile\n\n**SUMMARY**\nResults-driven Delivery Manager and Scrum Master. Facilitated technical agile teams to launch distributed cloud-native services. Expert at removing blockers, managing stakeholders, and tracking budgets.\n\n**KEY SKILLS**\n- Agile Frameworks: Scrum, Kanban, Lean\n- PM Software: Jira, Confluence, Monday.com, Trello\n- Technical Alignment: Python Architecture basics, API design concepts, AWS Cloud\n- Certifications: PMP, Certified Scrum Master (CSM)\n\n**EXPERIENCE**\n- **Project Lead @ SoftCorp (2023-Present)**: Delivered 12 major releases on time using cross-functional Kanban systems.\n- **Agile Facilitator @ WebTech (2020-2023)**: Guided 3 distributed engineering sprints, improving team velocity by 30%.`,
-      
-      "data_analyst.md": `# Data & BI Analyst Profile\n\n**SUMMARY**\nData analyst skilled at turning raw business data into actionable dashboards. Expert in SQL, Python data manipulation (Pandas/NumPy), Tableau, and PowerBI. Strong communicator for executive presentations.\n\n**KEY SKILLS**\n- Data Visualization: Tableau, PowerBI, Looker\n- Analysis & SQL: Complex subqueries, Joins, Window functions\n- Code & Math: Python, R, Statistics, Predictive Modeling\n\n**EXPERIENCE**\n- **Business Intelligence Analyst @ FinData (2023-Present)**: Maintained SQL databases and produced revenue analytics dashboards for C-level executives.\n- **Data Analyst @ RetailGlow (2021-2023)**: Programmed automated email performance dashboard reports.`
-    };
+    let mockResumes = {};
 
     // Active configuration state
     let activeResume = "qa.md";
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
-    let commentTimeout = null;
-    let templateSaveTimeout = null;
 
     // ----------------------------------------------------
     // ----------------------------------------------------
     // RENDERING LOGIC
     // ----------------------------------------------------
     function renderActiveVariant() {
-      renderVariantB();
+      renderBoard(getJobs(), getBoardFiltersFromDom());
     }
 
-    // --- VARIANT B: KANBAN BOARD ---
-    function renderVariantB() {
-      const lanes = ['sourced', 'enriching', 'enriched', 'contacted', 'interviewing', 'rejected'];
+    const taskLog = createTaskLogClient();
+    const {
+      addLogLine,
+      clearLogs,
+      connectTaskLogStream,
+      closeTaskLogStreamQuietly,
+      expandLogsConsole,
+      markPageUnloading,
+      restoreSessionLogs,
+    } = taskLog;
 
-      const remoteFilter = document.getElementById('board-filter-remote')?.value || 'all';
-      const sizeFilter = document.getElementById('board-filter-size')?.value || 'all';
-      const recruiterFilter = document.getElementById('board-filter-recruiter')?.value || 'all';
-      const sortBy = document.getElementById('board-sort-by')?.value || 'match_desc';
-
-      // 1. Filter jobs
-      let filteredJobs = masterJobs.filter(job => {
-        if (remoteFilter !== 'all') {
-          let normalizedRemote = (job.remoteType || '').toLowerCase().trim();
-          if (normalizedRemote === 'in office') normalizedRemote = 'in_office';
-          if (normalizedRemote !== remoteFilter) {
-            return false;
-          }
-        }
-        
-        if (sizeFilter !== 'all') {
-          const sizeCat = getCompanySizeCategory(job.size);
-          if (sizeCat !== sizeFilter) {
-            return false;
-          }
-        }
-
-        if (recruiterFilter === 'exclude') {
-          if (job.isRecruiter) {
-            return false;
-          }
-        } else if (recruiterFilter === 'only') {
-          if (!job.isRecruiter) {
-            return false;
-          }
-        }
-        
-        return true;
-      });
-
-      // 2. Sort jobs
-      filteredJobs.sort((a, b) => {
-        if (sortBy === 'match_desc') {
-          return (b.matchScore || 0) - (a.matchScore || 0);
-        } else if (sortBy === 'match_asc') {
-          return (a.matchScore || 0) - (b.matchScore || 0);
-        } else if (sortBy === 'novelty_desc') {
-          if (a.date && b.date) {
-            if (a.date !== b.date) {
-              return b.date.localeCompare(a.date);
-            }
-          }
-          return (b.id || 0) - (a.id || 0);
-        } else if (sortBy === 'novelty_asc') {
-          if (a.date && b.date) {
-            if (a.date !== b.date) {
-              return a.date.localeCompare(b.date);
-            }
-          }
-          return (a.id || 0) - (b.id || 0);
-        }
-        return 0;
-      });
-
-      lanes.forEach(lane => {
-        const laneEl = document.getElementById(`lane-${lane}`);
-        laneEl.innerHTML = '';
-
-        const jobsInLane = filteredJobs.filter(j => j.status === lane);
-        document.getElementById(`count-${lane}`).textContent = jobsInLane.length;
-
-        jobsInLane.forEach(job => {
-          const card = document.createElement('div');
-          card.className = 'kanban-card' + (job.archived ? ' kanban-card--archived' : '');
-          card.setAttribute('onclick', `openJobDetailsDrawer(${job.id})`);
-          card.setAttribute('draggable', 'true');
-          card.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/plain', String(job.id));
-            e.dataTransfer.effectAllowed = 'move';
-            setTimeout(() => card.classList.add('dragging'), 0);
-          });
-          card.addEventListener('dragend', () => {
-            card.classList.remove('dragging');
-            document.querySelectorAll('.kanban-column.drag-over').forEach(c => c.classList.remove('drag-over'));
-          });
-
-          let matchClass = 'match-low';
-          if (job.matchScore >= 85) matchClass = 'match-high';
-          else if (job.matchScore >= 70) matchClass = 'match-mid';
-
-          card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div class="kanban-card-title" style="flex:1; min-width:0; word-break:break-word;">${job.title || 'Incomplete Job'}</div>
-              <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-                ${(job.link && job.link.trim() && job.link !== '#' && job.link !== 'undefined') ? `
-                  <a href="${job.link}" target="_blank" onclick="event.stopPropagation()" style="color:#06b6d4; font-size:0.95rem;" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
-                ` : ''}
-                <span class="match-pill ${matchClass}">${job.matchScore}%</span>
-              </div>
-            </div>
-            <div class="kanban-card-company" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-              <span><i class="fa-regular fa-building"></i> ${job.company}</span>
-              <div style="display:flex; align-items:center; gap:4px;">
-                ${job.archived ? `<span class="archived-badge">Archived</span>` : ''}
-                ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
-              </div>
-            </div>
-            <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-              <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
-              <span style="display:flex; align-items:center; gap:6px;">
-                <span style="text-transform:capitalize;">${job.remoteType}</span>
-                ${job.salary ? `&bull; <span style="color:#10b981; font-weight:500; font-size:0.75rem;"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</span>` : ''}
-              </span>
-            </div>
-            ${job.comment ? `
-              <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <i class="fa-regular fa-comment-dots"></i> ${job.comment}
-              </div>
-            ` : ''}
-            ${job.enrichmentNote ? `
-              <div style="font-size: 0.72rem; color: #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #f59e0b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.enrichmentNote}">
-                <i class="fa-solid fa-triangle-exclamation"></i> ${job.enrichmentNote}
-              </div>
-            ` : ''}
-            <div class="kanban-card-footer">
-              <span style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">${job.resumeUsed}</span>
-              <div class="kanban-card-actions" onclick="event.stopPropagation()">
-                ${job.status === 'enriching' ? `
-                  <span style="font-size:0.85rem; color:#22d3ee;" title="Enriching contacts & outreach..."><i class="fa-solid fa-spinner fa-spin"></i></span>
-                ` : getKanbanCardMovementButtons(job)}
-              </div>
-            </div>
-          `;
-          laneEl.appendChild(card);
-        });
-      });
-    }
-
-    function getCompanySizeCategory(sizeStr) {
-      if (!sizeStr) return 'unknown';
-      const sizeLower = sizeStr.toLowerCase().trim();
-      
-      const cleanStr = sizeStr.replace(/,/g, '');
-      const numbers = cleanStr.match(/\d+/g);
-      if (numbers) {
-        const maxVal = Math.max(...numbers.map(Number));
-        if (maxVal <= 50) return 'small';
-        if (maxVal <= 500) return 'medium';
-        return 'large';
-      }
-      
-      if (sizeLower.includes('small') || sizeLower.includes('1-50') || sizeLower.includes('10-50')) {
-        return 'small';
-      }
-      if (sizeLower.includes('medium') || sizeLower.includes('50-500') || sizeLower.includes('100-500') || sizeLower.includes('200-500')) {
-        return 'medium';
-      }
-      return 'large';
-    }
+    const drawer = createDrawerController({
+      onJobMutated: renderActiveVariant,
+      addLogLine,
+    });
+    const {
+      closeDrawer,
+      copyDrawerOutreach,
+      openJobDetailsDrawer,
+      saveOutreachTemplate,
+      selectActiveContact,
+      toggleActivityLog,
+      toggleContacted,
+      updateJobComment,
+      updateOutreachCounter,
+    } = drawer;
 
     function updateBoardFiltersAndSort() {
       const remoteFilter = document.getElementById('board-filter-remote')?.value || 'all';
@@ -1684,18 +1374,8 @@
       loadJobs();
     }
 
-    function getKanbanCardMovementButtons(job) {
-      if (job.archived) {
-        return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
-      }
-      if (job.status === 'rejected') {
-        return `<button class="kanban-action-btn archive-btn hover-reject" onclick="archiveJob(${job.id})" title="Archive Job"><i class="fa-solid fa-box-archive"></i></button>`;
-      }
-      return `<button class="kanban-action-btn reject-btn hover-reject" onclick="moveJobStage(${job.id}, 'rejected')" title="Reject Job"><i class="fa-solid fa-ban"></i></button>`;
-    }
-
     async function archiveJob(id) {
-      const job = masterJobs.find(j => j.id === id);
+      const job = findJob(id);
       if (!job) return;
       try {
         const r = await fetch(`/api/jobs/${id}/archive`, { method: 'POST' });
@@ -1753,7 +1433,7 @@
           column.classList.remove('drag-over');
           const jobId = parseInt(e.dataTransfer.getData('text/plain'), 10);
           if (!jobId) return;
-          const job = masterJobs.find(j => j.id === jobId);
+          const job = findJob(jobId);
           if (!job || job.status === lane) return;
           if (job.archived && lane === 'enriching') return;
           moveJobStage(jobId, lane);
@@ -1767,7 +1447,7 @@
     function changeActiveResume(val) {
       activeResume = val;
       addLogLine(`Switched active resume profile configuration to: ${val}`, 'warning');
-      masterJobs.forEach(job => {
+      getJobs().forEach(job => {
         if (job.status === 'sourced') {
           // Re-evaluate score mock
           job.resumeUsed = val;
@@ -1799,7 +1479,7 @@
       if (enrichPollingInterval) return;
       
       enrichPollingInterval = setInterval(() => {
-        const hasEnriching = masterJobs.some(j => j.status === 'enriching');
+        const hasEnriching = getJobs().some(j => j.status === 'enriching');
         if (!hasEnriching) {
           clearInterval(enrichPollingInterval);
           enrichPollingInterval = null;
@@ -1811,7 +1491,7 @@
         .then(jobs => {
           let changed = false;
           jobs.forEach(updatedJob => {
-            const localJob = masterJobs.find(j => j.id === updatedJob.id);
+            const localJob = findJob(updatedJob.id);
             if (localJob) {
               if (localJob.status !== updatedJob.status || 
                   JSON.stringify(localJob.contacts) !== JSON.stringify(updatedJob.contacts) ||
@@ -1842,7 +1522,7 @@
     }
 
     function enrichJob(id) {
-      const job = masterJobs.find(j => j.id === id);
+      const job = findJob(id);
       if (!job) return;
 
       addLogLine(`Initiating enrichment for [${job.title} @ ${job.company}]...`, 'warning');
@@ -1855,8 +1535,7 @@
         })
         .then(data => {
           if (data.job) {
-            const idx = masterJobs.findIndex(j => j.id === data.job.id);
-            if (idx !== -1) masterJobs[idx] = data.job;
+            if (data.job) updateJob(data.job.id, data.job);
           }
           renderActiveVariant();
 
@@ -1865,14 +1544,13 @@
           localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
           localStorage.setItem(ACTIVE_ENRICH_LOG_SKIP_KEY, '0');
 
-          enrichEventSource = connectTaskLogStream(task_id, {
+          taskLog.setEnrichEventSource(connectTaskLogStream(task_id, {
             skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
             taskKey: ACTIVE_ENRICH_TASK_KEY,
-            existingSource: enrichEventSource,
+            existingSource: taskLog.getEnrichEventSource(),
             onResult(logData) {
               if (logData.job) {
-                const idx = masterJobs.findIndex(j => j.id === logData.job.id);
-                if (idx !== -1) masterJobs[idx] = logData.job;
+                if (logData.job) updateJob(logData.job.id, logData.job);
               }
               renderActiveVariant();
             },
@@ -1882,7 +1560,7 @@
             onError() {
               addLogLine(`Enrichment SSE stream closed for job [${job.title}].`, 'warning');
             },
-          });
+          }));
         })
         .catch(err => {
           addLogLine(`Failed to trigger enrichment: ${err.message}.`, 'error');
@@ -1890,7 +1568,7 @@
     }
 
     function refreshContacts(id) {
-      const job = masterJobs.find(j => j.id === id);
+      const job = findJob(id);
       if (!job) return;
 
       addLogLine(`Refreshing contacts for [${job.title} @ ${job.company}]...`, 'warning');
@@ -1903,8 +1581,7 @@
         })
         .then(data => {
           if (data.job) {
-            const idx = masterJobs.findIndex(j => j.id === data.job.id);
-            if (idx !== -1) masterJobs[idx] = data.job;
+            if (data.job) updateJob(data.job.id, data.job);
           }
           renderActiveVariant();
 
@@ -1913,14 +1590,13 @@
           localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
           localStorage.setItem(ACTIVE_ENRICH_LOG_SKIP_KEY, '0');
 
-          enrichEventSource = connectTaskLogStream(task_id, {
+          taskLog.setEnrichEventSource(connectTaskLogStream(task_id, {
             skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
             taskKey: ACTIVE_ENRICH_TASK_KEY,
-            existingSource: enrichEventSource,
+            existingSource: taskLog.getEnrichEventSource(),
             onResult(logData) {
               if (logData.job) {
-                const idx = masterJobs.findIndex(j => j.id === logData.job.id);
-                if (idx !== -1) masterJobs[idx] = logData.job;
+                if (logData.job) updateJob(logData.job.id, logData.job);
               }
               renderActiveVariant();
             },
@@ -1930,7 +1606,7 @@
             onError() {
               addLogLine(`Refresh contacts SSE stream closed for job [${job.title}].`, 'warning');
             },
-          });
+          }));
         })
         .catch(err => {
           addLogLine(`Failed to trigger refresh contacts: ${err.message}.`, 'error');
@@ -1938,9 +1614,9 @@
     }
 
     function deleteJob(id) {
-      const job = masterJobs.find(j => j.id === id);
+      const job = findJob(id);
       if (job) {
-        masterJobs = masterJobs.filter(j => j.id !== id);
+        removeJob(id);
         addLogLine(`Job [${job.title}] deleted from tracker.`, 'error');
         renderActiveVariant();
       }
@@ -1951,7 +1627,7 @@
         enrichJob(id);
         return;
       }
-      const job = masterJobs.find(j => j.id === id);
+      const job = findJob(id);
       if (job) {
         const oldStatus = job.status;
         
@@ -1988,144 +1664,6 @@
 
     function changeJobStage(id, newStatus) {
       moveJobStage(id, newStatus);
-    }
-
-    // --- LOG STREAMING & SSE INTEGRATION ---
-    let logEventSource = null;
-    let enrichEventSource = null;
-    let pageUnloading = false;
-    const SESSION_LOGS_KEY = 'taskLogsSession';
-    const SESSION_LOGS_MAX = 200;
-    const ACTIVE_SCRAPE_TASK_KEY = 'activeScrapeTaskId';
-    const ACTIVE_SCRAPE_LOG_SKIP_KEY = 'activeScrapeTaskLogSkip';
-    const ACTIVE_ENRICH_TASK_KEY = 'activeEnrichTaskId';
-    const ACTIVE_ENRICH_LOG_SKIP_KEY = 'activeEnrichTaskLogSkip';
-    let sessionLogs = [];
-
-    function persistSessionLogs() {
-      try {
-        localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(sessionLogs));
-      } catch (e) {
-        console.warn('Failed to persist task logs', e);
-      }
-    }
-
-    function restoreSessionLogs() {
-      try {
-        const raw = localStorage.getItem(SESSION_LOGS_KEY);
-        if (!raw) return;
-        sessionLogs = JSON.parse(raw);
-        if (!Array.isArray(sessionLogs)) {
-          sessionLogs = [];
-          return;
-        }
-        const consoles = [
-          document.getElementById('cc-logs-console'),
-          document.getElementById('kb-logs-console')
-        ];
-        consoles.forEach(consoleEl => {
-          if (!consoleEl) return;
-          consoleEl.innerHTML = '';
-        });
-        sessionLogs.forEach(entry => {
-          renderLogLine(entry.message, entry.level, entry.ts);
-        });
-        if (sessionLogs.length > 0) {
-          const kbLogsPanel = document.getElementById('kb-logs-panel');
-          if (kbLogsPanel) kbLogsPanel.style.display = 'block';
-        }
-      } catch (e) {
-        console.warn('Failed to restore task logs', e);
-        sessionLogs = [];
-      }
-    }
-
-    function renderLogLine(msg, level = 'info', ts = null) {
-      const consoles = [
-        document.getElementById('cc-logs-console'),
-        document.getElementById('kb-logs-console')
-      ];
-      const timeStr = ts
-        ? new Date(ts).toTimeString().split(' ')[0]
-        : new Date().toTimeString().split(' ')[0];
-
-      consoles.forEach(consoleEl => {
-        if (!consoleEl) return;
-        if (consoleEl.children.length === 1 &&
-            consoleEl.children[0].innerText.includes('System initialized')) {
-          consoleEl.innerHTML = '';
-        }
-        const line = document.createElement('div');
-        line.className = 'terminal-line';
-        line.innerHTML = `
-          <span class="terminal-time">${timeStr}</span>
-          <span class="terminal-text ${level}">${msg}</span>
-        `;
-        consoleEl.appendChild(line);
-        consoleEl.scrollTop = consoleEl.scrollHeight;
-      });
-    }
-
-    function bumpTaskLogSkip(storageKey) {
-      const skip = parseInt(localStorage.getItem(storageKey) || '0', 10) + 1;
-      localStorage.setItem(storageKey, String(skip));
-      return skip;
-    }
-
-    function markPageUnloading() {
-      pageUnloading = true;
-    }
-
-    function closeTaskLogStreamQuietly(source) {
-      if (!source) return;
-      source._intentionalClose = true;
-      source.close();
-    }
-
-    function connectTaskLogStream(taskId, options = {}) {
-      const {
-        skipKey,
-        taskKey,
-        onResult,
-        onDone,
-        onError,
-        existingSource = null,
-      } = options;
-
-      if (existingSource) {
-        closeTaskLogStreamQuietly(existingSource);
-      }
-
-      const skip = parseInt(localStorage.getItem(skipKey) || '0', 10);
-      const es = new EventSource(`/api/logs/${taskId}?skip=${skip}`);
-
-      es.onmessage = function(event) {
-        const logData = JSON.parse(event.data);
-        if (logData.type === 'log') {
-          addLogLine(logData.message, logData.level);
-          bumpTaskLogSkip(skipKey);
-        } else if (logData.type === 'result') {
-          if (onResult) onResult(logData);
-        } else if (logData.type === 'done') {
-          closeTaskLogStreamQuietly(es);
-          localStorage.removeItem(taskKey);
-          localStorage.removeItem(skipKey);
-          if (onDone) onDone(logData);
-        }
-      };
-
-      es.onerror = function(err) {
-        const intentional = es._intentionalClose || pageUnloading;
-        closeTaskLogStreamQuietly(es);
-        if (intentional) {
-          return;
-        }
-        localStorage.removeItem(taskKey);
-        localStorage.removeItem(skipKey);
-        if (onError) onError(err);
-      };
-
-      return es;
     }
 
     function resetScrapeButtons() {
@@ -2205,8 +1743,8 @@
       }
 
       // Connect to FastAPI SSE endpoint to stream logs
-      closeTaskLogStreamQuietly(logEventSource);
-      logEventSource = null;
+      closeTaskLogStreamQuietly(taskLog.getLogEventSource());
+      taskLog.setLogEventSource(null);
 
       const url = `/api/search`;
       fetch(url, {
@@ -2240,15 +1778,15 @@
         localStorage.setItem(ACTIVE_SCRAPE_LOG_SKIP_KEY, '0');
         addLogLine(`FastAPI background task created: ${taskId}`, 'info');
 
-        logEventSource = connectTaskLogStream(taskId, {
+        taskLog.setLogEventSource(connectTaskLogStream(taskId, {
           skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
           taskKey: ACTIVE_SCRAPE_TASK_KEY,
-          existingSource: logEventSource,
+          existingSource: taskLog.getLogEventSource(),
           onResult(logData) {
             if (logData.jobs && logData.jobs.length > 0) {
               logData.jobs.forEach(newJob => {
-                if (!masterJobs.some(j => j.title === newJob.title && j.company === newJob.company)) {
-                  masterJobs.unshift(newJob);
+                if (!hasJobMatching(newJob.title, newJob.company)) {
+                  addJob(newJob);
                 }
               });
               addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
@@ -2263,120 +1801,12 @@
             addLogLine('Scraper SSE stream closed unexpectedly.', 'warning');
             resetScrapeButtons();
           },
-        });
+        }));
       })
       .catch(err => {
-        console.warn("FastAPI backend not responding, falling back to client-side simulated logging.", err);
-        simulateLocalScrape();
-      });
-    }
-
-    function simulateLocalScrape() {
-      // Reveal logs console panel in UI
-      const kbLogsPanel = document.getElementById('kb-logs-panel');
-      if (kbLogsPanel) {
-        kbLogsPanel.style.display = 'block';
-      }
-      expandLogsConsole();
-
-      // Simulate locally
-      let steps = [
-        { time: 1000, msg: "Initializing local mock scraper pipeline...", level: "info" },
-        { time: 2500, msg: "Connecting to Bright Data Mock API...", level: "info" },
-        { time: 4000, msg: "Found 2 matching roles on LinkedIn. Processing matching matrix...", level: "warning" },
-        { time: 5500, msg: "Job: 'Automation Analyst' @ 'InnovateCorp' -> 89% Match Score using " + activeResume, level: "success" },
-        { time: 7000, msg: "Job: 'QA SDET' @ 'ScaleWeb' -> 76% Match Score using " + activeResume, level: "info" },
-        { time: 8000, msg: "Scrape run completed. Appended 2 new rows to sourced jobs.", level: "success" }
-      ];
-
-      steps.forEach(step => {
-        setTimeout(() => {
-          addLogLine(step.msg, step.level);
-          
-          // On completion, inject jobs
-          if (step.msg.includes("Scrape run completed")) {
-            const btnPanel = document.getElementById('kb-scrape-btn-panel');
-            if (btnPanel) {
-              btnPanel.disabled = false;
-              btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
-            }
-            
-            // Add jobs to state
-            masterJobs.unshift(
-              {
-                id: Date.now() + 1,
-                title: "Automation Analyst",
-                company: "InnovateCorp",
-                size: "50-100",
-                link: "#",
-                date: new Date().toISOString().split('T')[0],
-                location: "Remote",
-                remoteType: "remote",
-                seniority: "mid",
-                salary: "$120k",
-                description: "Automate API and frontend tests using Playwright and Python. Coordinate with offshore delivery teams.",
-                matchScore: 89,
-                matchType: "match",
-                shouldProceed: true,
-                status: "sourced",
-                resumeUsed: activeResume,
-                strengths: ["Strong Playwright expertise", "API tests development"],
-                gaps: ["Requires cross-timezones communication with offshore teams"],
-                contactName: "Sarah Connor",
-                contactRole: "Scrum Master",
-                outreachMessage: ""
-              },
-              {
-                id: Date.now() + 2,
-                title: "QA SDET",
-                company: "ScaleWeb",
-                size: "10-50",
-                link: "#",
-                date: new Date().toISOString().split('T')[0],
-                location: "Remote",
-                remoteType: "remote",
-                seniority: "mid",
-                salary: "$105k",
-                description: "Seeking SDET to maintain regression framework in Python/unittest. Add UI automated test cases.",
-                matchScore: 76,
-                matchType: "match",
-                shouldProceed: true,
-                status: "sourced",
-                resumeUsed: activeResume,
-                strengths: ["Python automation experience"],
-                gaps: ["No Pytest experience (uses Unittest)", "No Playwright (strictly legacy Selenium)"],
-                contactName: "John Connor",
-                contactRole: "Tech Lead",
-                outreachMessage: ""
-              }
-            );
-            renderActiveVariant();
-          }
-        }, step.time);
-      });
-    }
-
-    function addLogLine(msg, level = 'info') {
-      const ts = new Date().toISOString();
-      renderLogLine(msg, level, ts);
-      sessionLogs.push({ ts, message: msg, level });
-      if (sessionLogs.length > SESSION_LOGS_MAX) {
-        sessionLogs = sessionLogs.slice(-SESSION_LOGS_MAX);
-      }
-      persistSessionLogs();
-    }
-
-    function clearLogs() {
-      sessionLogs = [];
-      persistSessionLogs();
-      const consoles = [
-        document.getElementById('cc-logs-console'),
-        document.getElementById('kb-logs-console')
-      ];
-      consoles.forEach(consoleEl => {
-        if (consoleEl) {
-          consoleEl.innerHTML = '<div class="terminal-line"><span class="terminal-time">' + new Date().toTimeString().split(' ')[0] + '</span><span class="terminal-text">Console cleared. Ready.</span></div>';
-        }
+        console.warn("FastAPI backend not responding.", err);
+        addLogLine("Could not start scraper — backend unavailable.", 'warning');
+        resetScrapeButtons();
       });
     }
 
@@ -2395,19 +1825,8 @@
       }
     }
 
-    function expandLogsConsole() {
-      const consoleEl = document.getElementById('kb-logs-console');
-      const btn = document.getElementById('toggle-logs-btn');
-      if (consoleEl && consoleEl.classList.contains('shrunk') && btn) {
-        consoleEl.classList.remove('shrunk');
-        btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
-        localStorage.setItem('panel-task-logs-collapsed', 'false');
-      }
-    }
-
     function initLogsConsoleState() {
       const stored = localStorage.getItem('panel-task-logs-collapsed');
-      // default collapsed (shrunk) unless explicitly set to 'false'
       const isShrunk = stored !== 'false';
       const consoleEl = document.getElementById('kb-logs-console');
       const btn = document.getElementById('toggle-logs-btn');
@@ -2419,417 +1838,6 @@
         consoleEl.classList.remove('shrunk');
         btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Collapse';
       }
-    }
-
-    // --- DETAILED DRAWER (Kanban & Table Details) ---
-    // activeContactIdx tracks which contact row is selected while the drawer is open.
-    let activeContactIdx = -1;
-
-    const NAME_PLACEHOLDER = '______';
-
-    // Replace the name token in the greeting line (Hello/Hi/Dear <name>,) with firstName.
-    // Works whether the current token is NAME_PLACEHOLDER or a previously substituted name.
-    function applyGreetingName(template, firstName) {
-      return template.replace(/^((?:Hello|Hi|Dear)\s+)\S+,/m, `$1${firstName},`);
-    }
-
-    // Restore NAME_PLACEHOLDER in the greeting line before persisting the template.
-    function normalizeGreeting(template) {
-      return template.replace(/^((?:Hello|Hi|Dear)\s+)\S+,/m, `$1${NAME_PLACEHOLDER},`);
-    }
-
-    function contactGroup(contact) {
-      if (contact.is_recruiter) return 'recruiters';
-      if (contact.russian_speaker) return 'russian_speakers';
-      return 'other';
-    }
-
-    function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
-      if (contacts.length === 0) {
-        return '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>';
-      }
-      const GROUPS = [
-        { key: 'recruiters', label: 'Recruiters', items: [] },
-        { key: 'russian_speakers', label: 'Russian Speakers', items: [] },
-        { key: 'other', label: 'Other', items: [] },
-      ];
-      contacts.forEach((contact, origIdx) => {
-        const key = contactGroup(contact);
-        const g = GROUPS.find(gr => gr.key === key);
-        if (g) g.items.push({ contact, origIdx });
-      });
-      return GROUPS.filter(g => g.items.length > 0).map(group => `
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); padding:0 4px; margin-top:4px;">${group.label}</div>
-          ${group.items.map(({ contact, origIdx }) => `
-            <div id="contact-row-${jobId}-${origIdx}"
-              onclick="selectActiveContact(${jobId}, ${origIdx})"
-              style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.18); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.02); border-left:${origIdx === activeContactIdx ? '3px solid var(--accent-cyan)' : '3px solid transparent'}; cursor:pointer;">
-              <div style="display:flex; align-items:center; gap:10px;">
-                <input type="checkbox" id="contact-${jobId}-${origIdx}" ${contact.contacted ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleContacted(${jobId}, ${origIdx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
-                <div style="display:flex; flex-direction:column;">
-                  <span style="font-size:0.85rem; font-weight:500; color:${contact.contacted ? 'var(--accent-emerald)' : 'var(--text-primary)'};">
-                    ${contact.name}
-                    ${contact.contacted ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#34d399; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">Contacted</span>' : ''}
-                    ${contact.russian_speaker ? '<span style="font-size:0.65rem; background:rgba(239,68,68,0.15); color:#f87171; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🇷🇺 RU</span>' : ''}
-                    ${contact.is_recruiter ? '<span style="font-size:0.65rem; background:rgba(99,102,241,0.15); color:#a5b4fc; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🎯 HR</span>' : ''}
-                    ${contact.is_job_poster ? '<span style="font-size:0.65rem; background:rgba(245,158,11,0.15); color:#fbbf24; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">📋 Poster</span>' : ''}
-                  </span>
-                  <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.title || contact.role || ''}</span>
-                </div>
-              </div>
-              <a href="${contact.url || contact.linkedin || '#'}" target="_blank" onclick="event.stopPropagation()" style="color:#0077b5; font-size:1.15rem; padding:4px;" title="View LinkedIn Profile"><i class="fa-brands fa-linkedin"></i></a>
-            </div>
-          `).join('')}
-        </div>
-      `).join('');
-    }
-
-    function getActiveTemplate(job, contactIdx) {
-      const contacts = job.contacts || [];
-      const contact = contacts[contactIdx];
-      if (contact && contact.is_recruiter) {
-        return job.recruiterOutreachTemplate || job.outreachMessage || '';
-      }
-      return job.russianSpeakerOutreachTemplate || job.outreachMessage || '';
-    }
-
-    function selectActiveContact(jobId, contactIdx) {
-      activeContactIdx = contactIdx;
-      const job = masterJobs.find(j => j.id === jobId);
-      if (!job) return;
-
-      // Highlight rows
-      const contacts = job.contacts || [];
-      contacts.forEach((_, i) => {
-        const row = document.getElementById(`contact-row-${jobId}-${i}`);
-        if (row) {
-          row.style.borderLeft = i === contactIdx
-            ? '3px solid var(--accent-cyan)'
-            : '3px solid transparent';
-        }
-      });
-
-      // Load matching template into textarea and apply greeting substitution
-      const textarea = document.getElementById('drawer-outreach-text');
-      const counter = document.getElementById('drawer-char-counter');
-      const rawTemplate = getActiveTemplate(job, contactIdx);
-      const contact = contacts[contactIdx];
-      const firstName = contact ? contact.name.split(' ')[0] : '';
-      const template = firstName ? applyGreetingName(rawTemplate, firstName) : rawTemplate;
-      if (textarea) {
-        textarea.value = template;
-        if (counter) {
-          const len = template.length;
-          counter.textContent = `${len}/200`;
-          counter.style.color = len > 200 ? 'var(--accent-rose)' : 'var(--text-muted)';
-        }
-      }
-    }
-
-    function openJobDetailsDrawer(id) {
-      const job = masterJobs.find(j => j.id === id);
-      if (!job) return;
-
-      const overlay = document.getElementById('kanban-drawer');
-      const body = document.getElementById('drawer-body');
-
-      let matchClass = 'match-low';
-      if (job.matchScore >= 85) matchClass = 'match-high';
-      else if (job.matchScore >= 70) matchClass = 'match-mid';
-
-      // Ensure "Posted by a recruiting agency/staffing firm" is in gaps if job is a recruiter listing
-      let displayGaps = [...(job.gaps || [])];
-      if (job.isRecruiter && !displayGaps.some(g => g.toLowerCase().includes("recruiting agency") || g.toLowerCase().includes("staffing firm"))) {
-        displayGaps.push("Posted by a recruiting agency/staffing firm");
-      }
-
-      // Compute default Active Contact: first uncontacted, fallback to first
-      const contacts = job.contacts || [];
-      let defaultContactIdx = contacts.findIndex(c => !c.contacted);
-      if (defaultContactIdx === -1) defaultContactIdx = contacts.length > 0 ? 0 : -1;
-      activeContactIdx = defaultContactIdx;
-
-      const rawActiveTemplate = activeContactIdx >= 0 ? getActiveTemplate(job, activeContactIdx) : '';
-      const defaultContact = activeContactIdx >= 0 ? contacts[activeContactIdx] : null;
-      const defaultFirstName = defaultContact ? defaultContact.name.split(' ')[0] : '';
-      const activeTemplate = defaultFirstName ? applyGreetingName(rawActiveTemplate, defaultFirstName) : rawActiveTemplate;
-
-      body.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
-          <div>
-            <h2 style="font-size:1.4rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
-              ${job.title}
-              <a href="${job.link}" target="_blank" style="color:#06b6d4; font-size:1.15rem;" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
-            </h2>
-            <div style="color:var(--text-secondary); margin-top:4px; font-size:0.9rem;">
-              <strong>${job.company}</strong> &bull; ${job.location} &bull; ${job.salary || 'Not specified'}
-            </div>
-          </div>
-          <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
-        </div>
-
-        ${job.isRecruiter ? `
-          <div style="background: linear-gradient(90deg, rgba(244, 63, 94, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.85rem; color: #f43f5e; display: flex; align-items: center; gap: 10px;">
-            <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b; font-size:1.15rem; flex-shrink:0;"></i>
-            <span><strong>Recruiting / Staffing Agency Warning:</strong> This job posting was published by a recruitment or staffing agency, not directly by the employer. The match score has been penalized by 15 points.</span>
-          </div>
-        ` : ''}
-
-        <div style="display:flex; flex-direction:column; gap:14px;">
-          <div>
-            <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Job Info</h4>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:0.85rem; color:var(--text-secondary);">
-              <div>Status: <span class="status-badge status-${job.status}" style="font-size:0.65rem; padding: 2px 6px;">${job.status}</span></div>
-              <div>Seniority: <span style="text-transform:capitalize;">${job.seniority}</span></div>
-              <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
-              <div>Resume Profile: <code>${job.resumeUsed}</code></div>
-            </div>
-          </div>
-
-          ${(job.activityLog && job.activityLog.length > 0) ? (() => {
-            const log = job.activityLog;
-            const latest = log[log.length - 1];
-            const logId = 'activity-log-' + job.id;
-            return `
-          <div>
-            <button onclick="toggleActivityLog('${logId}')" style="background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:6px; padding:0; width:100%; text-align:left; margin-bottom:0;">
-              <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Job Activity Log</h4>
-              <i id="${logId}-chevron" class="fa-solid fa-chevron-right" style="font-size:0.65rem; color:var(--text-muted); transition:transform 0.2s;"></i>
-              <span style="font-size:0.78rem; color:var(--text-secondary); font-weight:400; text-transform:none; letter-spacing:0; margin-left:4px;">${latest.message}</span>
-            </button>
-            <div id="${logId}" style="display:none; margin-top:8px; border-left:2px solid rgba(6,182,212,0.2); padding-left:10px; flex-direction:column; gap:4px;">
-              ${log.map(e => {
-                const d = new Date(e.ts);
-                const now = new Date();
-                const isToday = d.toDateString() === now.toDateString();
-                const timeStr = isToday
-                  ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
-                  : d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                return `<div style="display:flex; gap:8px; font-size:0.78rem;">
-                  <span style="color:var(--text-muted); white-space:nowrap; flex-shrink:0;">${timeStr}</span>
-                  <span style="color:var(--text-secondary);">${e.message}</span>
-                </div>`;
-              }).join('')}
-            </div>
-          </div>`;
-          })() : ''}
-
-          <div>
-            <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Description</h4>
-            <div class="detail-description" style="font-size:0.85rem; max-height: 150px; overflow-y: auto;">${job.description}</div>
-          </div>
-
-          <div class="match-breakdown">
-            <div class="match-factor-box" style="padding:10px;">
-              <div class="factor-title strengths" style="font-size:0.75rem;"><i class="fa-solid fa-circle-check"></i> Strengths</div>
-              <ul class="factor-list" style="font-size:0.75rem;">
-                ${job.strengths.map(s => `<li><i class="fa-solid fa-check" style="color:var(--accent-emerald)"></i> ${s}</li>`).join('')}
-              </ul>
-            </div>
-            <div class="match-factor-box" style="padding:10px;">
-              <div class="factor-title gaps" style="font-size:0.75rem;"><i class="fa-solid fa-circle-xmark"></i> Gaps</div>
-              <ul class="factor-list" style="font-size:0.75rem;">
-                ${displayGaps.map(g => `<li><i class="fa-solid fa-xmark" style="color:var(--accent-rose)"></i> ${g}</li>`).join('')}
-              </ul>
-            </div>
-          </div>
-
-          <!-- Comment / Notes Section -->
-          <div>
-            <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Notes / Comments</h4>
-            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="updateJobComment(${job.id}, this.value)">${job.comment || ''}</textarea>
-          </div>
-
-          ${job.enrichmentNote ? `
-          <!-- Enrichment Status Section -->
-          <div>
-            <h4 style="font-size:0.8rem; color:var(--accent-amber); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Enrichment Status</h4>
-            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; color: #fbbf24;">
-              ${job.enrichmentNote}
-            </div>
-          </div>
-          ` : ''}
-
-          <!-- Outreach Contacts & Referral Status -->
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-              <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
-              ${(job.status === 'enriched' || job.status === 'enriching') ? `
-                <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="refreshContacts(${job.id}); closeDrawer(null);"><i class="fa-solid fa-arrows-rotate"></i> Refresh Contacts</button>
-              ` : ''}
-            </div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              ${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}
-            </div>
-          </div>
-
-          <div class="outreach-box" style="padding:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <h4 style="font-size:0.85rem; color:var(--accent-indigo); margin:0;">Outreach Message Draft</h4>
-            </div>
-            ${activeTemplate || (contacts.length === 0 && (job.outreachMessage || job.recruiterOutreachTemplate || job.russianSpeakerOutreachTemplate)) ? `
-              <textarea class="outreach-text" id="drawer-outreach-text" oninput="updateOutreachCounter(); saveOutreachTemplate(${job.id}, this.value)" style="font-size:0.8rem; min-height:100px;">${activeTemplate}</textarea>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
-                <span id="drawer-char-counter" style="font-size:0.75rem; color:var(--text-muted);">${activeTemplate.length}/200</span>
-                <div style="display:flex; gap:8px;">
-                  <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyDrawerOutreach()"><i class="fa-regular fa-copy"></i> Copy</button>
-                  ${job.status === 'enriched' ? `
-                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="changeJobStage(${job.id}, 'contacted'); closeDrawer(null);"><i class="fa-solid fa-check"></i> Mark Contacted</button>
-                  ` : ''}
-                </div>
-              </div>
-            ` : `
-              <p style="font-size:0.75rem; color:var(--text-secondary); text-align:center;">Enrich job listing to source contacts and generate outreach.</p>
-              <div style="display:flex; justify-content:center; margin-top:6px;">
-                <button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem;" onclick="enrichJob(${job.id}); closeDrawer(null);"><i class="fa-solid fa-wand-magic-sparkles"></i> Enrich Job</button>
-              </div>
-            `}
-          </div>
-          <div style="display:flex; justify-content:flex-end; gap:12px; border-top:1px solid var(--border-color); padding-top:16px; margin-top:8px;">
-            ${job.status !== 'rejected' ? `
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.2);" onclick="changeJobStage(${job.id}, 'rejected'); closeDrawer(null);"><i class="fa-solid fa-ban"></i> Reject Job</button>
-            ` : ''}
-            <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="closeDrawer(null)"><i class="fa-solid fa-xmark"></i> Close</button>
-          </div>
-        </div>
-      `;
-
-      overlay.classList.add('active');
-    }
-
-    function updateJobComment(id, value) {
-      const job = masterJobs.find(j => j.id === id);
-      if (job) {
-        job.comment = value;
-        // Sync to board immediately (updates card snippet on board face)
-        renderActiveVariant();
-      }
-
-      // Debounce database sync to 500ms
-      if (commentTimeout) {
-        clearTimeout(commentTimeout);
-      }
-      commentTimeout = setTimeout(() => {
-        fetch(`/api/jobs/${id}/comment`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ comment: value })
-        })
-        .then(r => {
-          if (!r.ok) throw new Error("HTTP error " + r.status);
-          return r.json();
-        })
-        .then(updatedJob => {
-          if (job) {
-            job.comment = updatedJob.comment;
-          }
-          addLogLine(`Successfully saved comment for [${job ? job.title : id}] to DB`, 'success');
-        })
-        .catch(err => {
-          addLogLine(`Failed to save comment: ${err.message}`, 'warning');
-        });
-      }, 500);
-    }
-
-    function saveOutreachTemplate(jobId, template) {
-      const job = masterJobs.find(j => j.id === jobId);
-      if (!job) return;
-
-      const contact = (activeContactIdx >= 0 && job.contacts) ? job.contacts[activeContactIdx] : null;
-      const audience = (contact && contact.is_recruiter) ? 'recruiter' : 'russian_speaker';
-      const normalizedTemplate = normalizeGreeting(template);
-
-      if (audience === 'recruiter') {
-        job.recruiterOutreachTemplate = normalizedTemplate;
-      } else {
-        job.russianSpeakerOutreachTemplate = normalizedTemplate;
-      }
-
-      if (templateSaveTimeout) {
-        clearTimeout(templateSaveTimeout);
-      }
-      templateSaveTimeout = setTimeout(() => {
-        fetch(`/api/jobs/${jobId}/template`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audience, template: normalizedTemplate })
-        })
-        .then(r => {
-          if (!r.ok) throw new Error('HTTP error ' + r.status);
-          return r.json();
-        })
-        .then(updatedJob => {
-          if (job) {
-            job.recruiterOutreachTemplate = updatedJob.recruiterOutreachTemplate;
-            job.russianSpeakerOutreachTemplate = updatedJob.russianSpeakerOutreachTemplate;
-          }
-        })
-        .catch(err => {
-          addLogLine(`Failed to save outreach template: ${err.message}`, 'warning');
-        });
-      }, 500);
-    }
-
-    async function toggleContacted(jobId, contactIdx, isChecked) {
-      const job = masterJobs.find(j => j.id === jobId);
-      if (!job || !job.contacts || !job.contacts[contactIdx]) return;
-
-      try {
-        const resp = await fetch(`/api/jobs/${jobId}/contacts/${contactIdx}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contacted: isChecked })
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const updated = await resp.json();
-
-        // Sync in-memory state from server response
-        const masterIdx = masterJobs.findIndex(j => j.id === jobId);
-        if (masterIdx !== -1) masterJobs[masterIdx] = updated;
-
-        addLogLine(`Marked contact ${job.contacts[contactIdx].name} as ${isChecked ? 'CONTACTED' : 'NOT CONTACTED'}.`, isChecked ? 'success' : 'warning');
-      } catch (err) {
-        addLogLine(`Failed to update contact: ${err.message}`, 'error');
-      }
-
-      openJobDetailsDrawer(jobId);
-      renderActiveVariant();
-    }
-
-    function closeDrawer(e) {
-      if (!e || e.target === document.getElementById('kanban-drawer') || e.target.closest('.drawer-close')) {
-        document.getElementById('kanban-drawer').classList.remove('active');
-      }
-    }
-
-    function toggleActivityLog(logId) {
-      const panel = document.getElementById(logId);
-      const chevron = document.getElementById(logId + '-chevron');
-      if (!panel) return;
-      const isOpen = panel.style.display !== 'none';
-      panel.style.display = isOpen ? 'none' : 'flex';
-      if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
-    }
-
-    function copyDrawerOutreach() {
-      const txt = document.getElementById('drawer-outreach-text');
-      if (txt) {
-        txt.select();
-        document.execCommand('copy');
-        addLogLine('Outreach message copied from drawer!', 'success');
-      }
-    }
-
-    function updateOutreachCounter() {
-      const textarea = document.getElementById('drawer-outreach-text');
-      const counter = document.getElementById('drawer-char-counter');
-      if (!textarea || !counter) return;
-      const len = textarea.value.length;
-      counter.textContent = `${len}/200`;
-      counter.style.color = len > 200 ? 'var(--accent-rose)' : 'var(--text-muted)';
     }
 
     function toggleJobSearchSettings() {
@@ -2926,16 +1934,17 @@
         })
         .then(data => {
           if (data && data.length > 0) {
-            masterJobs = data;
+            setJobs(data);
             addLogLine(`Loaded ${data.length} jobs dynamically from /api/jobs`, 'success');
           } else {
-            masterJobs = [];
+            setJobs([]);
             addLogLine("Backend returned empty job list. Board is empty.", 'info');
           }
           renderActiveVariant();
         })
         .catch(err => {
-          addLogLine("Could not fetch jobs from backend. Using static fallback database.", 'info');
+          setJobs([]);
+          addLogLine("Could not fetch jobs from backend. Board is empty.", 'warning');
           renderActiveVariant();
         });
     }
@@ -2958,15 +1967,15 @@
 
       addLogLine(`Reconnecting to active background task: ${taskId}`, 'info');
 
-      logEventSource = connectTaskLogStream(taskId, {
+      taskLog.setLogEventSource(connectTaskLogStream(taskId, {
         skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
         taskKey: ACTIVE_SCRAPE_TASK_KEY,
-        existingSource: logEventSource,
+        existingSource: taskLog.getLogEventSource(),
         onResult(logData) {
           if (logData.jobs && logData.jobs.length > 0) {
             logData.jobs.forEach(newJob => {
-              if (!masterJobs.some(j => j.title === newJob.title && j.company === newJob.company)) {
-                masterJobs.unshift(newJob);
+              if (!hasJobMatching(newJob.title, newJob.company)) {
+                addJob(newJob);
               }
             });
             addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
@@ -2984,7 +1993,7 @@
           );
           resetScrapeButtons();
         },
-      });
+      }));
     }
 
     function restoreActiveEnrichTask() {
@@ -2997,21 +2006,20 @@
       addLogLine(`Reconnecting to active enrichment task: ${taskId}`, 'info');
       startPollingEnrichingJobs();
 
-      enrichEventSource = connectTaskLogStream(taskId, {
+      taskLog.setEnrichEventSource(connectTaskLogStream(taskId, {
         skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
         taskKey: ACTIVE_ENRICH_TASK_KEY,
-        existingSource: enrichEventSource,
+        existingSource: taskLog.getEnrichEventSource(),
         onResult(logData) {
           if (logData.job) {
-            const idx = masterJobs.findIndex(j => j.id === logData.job.id);
-            if (idx !== -1) masterJobs[idx] = logData.job;
+            updateJob(logData.job.id, logData.job);
           }
           renderActiveVariant();
         },
         onDone() {
           renderActiveVariant();
         },
-      });
+      }));
     }
 
     async function loadOutreachSettings() {
@@ -3042,10 +2050,36 @@
     window.addEventListener('beforeunload', markPageUnloading);
     window.addEventListener('pagehide', () => {
       markPageUnloading();
-      closeTaskLogStreamQuietly(logEventSource);
-      logEventSource = null;
-      closeTaskLogStreamQuietly(enrichEventSource);
-      enrichEventSource = null;
+      closeTaskLogStreamQuietly(taskLog.getLogEventSource());
+      taskLog.setLogEventSource(null);
+      closeTaskLogStreamQuietly(taskLog.getEnrichEventSource());
+      taskLog.setEnrichEventSource(null);
+    });
+
+    Object.assign(window, {
+      archiveJob,
+      changeActiveResume,
+      changeJobStage,
+      clearLogs,
+      closeDrawer,
+      closeModal,
+      copyDrawerOutreach,
+      enrichJob,
+      moveJobStage,
+      openJobDetailsDrawer,
+      refreshContacts,
+      resetKbFilters,
+      saveOutreachSettings,
+      selectActiveContact,
+      toggleActivityLog,
+      toggleContacted,
+      toggleJobSearchSettings,
+      toggleLaneCollapse,
+      toggleLogsHeight,
+      triggerScrapeRun,
+      updateArchiveVisibility,
+      updateBoardFiltersAndSort,
+      viewResumeProfile,
     });
 
     // Initialize

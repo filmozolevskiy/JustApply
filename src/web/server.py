@@ -5,6 +5,7 @@ import json
 import asyncio
 from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from ..schemas import Job, OutreachSettings
@@ -21,7 +22,11 @@ init_db()
 app = FastAPI(title="Job Hunter Dashboard")
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
+
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # In-memory storage for active scraping sessions
 active_tasks = {}
