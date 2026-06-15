@@ -143,13 +143,13 @@ def _make_live_task_state(log_messages):
 def test_live_stream_does_not_duplicate_replayed_logs():
     """Logs buffered before SSE connect must not appear twice (replay + queue)."""
     active_tasks["live1"] = _make_live_task_state(
-        ["Enriching 'QA' at 'Acme'...", "Fetching up to 100 employees for 'Acme'..."]
+        ["Enriching 'QA' at 'Acme'...", "Fetching up to 25 employees for 'Acme'..."]
     )
     msgs = _collect_messages("live1", skip=0)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == [
         "Enriching 'QA' at 'Acme'...",
-        "Fetching up to 100 employees for 'Acme'...",
+        "Fetching up to 25 employees for 'Acme'...",
     ]
 
 

@@ -15,7 +15,7 @@ class ApifyTimeoutError(Exception):
 
 APIFY_API_BASE = "https://api.apify.com/v2"
 ACTOR_ID = "harvestapi~linkedin-company-employees"
-CONTACT_SAMPLE_SIZE = 100
+CONTACT_SAMPLE_SIZE = 25
 
 _COMPANY_SUFFIXES = (
     "-technologies", "-technology", "-incorporated", "-corporation",
