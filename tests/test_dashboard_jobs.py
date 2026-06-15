@@ -203,7 +203,7 @@ async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
     state = TaskState({"job_id": 1})
     active_tasks[task_id] = state
 
-    with patch("src.pipelines.run_enrichment_pipeline", new=AsyncMock(return_value=None)):
+    with patch("src.service.job_hunter.run_enrichment_pipeline", new=AsyncMock(return_value=None)):
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1, setup_test_db)

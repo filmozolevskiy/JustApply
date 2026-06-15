@@ -8,9 +8,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .. import db as database
-from ..pipelines import run_search_pipeline, run_enrichment_pipeline
-from ..core.enrichment.coordinator import begin_enrichment
-from ..rate_limiter import scrape_limiter, RateLimitError
+from ..service import RateLimitError, promote_sourced_jobs, search_jobs
+
+
+def _resume_name_for_position(position: str) -> str:
+    resume_name = position.lower().replace("/", "_").replace(" ", "_")
+    if not resume_name.endswith(".md"):
+        resume_name += ".md"
+    return resume_name
 
 
 async def run_search(
@@ -20,30 +25,21 @@ async def run_search(
     allowed_remote_types: list = None
 ) -> list:
     """Search for jobs using Bright Data scraper, evaluate via LLM, save to SQLite."""
-    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
-    is_real = (not mock_eval) or (not is_mock_scraper)
-    if is_real:
-        try:
-            scrape_limiter.acquire()
-        except RateLimitError as e:
-            print(f"Warning: Rate limit active. Please wait {e.wait_seconds} seconds.", file=sys.stderr)
-            sys.exit(1)
-
-    resume_name = position.lower().replace("/", "_").replace(" ", "_")
-    if not resume_name.endswith(".md"):
-        resume_name += ".md"
-
     def log_sync(msg: str, level: str = "info"):
         print(f"[{level.upper()}] {msg}", file=sys.stderr)
 
-    saved = await run_search_pipeline(
-        query=position,
-        location="Remote",
-        active_resume=resume_name,
-        mock_eval=mock_eval,
-        allowed_remote_types=allowed_remote_types,
-        log_func=log_sync,
-    )
+    try:
+        saved = await search_jobs(
+            query=position,
+            location="Remote",
+            active_resume=_resume_name_for_position(position),
+            mock_eval=mock_eval,
+            allowed_remote_types=allowed_remote_types,
+            log_func=log_sync,
+        )
+    except RateLimitError as e:
+        print(f"Warning: Rate limit active. Please wait {e.wait_seconds} seconds.", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Search complete. {len(saved)} jobs saved to database.")
     return saved
@@ -52,28 +48,11 @@ async def run_search(
 async def run_promote() -> list:
     """Enrich jobs ready for outreach: source contacts and generate messages."""
     print("Starting promote pipeline...")
-    database.init_db()
-
-    all_jobs = database.get_jobs()
-    to_promote = [
-        j for j in all_jobs
-        if j.get("shouldProceed") and j.get("status") == "sourced"
-    ]
-    print(f"Found {len(to_promote)} jobs ready for outreach.")
 
     def log_sync(msg: str, level: str = "info"):
         print(f"  [{level.upper()}] {msg}", file=sys.stderr)
 
-    promoted = []
-    for job in to_promote:
-        print(f"Enriching '{job['title']}' at '{job['company']}'...")
-        began = begin_enrichment(job["id"])
-        if not began:
-            print(f"  [ERROR] Could not start enrichment for job id={job['id']}.", file=sys.stderr)
-            promoted.append(job)
-            continue
-        enriched = await run_enrichment_pipeline({**job, "status": "enriching"}, log_func=log_sync)
-        promoted.append(enriched if enriched else job)
+    promoted = await promote_sourced_jobs(log_func=log_sync)
 
     print(f"Promote complete. Processed {len(promoted)} jobs.")
     return promoted

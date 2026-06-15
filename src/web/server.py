@@ -13,8 +13,14 @@ from ..schemas import Job, OutreachSettings
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job
-from ..core.enrichment.coordinator import begin_enrichment, abort_enrichment
-from ..rate_limiter import scrape_limiter, RateLimitError
+from ..service import (
+    RateLimitError,
+    acquire_scrape_slot,
+    begin_enrichment,
+    complete_enrichment,
+    parse_remote_types,
+    search_jobs,
+)
 
 # Initialize SQLite database
 init_db()
@@ -139,24 +145,15 @@ async def _run_enrichment_task(task_id: str, job_id: int, bust_cache: bool = Fal
         await state.queue.put(event)
 
     try:
-        job = get_job(job_id)
-        if not job:
-            await log_callback(f"Job id={job_id} not found.", "error")
-            abort_enrichment(job_id)
-            state.status = "failed"
-            return
-
-        from ..pipelines import run_enrichment_pipeline
-        updated = await run_enrichment_pipeline(job, log_func=log_callback, bust_cache=bust_cache)
-
+        updated = await complete_enrichment(job_id, bust_cache=bust_cache, log_func=log_callback)
         if updated:
             state.result = {"type": "result", "job": updated}
             state.status = "completed"
         else:
-            abort_enrichment(job_id)
+            if not get_job(job_id):
+                await log_callback(f"Job id={job_id} not found.", "error")
             state.status = "failed"
     except Exception as e:
-        abort_enrichment(job_id)
         state.status = "failed"
         await log_callback(f"Enrichment task failed: {str(e)}", "error")
     finally:
@@ -242,27 +239,18 @@ async def run_scraping_task(task_id: str):
         await state.queue.put(event)
 
     try:
-        from ..pipelines import run_search_pipeline
-
-        remote_types_str = params.get("remote_type", "any")
-        if isinstance(remote_types_str, str):
-            allowed_remote_types = [t.strip().lower() for t in remote_types_str.split(",") if t.strip()]
-        elif isinstance(remote_types_str, list):
-            allowed_remote_types = [t.lower() for t in remote_types_str]
-        else:
-            allowed_remote_types = ["any"]
-
-        state.jobs = await run_search_pipeline(
+        state.jobs = await search_jobs(
             query=params["query"],
             location=params["location"],
             active_resume=params["active_resume"],
             mock_eval=params.get("mock_eval", True),
-            allowed_remote_types=allowed_remote_types,
+            allowed_remote_types=parse_remote_types(params.get("remote_type", "any")),
             seniorities=params.get("seniority", "any"),
             company_sizes=params.get("company_size", "any"),
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
             log_func=log_callback,
+            rate_limit=False,
         )
 
         state.status = "completed"
@@ -278,16 +266,13 @@ async def run_scraping_task(task_id: str):
 
 @app.post("/api/search")
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
-    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
-    is_real = (not request.mock_eval) or (not is_mock_scraper)
-    if is_real:
-        try:
-            scrape_limiter.acquire()
-        except RateLimitError as e:
-            return JSONResponse(
-                status_code=429,
-                content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
-            )
+    try:
+        acquire_scrape_slot(request.mock_eval)
+    except RateLimitError as e:
+        return JSONResponse(
+            status_code=429,
+            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
+        )
 
     task_id = str(uuid.uuid4())
     state = TaskState(request.model_dump())
@@ -311,16 +296,13 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
-    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
-    is_real = (not mock_eval) or (not is_mock_scraper)
-    if is_real:
-        try:
-            scrape_limiter.acquire()
-        except RateLimitError as e:
-            return JSONResponse(
-                status_code=429,
-                content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
-            )
+    try:
+        acquire_scrape_slot(mock_eval)
+    except RateLimitError as e:
+        return JSONResponse(
+            status_code=429,
+            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
+        )
 
     task_id = str(uuid.uuid4())
     params = {
