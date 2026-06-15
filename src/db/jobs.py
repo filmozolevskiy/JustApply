@@ -64,11 +64,26 @@ def _parse_job_row(row) -> dict:
     return job
 
 
+def _auto_archive_stale_jobs(cursor) -> None:
+    """Archive rejected jobs whose rejectedAt is 14+ days ago and are not exempt."""
+    cursor.execute(
+        "SELECT id FROM jobs WHERE status = 'rejected' AND archived = 0 "
+        "AND autoArchiveExempt = 0 AND rejectedAt != '' "
+        "AND rejectedAt <= datetime('now', '-14 days')"
+    )
+    stale_ids = [row[0] for row in cursor.fetchall()]
+    for job_id in stale_ids:
+        cursor.execute("UPDATE jobs SET archived = 1 WHERE id = ?", (job_id,))
+        _append_activity_log(cursor, job_id, "Auto-archived (rejected 14+ days)")
+
+
 def get_jobs(db_path=None):
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
+    _auto_archive_stale_jobs(cursor)
+    conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE archived = 0 ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()

@@ -27,3 +27,24 @@ Implemented the first tracer bullet for Archived Jobs feature (Parent PRD #51).
 
 **Tests** (`tests/test_archive.py`): 16 new tests covering DB schema, backfill, `rejectedAt` logic, `get_jobs` filtering, `archive_job` behavior, deduplication, and all three API cases. All 341 tests pass.
 
+## Iteration 2 — Issue #53: Auto-archive stale Rejected jobs
+
+### Summary
+Implemented auto-archive sweep for stale Rejected jobs (Parent PRD #51).
+
+**DB logic** (`src/db/jobs.py`):
+- `_auto_archive_stale_jobs(cursor)`: new private helper — queries for jobs where `status = 'rejected'`, `archived = 0`, `autoArchiveExempt = 0`, `rejectedAt != ''`, and `rejectedAt <= datetime('now', '-14 days')`. Sets `archived = 1` and appends "Auto-archived (rejected 14+ days)" to Job Activity Log for each match.
+- `get_jobs`: calls `_auto_archive_stale_jobs` before querying, so the sweep runs on every board load. No schema changes needed.
+
+**Tests** (`tests/test_auto_archive.py`): 8 new TDD tests (red→green) covering:
+1. Tracer bullet: 15-day-old rejected job gets archived on `get_jobs`
+2. Auto-archived job absent from active board response
+3. Activity log contains "Auto-archived (rejected 14+ days)"
+4. `autoArchiveExempt = True` blocks the sweep
+5. Non-rejected job not auto-archived
+6. 13-day-old job not yet auto-archived (boundary)
+7. Already-archived job not double-archived
+8. API `GET /api/jobs` triggers the sweep end-to-end
+
+All 349 tests pass.
+
