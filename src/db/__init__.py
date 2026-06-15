@@ -13,5 +13,6 @@ from .jobs import (
     job_exists,
     update_outreach_template,
     log_activity,
+    archive_job,
 )
 from .cache import get_contact_sample, set_contact_sample, delete_contact_sample

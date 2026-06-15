@@ -1,96 +1,29 @@
 # Ralph Loop Progress Log
 
-## Iteration: 2026-06-14 — Issue #46: Remove dead Kanban Dashboard UI
+## Iteration 1 — Issue #52: Manual archive on Rejected cards
 
 ### Summary
-Removed three dead UI controls from the Kanban Dashboard per PRD #45 Issue #46.
+Implemented the first tracer bullet for Archived Jobs feature (Parent PRD #51).
 
-**Removed:**
-- `Add Job` button and `addNewJobPrompt()` function — client-only fake jobs that never persisted to the DB
-- `Scrape & Sync` button (`kb-scrape-btn-top`) from Pipeline Tracker header — duplicate trigger; `Run Scraper with Filters` remains the sole scrape control
-- Navbar `#connection-mode` indicator (`Connected to FastAPI / Local Standalone Mode` badge) and the `fetch('/api/health')` update logic
+**DB schema** (`src/db/connection.py`):
+- Added `archived INTEGER DEFAULT 0`, `rejectedAt TEXT DEFAULT ''`, `autoArchiveExempt INTEGER DEFAULT 0` columns via migration-safe `ALTER TABLE` blocks.
+- Backfill: after seed insert, sets `rejectedAt = datetime('now')` for any existing Rejected jobs with no timestamp.
 
-**Cleaned up:**
-- All `kb-scrape-btn-top` DOM references in `resetScrapeButtons()`, `triggerScrapeRun()`, `simulateLocalScrape()`, and `restoreActiveScrapeTask()`
-- `#connection-mode` CSS block
+**DB logic** (`src/db/jobs.py`):
+- `_parse_job_row`: exposes `archived`, `rejectedAt`, `autoArchiveExempt` on every job dict.
+- `get_jobs`: filters `archived = 0` by default — archived jobs are invisible on the active board.
+- `update_job_status`: sets `rejectedAt` on first move to Rejected via SQL `CASE` (never overwrites existing value).
+- `archive_job(job_id)`: new function — archives a Rejected job (`archived=1`), appends "Archived" to Job Activity Log; returns `None` for non-Rejected or nonexistent jobs.
+- `job_exists`: unchanged — still matches archived rows for deduplication.
 
-**Tests added:** `tests/test_dashboard_dead_ui.py` — 8 HTML contract tests asserting absent controls and retained Pipeline Tracker header. All 280 tests pass.
+**Schema** (`src/schemas.py`): added `archived`, `rejectedAt`, `autoArchiveExempt` fields to `Job` Pydantic model.
 
-## Iteration: 2026-06-14 — Issue #47: Unify dashboard utility panel chrome and layout
+**API** (`src/web/server.py`): new `POST /api/jobs/{id}/archive` endpoint — 200 on success, 422 for non-Rejected, 404 for missing.
 
-### Summary
-Refactored the four utility panels above the kanban board to use a shared header style and corrected their DOM order per PRD #45 Issue #47.
+**Dashboard** (`src/web/dashboard.html`):
+- `getKanbanCardMovementButtons`: Rejected cards now show a purple box-archive icon on hover instead of the ban/reject button.
+- `archiveJob(id)` async JS function: calls `POST /api/jobs/{id}/archive`, removes the card from `masterJobs`, and re-renders the board.
+- CSS: `.kanban-action-btn.archive-btn:hover` — purple hover color.
 
-**Panel order (before → after):**
-- Before: Pipeline Tracker → Task Logs → Board Controls → Outreach Settings → Kanban
-- After: Pipeline Tracker → Task Logs → Outreach Settings → Board Controls → Kanban
+**Tests** (`tests/test_archive.py`): 16 new tests covering DB schema, backfill, `rejectedAt` logic, `get_jobs` filtering, `archive_job` behavior, deduplication, and all three API cases. All 341 tests pass.
 
-**Shared chrome:**
-- Added `.panel-header`, `.panel-header-left`, `.panel-header-right` CSS classes used consistently across all four panels (icon + title left, actions/chevron right)
-- Removed per-panel ad-hoc inline styles from Pipeline Tracker header and Outreach Settings
-
-**Outreach Settings cleaned up:**
-- Removed cyan background tint (`rgba(6, 182, 212, 0.04)`) and cyan border (`rgba(6, 182, 212, 0.2)`) inline styles
-
-**Board Controls:**
-- Added `id="board-controls-panel"` and placed it directly above the kanban lane container
-
-**Collapse state with local storage:**
-- Task Logs console starts collapsed (`shrunk` class in static HTML); state persists via `panel-task-logs-collapsed` key
-- Scraper Settings already started collapsed; now persists via `panel-scraper-settings-collapsed` key
-- Updated `toggleLogsHeight()`, `expandLogsConsole()`, `initLogsConsoleState()`, and `toggleScraperSettings()` to use the new keys; `initLogsConsoleState()` now defaults to collapsed when no key is present
-
-**Tests added:** `tests/test_dashboard_panel_chrome.py` — 10 HTML contract tests covering panel order, shared header markup, collapse keys, and default collapsed state. All 290 tests pass.
-
-## Iteration: 2026-06-14 — Issue #48: Drag-and-drop pipeline lane moves
-
-### Summary
-Replaced chevron-based lane moves with HTML5 drag-and-drop on the Kanban Dashboard per PRD #45 Issue #48.
-
-**Removed:**
-- `getKanbanCardMovementButtons` chevron left/right buttons (`title="Move Left"` and `title="Move Right"`)
-
-**Added:**
-- `draggable="true"` on each kanban card via `setAttribute('draggable', 'true')`
-- `dragstart` handler: sets `text/plain` data transfer with job ID, adds `.dragging` class with setTimeout (prevents premature opacity during brief mouse hold)
-- `dragend` handler: removes `.dragging` class and clears any `.drag-over` column highlights
-- `initKanbanDnd()` function: wires `dragover`, `dragleave`, `drop` on each `.kanban-column` found via its `lane-*` wrapper
-  - `dragover`: calls `e.preventDefault()` + adds `.drag-over` highlight
-  - `dragleave`: removes `.drag-over` only when pointer leaves the column entirely (`!column.contains(e.relatedTarget)`)
-  - `drop`: same-lane drop is a silent no-op (`job.status === lane`); otherwise calls `moveJobStage(jobId, lane)` which routes Enriching drops through `enrichJob`
-- Hover-only reject: `getKanbanCardMovementButtons` now returns a single `<button class="kanban-action-btn reject-btn hover-reject">` for non-rejected cards; CSS `.hover-reject { opacity: 0 }` / `.kanban-card:hover .hover-reject { opacity: 1 }`
-- CSS classes: `.hover-reject`, `.kanban-card.dragging`, `.kanban-column.drag-over`
-- `initKanbanDnd()` called at page init alongside `initBoardControls()`
-
-**Tests added:** `tests/test_dashboard_dnd.py` — 13 HTML contract tests asserting absent chevrons, DnD wiring, hover-reject class, same-lane noop guard, and dragging class lifecycle. All 303 tests pass.
-
-## Iteration: 2026-06-14 — Issue #49: Collapsible pipeline lane rails
-
-### Summary
-Added collapsible lane rails to the Kanban Dashboard per PRD #45 Issue #49.
-
-**Layout change:**
-- Changed `.kanban-board-container` from `display: grid` (fixed 6-column grid) to `display: flex` so expanded lanes absorb space freed by collapsed neighbors via `flex: 1`.
-
-**Column changes:**
-- Added `data-lane` attribute to each `.kanban-column` (e.g. `data-lane="sourced"`)
-- Added `class="lane-name-text"` to each lane name span for CSS vertical-text targeting
-- Added a `<button class="lane-collapse-btn">` with `<i class="fa-solid fa-angles-left">` to each column header; calls `toggleLaneCollapse(lane)`
-
-**CSS added:**
-- `.kanban-column.lane-collapsed`: `flex: 0 0 48px; min-width/max-width: 48px` — renders as narrow rail
-- `.kanban-column.lane-collapsed .kanban-col-header`: vertical flex layout (column direction, full height)
-- `.kanban-column.lane-collapsed .lane-name-text`: `writing-mode: vertical-rl; rotate(180deg)` for upward vertical text
-- `.kanban-column.lane-collapsed .lane-collapse-btn i`: `rotate(180deg)` — icon flips to point right when collapsed
-- `.kanban-column.lane-collapsed .kanban-cards-wrapper`: `display: none !important` — hides cards in rail mode
-- `.lane-collapse-btn`: unstyled button with muted colour and hover to primary
-
-**JS added:**
-- `toggleLaneCollapse(lane)`: toggles `lane-collapsed` class on the column, persists to `localStorage` with key `kanban-lane-${lane}-collapsed`
-- `initLaneCollapse()`: reads localStorage for each of the 6 stages and restores collapsed state on page load
-- Both called at page initialisation alongside `initKanbanDnd()`
-
-**DnD compatibility:**
-- No extra wiring needed — `initKanbanDnd()` already attaches `dragover`/`dragleave`/`drop` to `.kanban-column` elements, which remain valid drop targets in collapsed state.
-
-**Tests added:** `tests/test_dashboard_lane_collapse.py` — 15 HTML contract tests covering: collapse button presence, `data-lane` attribute, `lane-name-text` class, CSS class definitions, flex layout, narrow rail width, cards hidden, `toggleLaneCollapse` and `initLaneCollapse` functions, init call, storage key prefix, and DnD drop-target guarantee. All 318 tests pass.

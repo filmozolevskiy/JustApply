@@ -713,6 +713,9 @@
     .kanban-action-btn.reject-btn:hover {
       color: var(--accent-rose);
     }
+    .kanban-action-btn.archive-btn:hover {
+      color: #a78bfa;
+    }
 
     .hover-reject {
       opacity: 0;
@@ -1647,8 +1650,24 @@
     }
 
     function getKanbanCardMovementButtons(job) {
-      if (job.status === 'rejected') return '';
+      if (job.status === 'rejected') {
+        return `<button class="kanban-action-btn archive-btn hover-reject" onclick="archiveJob(${job.id})" title="Archive Job"><i class="fa-solid fa-box-archive"></i></button>`;
+      }
       return `<button class="kanban-action-btn reject-btn hover-reject" onclick="moveJobStage(${job.id}, 'rejected')" title="Reject Job"><i class="fa-solid fa-ban"></i></button>`;
+    }
+
+    async function archiveJob(id) {
+      const job = masterJobs.find(j => j.id === id);
+      if (!job) return;
+      try {
+        const r = await fetch(`/api/jobs/${id}/archive`, { method: 'POST' });
+        if (!r.ok) throw new Error('HTTP error ' + r.status);
+        masterJobs = masterJobs.filter(j => j.id !== id);
+        addLogLine(`Archived [${job.title}] at ${job.company}`, 'info');
+        renderActiveVariant();
+      } catch (err) {
+        addLogLine(`Failed to archive [${job.title}]: ${err.message}`, 'warning');
+      }
     }
 
     function toggleLaneCollapse(lane) {

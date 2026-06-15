@@ -11,7 +11,7 @@ from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment, get_outreach_settings, save_outreach_settings, update_outreach_template
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job
 from ..rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -101,6 +101,17 @@ async def update_contact(job_id: int, contact_idx: int, update: ContactUpdate):
 class TemplateUpdate(BaseModel):
     audience: str
     template: str
+
+
+@app.post("/api/jobs/{job_id}/archive", response_model=Job)
+async def archive_job_endpoint(job_id: int):
+    result = archive_job(job_id)
+    if result is None:
+        job = get_job(job_id)
+        if job is None:
+            return JSONResponse(status_code=404, content={"message": "Job not found"})
+        return JSONResponse(status_code=422, content={"message": "Only Rejected jobs can be archived"})
+    return result
 
 
 @app.put("/api/jobs/{job_id}/template", response_model=Job)

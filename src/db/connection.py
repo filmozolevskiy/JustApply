@@ -88,6 +88,24 @@ def init_db(db_path=None):
     except sqlite3.OperationalError:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN archived INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN rejectedAt TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN autoArchiveExempt INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS outreach_settings (
             id INTEGER PRIMARY KEY,
@@ -112,4 +130,10 @@ def init_db(db_path=None):
     if count == 0:
         _seed_db(cursor)
         conn.commit()
+
+    # Backfill rejectedAt for Rejected jobs that predate this column
+    cursor.execute(
+        "UPDATE jobs SET rejectedAt = datetime('now') WHERE status = 'rejected' AND (rejectedAt IS NULL OR rejectedAt = '')"
+    )
+    conn.commit()
     conn.close()

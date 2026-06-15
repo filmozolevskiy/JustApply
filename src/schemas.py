@@ -59,3 +59,6 @@ class Job(BaseModel):
     isRecruiter: bool = False
     enrichmentNote: str = ""
     activityLog: list[ActivityLogEntry] = []
+    archived: bool = False
+    rejectedAt: str = ""
+    autoArchiveExempt: bool = False

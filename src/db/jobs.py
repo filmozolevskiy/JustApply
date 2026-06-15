@@ -55,6 +55,9 @@ def _parse_job_row(row) -> dict:
     job["recruiterOutreachTemplate"] = job.get("recruiterOutreachTemplate") or ""
     job["russianSpeakerOutreachTemplate"] = job.get("russianSpeakerOutreachTemplate") or ""
     job["companyUrl"] = job.get("companyUrl") or ""
+    job["archived"] = bool(job.get("archived", 0))
+    job["rejectedAt"] = job.get("rejectedAt") or ""
+    job["autoArchiveExempt"] = bool(job.get("autoArchiveExempt", 0))
     # Legacy migration: promote outreachMessage into recruiterOutreachTemplate on read
     if not job["recruiterOutreachTemplate"] and job.get("outreachMessage"):
         job["recruiterOutreachTemplate"] = job["outreachMessage"]
@@ -66,7 +69,7 @@ def get_jobs(db_path=None):
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM jobs ORDER BY id DESC")
+    cursor.execute("SELECT * FROM jobs WHERE archived = 0 ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
     return [_parse_job_row(r) for r in rows]
@@ -85,7 +88,13 @@ def update_job_status(job_id, status, db_path=None):
         conn.close()
         return None
     old_status = old_row[0]
-    cursor.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job_id))
+    if status == "rejected":
+        cursor.execute(
+            "UPDATE jobs SET status = ?, rejectedAt = CASE WHEN (rejectedAt IS NULL OR rejectedAt = '') THEN datetime('now') ELSE rejectedAt END WHERE id = ?",
+            (status, job_id),
+        )
+    else:
+        cursor.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job_id))
     if old_status != status:
         if status == "enriching":
             _append_activity_log(cursor, job_id, "Enrichment started")
@@ -244,6 +253,29 @@ def update_outreach_template(job_id, audience, template, db_path=None):
     row = cursor.fetchone()
     conn.close()
     return _parse_job_row(row) if row else None
+
+
+def archive_job(job_id: int, db_path=None):
+    """Archive a Rejected job. Returns updated job dict or None if not found / not rejected."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT status FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+    if row[0] != "rejected":
+        conn.close()
+        return None
+    cursor.execute("UPDATE jobs SET archived = 1 WHERE id = ?", (job_id,))
+    _append_activity_log(cursor, job_id, "Archived")
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    return _parse_job_row(updated) if updated else None
 
 
 def job_exists(title, company, link=None, db_path=None):
