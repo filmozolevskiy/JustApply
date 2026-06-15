@@ -647,7 +647,21 @@
       color: var(--accent-rose);
     }
 
-
+    .hover-reject {
+      opacity: 0;
+      transition: opacity var(--transition-fast);
+    }
+    .kanban-card:hover .hover-reject {
+      opacity: 1;
+    }
+    .kanban-card.dragging {
+      opacity: 0.4;
+      cursor: grabbing;
+    }
+    .kanban-column.drag-over {
+      background: rgba(6, 182, 212, 0.06);
+      border-color: rgba(6, 182, 212, 0.3);
+    }
 
     .detail-description {
       color: var(--text-secondary);
@@ -1445,6 +1459,16 @@
           const card = document.createElement('div');
           card.className = 'kanban-card';
           card.setAttribute('onclick', `openJobDetailsDrawer(${job.id})`);
+          card.setAttribute('draggable', 'true');
+          card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', String(job.id));
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => card.classList.add('dragging'), 0);
+          });
+          card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            document.querySelectorAll('.kanban-column.drag-over').forEach(c => c.classList.remove('drag-over'));
+          });
 
           let matchClass = 'match-low';
           if (job.matchScore >= 85) matchClass = 'match-high';
@@ -1549,22 +1573,37 @@
     }
 
     function getKanbanCardMovementButtons(job) {
-      const stages = ['sourced', 'enriching', 'enriched', 'contacted', 'interviewing', 'rejected'];
-      const idx = stages.indexOf(job.status);
-      let html = '';
-      if (idx > 0) {
-        html += `<button class="kanban-action-btn" onclick="moveJobStage(${job.id}, '${stages[idx-1]}')" title="Move Left"><i class="fa-solid fa-chevron-left"></i></button>`;
-      }
-      if (idx < stages.length - 1) {
-        html += `<button class="kanban-action-btn" onclick="moveJobStage(${job.id}, '${stages[idx+1]}')" title="Move Right"><i class="fa-solid fa-chevron-right"></i></button>`;
-      }
-      if (job.status !== 'rejected') {
-        html += `<button class="kanban-action-btn reject-btn" onclick="moveJobStage(${job.id}, 'rejected')" title="Reject Job" style="margin-left: 6px;"><i class="fa-solid fa-ban"></i></button>`;
-      }
-      return html;
+      if (job.status === 'rejected') return '';
+      return `<button class="kanban-action-btn reject-btn hover-reject" onclick="moveJobStage(${job.id}, 'rejected')" title="Reject Job"><i class="fa-solid fa-ban"></i></button>`;
     }
 
-
+    function initKanbanDnd() {
+      const stages = ['sourced', 'enriching', 'enriched', 'contacted', 'interviewing', 'rejected'];
+      stages.forEach(lane => {
+        const wrapper = document.getElementById('lane-' + lane);
+        if (!wrapper) return;
+        const column = wrapper.closest('.kanban-column') || wrapper;
+        column.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          column.classList.add('drag-over');
+        });
+        column.addEventListener('dragleave', (e) => {
+          if (!column.contains(e.relatedTarget)) {
+            column.classList.remove('drag-over');
+          }
+        });
+        column.addEventListener('drop', (e) => {
+          e.preventDefault();
+          column.classList.remove('drag-over');
+          const jobId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+          if (!jobId) return;
+          const job = masterJobs.find(j => j.id === jobId);
+          if (!job || job.status === lane) return;
+          moveJobStage(jobId, lane);
+        });
+      });
+    }
 
     // ----------------------------------------------------
     // USER ACTIONS & INTERACTIVITY
@@ -2842,6 +2881,7 @@
 
     // Initialize
     initBoardControls();
+    initKanbanDnd();
     initLogsConsoleState();
     restoreSessionLogs();
     loadResumes();

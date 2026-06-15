@@ -41,3 +41,25 @@ Refactored the four utility panels above the kanban board to use a shared header
 - Updated `toggleLogsHeight()`, `expandLogsConsole()`, `initLogsConsoleState()`, and `toggleScraperSettings()` to use the new keys; `initLogsConsoleState()` now defaults to collapsed when no key is present
 
 **Tests added:** `tests/test_dashboard_panel_chrome.py` — 10 HTML contract tests covering panel order, shared header markup, collapse keys, and default collapsed state. All 290 tests pass.
+
+## Iteration: 2026-06-14 — Issue #48: Drag-and-drop pipeline lane moves
+
+### Summary
+Replaced chevron-based lane moves with HTML5 drag-and-drop on the Kanban Dashboard per PRD #45 Issue #48.
+
+**Removed:**
+- `getKanbanCardMovementButtons` chevron left/right buttons (`title="Move Left"` and `title="Move Right"`)
+
+**Added:**
+- `draggable="true"` on each kanban card via `setAttribute('draggable', 'true')`
+- `dragstart` handler: sets `text/plain` data transfer with job ID, adds `.dragging` class with setTimeout (prevents premature opacity during brief mouse hold)
+- `dragend` handler: removes `.dragging` class and clears any `.drag-over` column highlights
+- `initKanbanDnd()` function: wires `dragover`, `dragleave`, `drop` on each `.kanban-column` found via its `lane-*` wrapper
+  - `dragover`: calls `e.preventDefault()` + adds `.drag-over` highlight
+  - `dragleave`: removes `.drag-over` only when pointer leaves the column entirely (`!column.contains(e.relatedTarget)`)
+  - `drop`: same-lane drop is a silent no-op (`job.status === lane`); otherwise calls `moveJobStage(jobId, lane)` which routes Enriching drops through `enrichJob`
+- Hover-only reject: `getKanbanCardMovementButtons` now returns a single `<button class="kanban-action-btn reject-btn hover-reject">` for non-rejected cards; CSS `.hover-reject { opacity: 0 }` / `.kanban-card:hover .hover-reject { opacity: 1 }`
+- CSS classes: `.hover-reject`, `.kanban-card.dragging`, `.kanban-column.drag-over`
+- `initKanbanDnd()` called at page init alongside `initBoardControls()`
+
+**Tests added:** `tests/test_dashboard_dnd.py` — 13 HTML contract tests asserting absent chevrons, DnD wiring, hover-reject class, same-lane noop guard, and dragging class lifecycle. All 303 tests pass.
