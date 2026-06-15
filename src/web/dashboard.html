@@ -1836,6 +1836,7 @@
     // --- LOG STREAMING & SSE INTEGRATION ---
     let logEventSource = null;
     let enrichEventSource = null;
+    let pageUnloading = false;
     const SESSION_LOGS_KEY = 'taskLogsSession';
     const SESSION_LOGS_MAX = 200;
     const ACTIVE_SCRAPE_TASK_KEY = 'activeScrapeTaskId';
@@ -1914,6 +1915,16 @@
       return skip;
     }
 
+    function markPageUnloading() {
+      pageUnloading = true;
+    }
+
+    function closeTaskLogStreamQuietly(source) {
+      if (!source) return;
+      source._intentionalClose = true;
+      source.close();
+    }
+
     function connectTaskLogStream(taskId, options = {}) {
       const {
         skipKey,
@@ -1925,7 +1936,7 @@
       } = options;
 
       if (existingSource) {
-        existingSource.close();
+        closeTaskLogStreamQuietly(existingSource);
       }
 
       const skip = parseInt(localStorage.getItem(skipKey) || '0', 10);
@@ -1939,7 +1950,7 @@
         } else if (logData.type === 'result') {
           if (onResult) onResult(logData);
         } else if (logData.type === 'done') {
-          es.close();
+          closeTaskLogStreamQuietly(es);
           localStorage.removeItem(taskKey);
           localStorage.removeItem(skipKey);
           if (onDone) onDone(logData);
@@ -1947,7 +1958,11 @@
       };
 
       es.onerror = function(err) {
-        es.close();
+        const intentional = es._intentionalClose || pageUnloading;
+        closeTaskLogStreamQuietly(es);
+        if (intentional) {
+          return;
+        }
         localStorage.removeItem(taskKey);
         localStorage.removeItem(skipKey);
         if (onError) onError(err);
@@ -2043,9 +2058,8 @@
       }
 
       // Connect to FastAPI SSE endpoint to stream logs
-      if (logEventSource) {
-        logEventSource.close();
-      }
+      closeTaskLogStreamQuietly(logEventSource);
+      logEventSource = null;
 
       const url = `/api/search`;
       fetch(url, {
@@ -2812,6 +2826,10 @@
           renderActiveVariant();
         },
         onError() {
+          addLogLine(
+            'Background scrape task is no longer available on the server.',
+            'info'
+          );
           resetScrapeButtons();
         },
       });
@@ -2868,6 +2886,15 @@
         });
       } catch (e) { console.error('Failed to save outreach setting', e); }
     }
+
+    window.addEventListener('beforeunload', markPageUnloading);
+    window.addEventListener('pagehide', () => {
+      markPageUnloading();
+      closeTaskLogStreamQuietly(logEventSource);
+      logEventSource = null;
+      closeTaskLogStreamQuietly(enrichEventSource);
+      enrichEventSource = null;
+    });
 
     // Initialize
     initBoardControls();
