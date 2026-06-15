@@ -1755,6 +1755,7 @@
           if (!jobId) return;
           const job = masterJobs.find(j => j.id === jobId);
           if (!job || job.status === lane) return;
+          if (job.archived && lane === 'enriching') return;
           moveJobStage(jobId, lane);
         });
       });

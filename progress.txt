@@ -1,5 +1,27 @@
 # Ralph Loop Progress Log
 
+## Iteration 4 — Issue #55: Archived card drag rules
+
+### Summary
+Implemented drag-and-drop rules for archived cards on the Kanban Dashboard (Parent PRD #51).
+
+**Dashboard** (`src/web/dashboard.html`):
+- `initKanbanDnd()` drop handler: added one-line guard — `if (job.archived && lane === 'enriching') return;` — after the existing same-lane no-op check. Archived cards dragged onto the Enriching lane are silently ignored (no status change, no enrichment trigger, no toast). Archived cards dragged to any other lane proceed through `moveJobStage` as normal; `update_job_status` never touches the `archived` column, so archived stays `true`.
+- Non-archived cards are unaffected.
+- Un-archive hover button already renders on archived cards in any lane from iteration 3; no changes needed.
+
+**Tests** (`tests/test_archived_drag.py`): 8 new TDD tests (red→green) covering:
+1. HTML guard `job.archived && lane === 'enriching'` is present in the drop handler
+2. Guard is an early `return` (silent no-op)
+3. Non-archived cards still call `moveJobStage` (no regression)
+4. DB: `update_job_status` on archived job preserves `archived=True`
+5. DB: archived job can be moved to any valid status (contacted)
+6. Archived moved job stays absent from active board
+7. Archived moved job stays visible in archived view
+8. API: `PUT /api/jobs/{id}/status` on archived job returns `archived=True`
+
+All 371 tests pass.
+
 ## Iteration 3 — Issue #54: Archived visibility filter and un-archive
 
 ### Summary
