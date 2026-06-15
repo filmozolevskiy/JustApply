@@ -105,10 +105,47 @@ APIFY_API_BASE = "https://api.apify.com/v2"
 ACTOR_ID = "harvestapi~linkedin-company-employees"
 CONTACT_SAMPLE_SIZE = 100
 
+_COMPANY_SUFFIXES = (
+    "-technologies", "-technology", "-incorporated", "-corporation",
+    "-holdings", "-international", "-solutions", "-services",
+    "-inc", "-corp", "-llc", "-ltd", "-group", "-co",
+)
 
 
-async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float = 300.0, poll_interval: float = 5.0) -> list:
-    """Fetch up to CONTACT_SAMPLE_SIZE employees for a company via Apify."""
+def normalize_company_slug(company: str) -> str:
+    """Return the primary LinkedIn company slug derived from a display name."""
+    return company.lower().strip().replace(" ", "-").replace("_", "-")
+
+
+def company_slug_candidates(company: str) -> list[str]:
+    """Return ordered LinkedIn company slug variants to try for Apify lookup."""
+    base = normalize_company_slug(company)
+    if not base:
+        return []
+
+    candidates = [base]
+    first = base.split("-", 1)[0]
+    if first and first != base:
+        candidates.append(first)
+
+    for suffix in _COMPANY_SUFFIXES:
+        if base.endswith(suffix):
+            stripped = base[: -len(suffix)]
+            if stripped and stripped not in candidates:
+                candidates.append(stripped)
+
+    return candidates
+
+
+async def _fetch_apify_employees_at_url(
+    company_url: str,
+    *,
+    label: str,
+    log_func=None,
+    timeout_seconds: float = 300.0,
+    poll_interval: float = 5.0,
+) -> list:
+    """Run Apify against one LinkedIn company page URL."""
 
     async def log(msg, level="info"):
         if log_func:
@@ -123,8 +160,6 @@ async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float =
         await log("APIFY_API_TOKEN not set, skipping Apify sourcing.", "warning")
         return []
 
-    slug = company.lower().strip().replace(" ", "-").replace("_", "-")
-    company_url = f"https://www.linkedin.com/company/{slug}/"
     actor_input = {"companies": [company_url], "maxItems": CONTACT_SAMPLE_SIZE}
 
     run_url = f"{APIFY_API_BASE}/acts/{ACTOR_ID}/runs"
@@ -178,8 +213,104 @@ async def _run_apify_actor(company: str, log_func=None, timeout_seconds: float =
             return []
 
         items = data_resp.json()
-        await log(f"Apify returned {len(items)} employees.", "info")
+        await log(f"Apify returned {len(items)} employees for {label}.", "info")
         return items
+
+
+async def _run_apify_for_slug(
+    slug: str,
+    log_func=None,
+    timeout_seconds: float = 300.0,
+    poll_interval: float = 5.0,
+) -> list:
+    """Fetch up to CONTACT_SAMPLE_SIZE employees for one LinkedIn company slug via Apify."""
+    company_url = f"https://www.linkedin.com/company/{slug}/"
+    return await _fetch_apify_employees_at_url(
+        company_url,
+        label=f"slug '{slug}'",
+        log_func=log_func,
+        timeout_seconds=timeout_seconds,
+        poll_interval=poll_interval,
+    )
+
+
+async def _run_apify_for_company_page(
+    company_url: str,
+    log_func=None,
+    timeout_seconds: float = 300.0,
+    poll_interval: float = 5.0,
+) -> list:
+    """Fetch employees using a Bright Data company page URL."""
+    normalized = normalize_linkedin_company_url(company_url)
+    if not normalized:
+        return []
+    slug = linkedin_company_slug_from_url(normalized)
+    return await _fetch_apify_employees_at_url(
+        normalized,
+        label=f"company URL '{slug}'",
+        log_func=log_func,
+        timeout_seconds=timeout_seconds,
+        poll_interval=poll_interval,
+    )
+
+
+async def _run_apify_actor(
+    company: str,
+    log_func=None,
+    timeout_seconds: float = 300.0,
+    poll_interval: float = 5.0,
+    company_url: str | None = None,
+) -> list:
+    """Fetch employees via Apify, preferring Bright Data company_url then slug variants."""
+
+    async def log(msg, level="info"):
+        if log_func:
+            if inspect.iscoroutinefunction(log_func):
+                await log_func(msg, level)
+            else:
+                log_func(msg, level)
+
+    if company_url:
+        try:
+            items = await _run_apify_for_company_page(
+                company_url,
+                log_func=log_func,
+                timeout_seconds=timeout_seconds,
+                poll_interval=poll_interval,
+            )
+        except ApifyTimeoutError:
+            raise
+        if items:
+            return items
+        await log("No employees at Bright Data company URL; trying name-based slug variants.", "info")
+
+    candidates = company_slug_candidates(company)
+    if not candidates:
+        await log("No company name for Apify sourcing.", "warning")
+        return []
+
+    last_error = None
+    for slug in candidates:
+        try:
+            items = await _run_apify_for_slug(
+                slug,
+                log_func=log_func,
+                timeout_seconds=timeout_seconds,
+                poll_interval=poll_interval,
+            )
+        except ApifyTimeoutError as exc:
+            last_error = exc
+            raise
+        if items:
+            if slug != candidates[0]:
+                await log(f"Resolved LinkedIn company slug '{slug}' for '{company}'.", "info")
+            return items
+        if len(candidates) > 1:
+            await log(f"No employees for slug '{slug}'; trying next variant.", "info")
+
+    if last_error:
+        raise last_error
+    return []
 
 
 def _normalize_apify_employee(item: dict) -> dict:
@@ -199,6 +330,14 @@ def _normalize_apify_employee(item: dict) -> dict:
     }
 
 
+def company_cache_slug(company: str, company_url: str = "") -> str:
+    """Return the cache key slug for a company's Contact Sample."""
+    slug = linkedin_company_slug_from_url(company_url)
+    if slug:
+        return slug
+    return normalize_company_slug(company)
+
+
 def normalize_linkedin_url(url: str) -> str:
     """Return the canonical /in/{slug} path from any LinkedIn profile URL."""
     if not url:
@@ -207,6 +346,22 @@ def normalize_linkedin_url(url: str) -> str:
     if match:
         return f"/in/{match.group(1)}"
     return ""
+
+
+def linkedin_company_slug_from_url(url: str) -> str:
+    """Return the /company/{slug} segment from a LinkedIn company page URL."""
+    if not url:
+        return ""
+    match = re.search(r'/company/([^/?#]+)', url)
+    return match.group(1) if match else ""
+
+
+def normalize_linkedin_company_url(url: str) -> str:
+    """Return a canonical LinkedIn company page URL without query params."""
+    slug = linkedin_company_slug_from_url(url)
+    if not slug:
+        return ""
+    return f"https://www.linkedin.com/company/{slug}/"
 
 
 def _poster_to_apify_item(poster: dict) -> dict:
@@ -223,7 +378,7 @@ def _poster_to_apify_item(poster: dict) -> dict:
     }
 
 
-async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: bool = False) -> list:
+async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: bool = False, meta: dict | None = None) -> list:
     """
     Return outreach contacts for a job using LLM classification.
 
@@ -258,11 +413,12 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
     }
 
     company = job.get("company") or ""
+    company_url = job.get("companyUrl") or ""
     if not company:
         await log("No company name for Apify sourcing.", "warning")
         return []
 
-    slug = company.lower().strip().replace(" ", "-").replace("_", "-")
+    slug = company_cache_slug(company, company_url)
 
     if bust_cache:
         delete_contact_sample(slug)
@@ -279,7 +435,11 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
     else:
         await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
         try:
-            items = await _run_apify_actor(company, log_func=log_func)
+            items = await _run_apify_actor(
+                company,
+                log_func=log_func,
+                company_url=company_url or None,
+            )
         except ApifyTimeoutError as e:
             await log(f"Apify polling timed out: {e}", "error")
             items = []
@@ -287,6 +447,7 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
             set_contact_sample(slug, items, display_name=company)
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
+    fetched_profiles = bool(items)
 
     if items:
         if job_poster and poster_slug:
@@ -306,6 +467,12 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
         contacts = await classify_contacts([_poster_to_apify_item(job_poster)], settings)
     else:
         contacts = []
+
+    if meta is not None and not contacts:
+        if not fetched_profiles and not job_poster:
+            meta["empty_reason"] = "no_employees"
+        else:
+            meta["empty_reason"] = "no_audience_match"
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
     for contact in contacts:

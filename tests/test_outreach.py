@@ -14,7 +14,18 @@ from src.web.server import app
 from fastapi.testclient import TestClient
 
 import src.core.outreach as outreach_module
-from src.core.outreach import source_contacts, _normalize_apify_employee, _run_apify_actor, ApifyTimeoutError, classify_contacts, normalize_linkedin_url
+from src.core.outreach import (
+    source_contacts,
+    _normalize_apify_employee,
+    _run_apify_actor,
+    ApifyTimeoutError,
+    classify_contacts,
+    normalize_linkedin_url,
+    company_slug_candidates,
+    normalize_company_slug,
+    linkedin_company_slug_from_url,
+    company_cache_slug,
+)
 from src.schemas import OutreachSettings
 
 client = TestClient(app)
@@ -334,6 +345,102 @@ def test_contact_toggle_does_not_downgrade_status(setup_test_db):
 def test_contact_toggle_returns_404_for_missing_job():
     response = client.put("/api/jobs/99999/contacts/0", json={"contacted": True})
     assert response.status_code == 404
+
+
+# --- Company slug resolution ---
+
+def test_company_cache_slug_prefers_company_url():
+    assert company_cache_slug(
+        "Trane Technologies",
+        "https://www.linkedin.com/company/tranetechnologies?trk=x",
+    ) == "tranetechnologies"
+
+
+def test_linkedin_company_slug_from_url_extracts_slug():
+    url = "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
+    assert linkedin_company_slug_from_url(url) == "tranetechnologies"
+
+
+def test_normalize_company_slug():
+    assert normalize_company_slug("Trane Technologies") == "trane-technologies"
+
+
+def test_company_slug_candidates_includes_first_word_and_suffix_strips():
+    assert company_slug_candidates("Trane Technologies") == ["trane-technologies", "trane"]
+
+
+def test_company_slug_candidates_deduplicates_suffix_variants():
+    assert company_slug_candidates("Acme Corp") == ["acme-corp", "acme"]
+
+
+@pytest.mark.asyncio
+async def test_run_apify_actor_uses_company_url_before_slug_variants():
+    company_page = "https://www.linkedin.com/company/tranetechnologies?trk=x"
+    employees = [{"firstName": "Jane", "lastName": "Doe", "linkedinUrl": ""}]
+
+    with patch.object(outreach_module, "_run_apify_for_company_page", new=AsyncMock(return_value=employees)) as mock_url, \
+         patch.object(outreach_module, "_run_apify_for_slug", new=AsyncMock(return_value=[])) as mock_slug:
+        result = await _run_apify_actor("Trane Technologies", company_url=company_page)
+
+    assert result == employees
+    mock_url.assert_called_once()
+    mock_slug.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_apify_actor_tries_slug_variants_until_profiles_found():
+    async def mock_for_slug(slug, **kwargs):
+        if slug == "trane":
+            return [{"firstName": "Jane", "lastName": "Doe", "linkedinUrl": "https://linkedin.com/in/jane"}]
+        return []
+
+    with patch.object(outreach_module, "_run_apify_for_slug", new=AsyncMock(side_effect=mock_for_slug)) as mock_run:
+        items = await _run_apify_actor("Trane Technologies")
+
+    assert len(items) == 1
+    assert mock_run.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_passes_company_url_to_apify():
+    job = {
+        "title": "Product Application Engineer",
+        "company": "Trane Technologies",
+        "companyUrl": "https://www.linkedin.com/company/tranetechnologies?trk=x",
+        "contacts": [],
+    }
+    employees = [{"firstName": "Jane", "lastName": "Doe", "headline": "Recruiter", "linkedinUrl": ""}]
+    classified = [{"name": "Jane Doe", "title": "Recruiter", "url": "", "contacted": False,
+                   "russian_speaker": False, "is_recruiter": True, "currentPosition": "", "location": ""}]
+
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)) as mock_apify, \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=classified)):
+        await source_contacts(job)
+
+    mock_apify.assert_called_once()
+    assert mock_apify.call_args.kwargs["company_url"] == job["companyUrl"]
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
+    job = {"title": "QA Engineer", "company": "Trane Technologies", "contacts": []}
+    meta = {}
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=[])):
+        result = await source_contacts(job, meta=meta)
+    assert result == []
+    assert meta["empty_reason"] == "no_employees"
+
+
+@pytest.mark.asyncio
+async def test_source_contacts_sets_meta_no_audience_match_when_classified_empty():
+    job = {"title": "QA Engineer", "company": "Acme", "contacts": []}
+    employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Engineer", "linkedinUrl": ""}]
+    meta = {}
+    with patch.object(outreach_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+         patch.object(outreach_module, "classify_contacts", new=AsyncMock(return_value=[])):
+        result = await source_contacts(job, meta=meta)
+    assert result == []
+    assert meta["empty_reason"] == "no_audience_match"
 
 
 # --- Apify polling timeout ---

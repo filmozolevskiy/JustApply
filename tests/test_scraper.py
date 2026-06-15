@@ -75,6 +75,21 @@ async def test_scraper_unset_mock_scraper_and_missing_api_key_raises_value_error
         )
     assert "BRIGHTDATA_API_KEY" in str(excinfo.value)
 
+def test_normalize_brightdata_job_preserves_company_url():
+    raw_job = {
+        "job_title": "Product Application Engineer",
+        "company_name": "Trane Technologies",
+        "company_url": "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name",
+        "url": "https://linkedin.com/jobs/view/1234",
+        "job_location": "Montreal, QC",
+        "is_remote": False,
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert result["companyUrl"] == (
+        "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
+    )
+
+
 def test_normalize_brightdata_job_sets_is_job_poster_flag():
     raw_job = {
         "job_title": "Senior QA",

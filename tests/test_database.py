@@ -61,6 +61,23 @@ def test_database_lifecycle(tmp_path):
     assert added_job["strengths"] == ["Testing", "Scaling"]
     assert added_job["shouldProceed"] is True
 
+
+def test_add_job_persists_company_url(tmp_path):
+    db_str = str(tmp_path / "test_job_tracker.db")
+    init_db(db_str)
+
+    job_id = add_job({
+        "title": "Product Application Engineer",
+        "company": "Trane Technologies",
+        "companyUrl": "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name",
+    }, db_str)
+
+    job = next(j for j in get_jobs(db_str) if j["id"] == job_id)
+    assert job["companyUrl"] == (
+        "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
+    )
+
+
 def test_update_nonexistent_job(tmp_path):
     test_db = tmp_path / "test_job_tracker.db"
     db_str = str(test_db)

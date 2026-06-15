@@ -35,6 +35,7 @@ class Job(BaseModel):
     id: Optional[int] = None
     title: str
     company: str
+    companyUrl: str = ""
     size: str = ""
     link: str = ""
     date: str = ""

@@ -54,6 +54,7 @@ def _parse_job_row(row) -> dict:
     job["enrichmentNote"] = job.get("enrichmentNote") or ""
     job["recruiterOutreachTemplate"] = job.get("recruiterOutreachTemplate") or ""
     job["russianSpeakerOutreachTemplate"] = job.get("russianSpeakerOutreachTemplate") or ""
+    job["companyUrl"] = job.get("companyUrl") or ""
     # Legacy migration: promote outreachMessage into recruiterOutreachTemplate on read
     if not job["recruiterOutreachTemplate"] and job.get("outreachMessage"):
         job["recruiterOutreachTemplate"] = job["outreachMessage"]
@@ -293,9 +294,9 @@ def add_job(job, db_path=None):
         INSERT INTO jobs (
             title, company, size, link, date, location, remoteType, seniority, salary,
             description, matchScore, matchType, shouldProceed, status, resumeUsed,
-            strengths, gaps, contacts, outreachMessage, comment, isRecruiter
+            strengths, gaps, contacts, outreachMessage, comment, isRecruiter, companyUrl
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         title,
@@ -318,7 +319,8 @@ def add_job(job, db_path=None):
         json.dumps(job.get("contacts") or []),
         job.get("outreachMessage") or "",
         job.get("comment") or job.get("Comment") or "",
-        1 if job.get("isRecruiter") else 0
+        1 if job.get("isRecruiter") else 0,
+        job.get("companyUrl") or "",
     ))
     new_id = cursor.lastrowid
     _append_activity_log(cursor, new_id, "Sourced")

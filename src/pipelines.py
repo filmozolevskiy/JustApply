@@ -160,15 +160,25 @@ async def run_enrichment_pipeline(job: dict, log_func=None, bust_cache: bool = F
     enrichment_note = ""
     contacts = []
 
+    source_meta = {}
     try:
         settings = OutreachSettings(**database.get_outreach_settings())
-        contacts = await source_contacts(job, settings=settings, log_func=log_func, bust_cache=bust_cache)
+        contacts = await source_contacts(
+            job,
+            settings=settings,
+            log_func=log_func,
+            bust_cache=bust_cache,
+            meta=source_meta,
+        )
     except Exception as exc:
         enrichment_note = f"Enrichment failed: {exc}"
         await log(enrichment_note, "error")
 
     if not enrichment_note and not contacts:
-        enrichment_note = "No contacts matched active Outreach Settings."
+        if source_meta.get("empty_reason") == "no_employees":
+            enrichment_note = "No LinkedIn employees found for this company."
+        else:
+            enrichment_note = "No contacts matched active Outreach Settings."
         await log("No contacts found.", "warning")
     elif contacts:
         await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")

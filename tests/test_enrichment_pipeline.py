@@ -25,6 +25,28 @@ _BOTH_TEMPLATES = {
 
 
 @pytest.mark.asyncio
+async def test_enrichment_no_employees_sets_specific_note(db):
+    """Zero Apify profiles sets a company-specific enrichmentNote."""
+    log_records = []
+
+    async def capture_log(msg, level="info"):
+        log_records.append((msg, level))
+
+    async def mock_source_contacts(job, settings=None, log_func=None, bust_cache=False, meta=None):
+        if meta is not None:
+            meta["empty_reason"] = "no_employees"
+        return []
+
+    with patch("src.pipelines.source_contacts", new=mock_source_contacts), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
+        from src.pipelines import run_enrichment_pipeline
+        job = get_job(1, db_path=db)
+        result = await run_enrichment_pipeline(job, log_func=capture_log)
+
+    assert result["enrichmentNote"] == "No LinkedIn employees found for this company."
+
+
+@pytest.mark.asyncio
 async def test_enrichment_failure_zero_contacts_sets_note(db):
     """Zero contacts sets a non-empty enrichmentNote on the job."""
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \

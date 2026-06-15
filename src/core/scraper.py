@@ -112,6 +112,7 @@ def normalize_brightdata_job(job: dict) -> dict:
     """Normalize a Bright Data job object into the standard database schema."""
     title = job.get("job_title") or job.get("title") or ""
     company = job.get("company_name") or job.get("company") or ""
+    company_url = job.get("company_url") or job.get("companyUrl") or ""
     size = job.get("company_size") or job.get("size") or ""
     link = job.get("url") or job.get("apply_link") or job.get("link") or ""
     date = job.get("date_posted") or job.get("date") or ""
@@ -155,6 +156,7 @@ def normalize_brightdata_job(job: dict) -> dict:
     return {
         "title": title,
         "company": company,
+        "companyUrl": company_url,
         "size": size,
         "link": link,
         "date": date,
@@ -166,6 +168,7 @@ def normalize_brightdata_job(job: dict) -> dict:
         "status": "sourced",
         "contacts": contacts
     }
+
 
 async def _scrape_linkedin_jobs_mock(
     query: str,
