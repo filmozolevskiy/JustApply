@@ -505,6 +505,11 @@
       gap: 8px;
     }
 
+    .panel-section-divider {
+      border-top: 1px solid var(--border-color);
+      margin: 0;
+    }
+
     .toggle-switch {
       position: relative;
       display: inline-block;
@@ -972,7 +977,7 @@
          ---------------------------------------------------- -->
     <section id="variant-b">
       <!-- Pipeline Tracker panel (shared header chrome) -->
-      <div class="glass-panel" id="pipeline-tracker-panel" style="margin-bottom: 8px;">
+      <div class="glass-panel" id="pipeline-tracker-panel" style="margin-bottom: 16px;">
         <div class="panel-header">
           <div class="panel-header-left">
             <i class="fa-solid fa-chart-gantt"></i>
@@ -1054,6 +1059,34 @@
             <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()"><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
           </div>
         </div>
+
+        <div class="panel-section-divider"></div>
+
+        <!-- Outreach Settings (nested in Pipeline Tracker) -->
+        <div class="panel-section" id="outreach-settings-section">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
+            <div class="panel-header-left">
+              <i class="fa-solid fa-bullhorn"></i>
+              <span>Outreach Settings</span>
+            </div>
+            <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Task Logs panel (shared header chrome, collapsed by default) -->
@@ -1070,32 +1103,6 @@
         </div>
         <div class="terminal-console shrunk" id="kb-logs-console" data-collapse-key="panel-task-logs-collapsed" style="margin: 0 20px 16px;">
           <div class="terminal-line"><span class="terminal-time">13:10:00</span><span class="terminal-text">System initialized. Ready to trigger.</span></div>
-        </div>
-      </div>
-
-      <!-- Outreach Settings panel (shared header chrome, always visible) -->
-      <div class="glass-panel" id="outreach-settings-panel" style="margin-bottom: 16px;">
-        <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
-          <div class="panel-header-left">
-            <i class="fa-solid fa-bullhorn"></i>
-            <span>Outreach Settings</span>
-          </div>
-          <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-              <label class="toggle-switch">
-                <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
-                <span class="toggle-slider"></span>
-              </label>
-              <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-              <label class="toggle-switch">
-                <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
-                <span class="toggle-slider"></span>
-              </label>
-              <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
-            </label>
-          </div>
         </div>
       </div>
 

@@ -122,9 +122,12 @@ def test_dashboard_html_outreach_panel_is_separate_from_board_controls():
         content = f.read()
     outreach_pos = content.find("Outreach Settings")
     board_controls_pos = content.find("Board Controls")
-    assert outreach_pos != -1, "Outreach Settings panel not found"
+    assert outreach_pos != -1, "Outreach Settings section not found"
     assert board_controls_pos != -1, "Board Controls panel not found"
-    assert outreach_pos != board_controls_pos, "Outreach Settings must be separate from Board Controls"
+    assert outreach_pos < board_controls_pos, "Outreach Settings must appear before Board Controls"
+    pt_start = content.index('id="pipeline-tracker-panel"')
+    pt_end = content.index('id="kb-logs-panel"')
+    assert pt_start < outreach_pos < pt_end, "Outreach Settings must be nested in Pipeline Tracker"
 
 
 def _get_drawer_body(content):

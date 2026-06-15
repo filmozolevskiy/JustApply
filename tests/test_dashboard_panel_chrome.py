@@ -9,15 +9,29 @@ def _read_html():
 
 
 def test_panel_order():
-    """Pipeline Tracker → Task Logs → Outreach Settings → Board Controls → kanban."""
+    """Pipeline Tracker (with Outreach Settings) → Task Logs → Board Controls → kanban."""
     content = _read_html()
     pt_idx = content.index("Pipeline Tracker")
-    tl_idx = content.index("Task Logs")
     os_idx = content.index("Outreach Settings")
+    tl_idx = content.index("Task Logs")
     bc_idx = content.index('id="board-controls-panel"')
     kb_idx = content.index("kanban-lanes-container")
-    assert pt_idx < tl_idx < os_idx < bc_idx < kb_idx, (
-        f"Panel order wrong: PT={pt_idx} TL={tl_idx} OS={os_idx} BC={bc_idx} KB={kb_idx}"
+    assert pt_idx < os_idx < tl_idx < bc_idx < kb_idx, (
+        f"Panel order wrong: PT={pt_idx} OS={os_idx} TL={tl_idx} BC={bc_idx} KB={kb_idx}"
+    )
+
+
+def test_outreach_settings_nested_in_pipeline_tracker():
+    """Outreach Settings must live inside the Pipeline Tracker panel."""
+    content = _read_html()
+    pt_start = content.index('id="pipeline-tracker-panel"')
+    pt_end = content.index('id="kb-logs-panel"')
+    pt_block = content[pt_start:pt_end]
+    assert "Outreach Settings" in pt_block, (
+        "Outreach Settings must be nested inside pipeline-tracker-panel"
+    )
+    assert 'id="outreach-settings-section"' in pt_block, (
+        "Outreach Settings section id must be inside pipeline-tracker-panel"
     )
 
 
@@ -35,10 +49,10 @@ def test_board_controls_immediately_precedes_kanban():
 
 
 def test_shared_panel_header_class():
-    """All four utility panels use the panel-header class."""
+    """Utility panels use the panel-header class (Pipeline Tracker, Outreach, Task Logs, Board Controls)."""
     content = _read_html()
     assert content.count("panel-header") >= 4, (
-        "Expected at least 4 panel-header class uses (one per utility panel)"
+        "Expected at least 4 panel-header class uses (Pipeline Tracker, Outreach, Task Logs, Board Controls)"
     )
 
 
@@ -92,13 +106,25 @@ def test_board_controls_has_id():
 
 
 def test_outreach_settings_no_cyan_border():
-    """Outreach Settings panel must not use the inline border-color cyan tint."""
+    """Outreach Settings section must not use the inline border-color cyan tint."""
     content = _read_html()
-    # Check the outreach-settings-panel element's inline style is clean
-    os_idx = content.index('id="outreach-settings-panel"')
+    os_idx = content.index('id="outreach-settings-section"')
     tag_start = content.rindex("<", 0, os_idx)
     tag_end = content.index(">", os_idx)
     tag = content[tag_start:tag_end]
     assert "rgba(6, 182, 212, 0.2)" not in tag, (
-        "Outreach Settings panel should not have inline cyan border-color"
+        "Outreach Settings section should not have inline cyan border-color"
+    )
+
+
+def test_outreach_settings_has_section_divider():
+    """Outreach Settings must be separated from Scraper Settings by a horizontal divider."""
+    content = _read_html()
+    pt_start = content.index('id="pipeline-tracker-panel"')
+    pt_end = content.index('id="kb-logs-panel"')
+    pt_block = content[pt_start:pt_end]
+    os_idx = pt_block.index("Outreach Settings")
+    divider_idx = pt_block.rindex("panel-section-divider", 0, os_idx)
+    assert divider_idx != -1, (
+        "A panel-section-divider must appear before Outreach Settings inside Pipeline Tracker"
     )
