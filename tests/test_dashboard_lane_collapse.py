@@ -104,6 +104,27 @@ def test_storage_key_uses_kanban_lane_prefix():
         "Local storage key for collapsed lane must use 'kanban-lane-' prefix"
 
 
+def test_kanban_board_stretches_columns_to_equal_height():
+    content = _read_html()
+    idx = content.find(".kanban-board-container")
+    snippet = content[idx:idx + 220]
+    assert "align-items: stretch" in snippet, (
+        ".kanban-board-container must stretch columns to equal height"
+    )
+
+
+def test_kanban_cards_wrapper_fills_column():
+    content = _read_html()
+    idx = content.find(".kanban-cards-wrapper {")
+    snippet = content[idx:idx + 220]
+    assert "flex: 1" in snippet, (
+        ".kanban-cards-wrapper must grow to fill the column height"
+    )
+    assert "overflow-y: auto" in snippet, (
+        ".kanban-cards-wrapper must scroll overflow instead of the column"
+    )
+
+
 def test_collapsed_column_is_valid_drop_target():
     content = _read_html()
     # DnD drop handler is registered on .kanban-column — collapsed columns
