@@ -1986,20 +1986,6 @@
       moveJobStage(id, newStatus);
     }
 
-    function regenerateOutreach(id) {
-      const job = masterJobs.find(j => j.id === id);
-      if (job) {
-        addLogLine(`Regenerating outreach message for ${job.company}...`, 'warning');
-        setTimeout(() => {
-          job.outreachMessage = `Dear ${job.contactName},\n\nI am re-writing to express my high interest in ${job.title}. After looking over the requirements, my skillset in ${job.strengths[0]} is a direct match. Looking forward to discussing this.\n\nRespectfully,\nCandidate`;
-          addLogLine(`Outreach regenerated.`, 'success');
-          renderActiveVariant();
-        }, 600);
-      }
-    }
-
-
-
     // --- LOG STREAMING & SSE INTEGRATION ---
     let logEventSource = null;
     let enrichEventSource = null;

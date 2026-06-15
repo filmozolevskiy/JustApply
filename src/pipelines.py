@@ -4,7 +4,7 @@ import inspect
 from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
-from .core.outreach import source_contacts, generate_outreach_for_job, generate_outreach_templates
+from .core.outreach import source_contacts, generate_outreach_templates
 from .schemas import OutreachSettings
 
 
