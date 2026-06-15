@@ -5,6 +5,8 @@ import asyncio
 import httpx
 from dotenv import load_dotenv
 
+from .pre_evaluation import normalize_remote_type
+
 # Load environment variables
 load_dotenv()
 
@@ -127,6 +129,8 @@ def normalize_brightdata_job(job: dict) -> dict:
         remote_type = "hybrid"
     else:
         remote_type = "in_office"
+
+    remote_type = normalize_remote_type(remote_type)
         
     title_lower = title.lower()
     raw_seniority = (job.get("job_seniority_level") or job.get("seniority") or "").lower()
@@ -449,17 +453,12 @@ async def scrape_linkedin_jobs(
         #     await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
         #     continue
 
-        # 3. Settings Filter - Remote Type (Moved to LLM matcher)
-        # if "any" not in remote_types and normalized["remoteType"] not in remote_types:
-        #     await log(f"Skipping '{normalized['title']}': Remote Type '{normalized['remoteType']}' not in target {remote_types}", "info")
-        #     continue
-
-        # 4. Settings Filter - Seniority
+        # 3. Settings Filter - Seniority
         if "any" not in seniorities and normalized["seniority"] not in seniorities:
             await log(f"Skipping '{normalized['title']}': Seniority '{normalized['seniority']}' not in target {seniorities}", "info")
             continue
 
-        # 5. Settings Filter - Company Size
+        # 4. Settings Filter - Company Size
         if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):
             await log(f"Skipping '{normalized['title']}': Company Size '{normalized['size']}' does not match {company_sizes}", "info")
             continue

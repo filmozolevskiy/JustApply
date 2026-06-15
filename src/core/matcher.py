@@ -37,13 +37,7 @@ def load_resume(name: str) -> str:
         return f.read()
 
 
-def _build_prompt(resume: str, job_title: str, company: str, description: str, allowed_remote_types: list = None) -> str:
-    allowed_str = "any"
-    if allowed_remote_types:
-        normalized_types = [t.lower().strip() for t in allowed_remote_types if t]
-        if "any" not in normalized_types:
-            allowed_str = ", ".join(normalized_types)
-
+def _build_prompt(resume: str, job_title: str, company: str, description: str) -> str:
     return f"""You are a resume matcher. Compare the candidate's resume to the job listing and evaluate compatibility.
 
 RESUME:
@@ -53,8 +47,6 @@ JOB LISTING:
 Title: {job_title}
 Company: {company}
 Description: {description}
-
-Candidate's Allowed Remote Preferences: {allowed_str}
 
 Respond with a JSON object (no markdown, no extra text) in this exact format:
 {{
@@ -76,9 +68,6 @@ Rules:
   * "remote" means work from home/anywhere, no office presence required.
   * "hybrid" means part-time in office, part-time remote.
   * "in_office" means fully in office.
-- If Candidate's Allowed Remote Preferences is not "any":
-  * Check if the determined "remoteType" is one of the allowed remote preferences (e.g., if preferences are "remote" and the job is "hybrid" or "in_office", it is a mismatch).
-  * If there is a mismatch: you MUST set "shouldProceed" to false, add the mismatch discrepancy to the "gaps" list (e.g., "Job is hybrid/in-office, but candidate prefers remote-only"), and lower the "matchScore" to be below 75 (typically between 30 and 60 depending on other factors).
 - Identify if the listing company is a recruiting/staffing/headhunting agency rather than the direct hiring employer (e.g. Randstad, Fuze HR, Teksystems, Robert Half, or if the description uses third-person phrasing like "Our client...", "A leading firm is seeking...", etc.).
   * If the job is posted by a recruiting/staffing firm: set "isRecruiter" to true. In this case, you MUST set "shouldProceed" to false, add "Posted by a recruiting agency/staffing firm" to the "gaps" list, and apply a penalty to "matchScore" by subtracting 15 points (or capping it at a maximum of 70).
   * If it is a direct employer, set "isRecruiter" to false.
@@ -86,7 +75,7 @@ Rules:
 """
 
 
-async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_remote_types: list = None) -> dict:
+async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:
     """
     Evaluate a job against a resume using the Gemini API.
     Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, summary, isRecruiter, salary.
@@ -116,7 +105,6 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None, allowed_re
         job.get("title", ""),
         company_name,
         job.get("description", ""),
-        allowed_remote_types
     )
 
     max_retries = 4

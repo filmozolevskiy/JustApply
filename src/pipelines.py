@@ -5,6 +5,7 @@ from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
 from .core.enrichment import source_contacts, generate_outreach_templates
+from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
 from .schemas import OutreachSettings
 
 
@@ -62,10 +63,6 @@ async def run_search_pipeline(
     pre_filtered_count = 0
     evaluated_count = 0
 
-    # Normalise allowed remote types once for Pre-Evaluation Filter comparisons.
-    _allowed_remote = [t.lower().strip() for t in (allowed_remote_types or [])]
-    _filter_remote = bool(_allowed_remote) and "any" not in _allowed_remote
-
     for job in jobs:
         title = job.get("title") or ""
         company = job.get("company") or ""
@@ -78,15 +75,13 @@ async def run_search_pipeline(
             continue
 
         # 2. Pre-Evaluation Filters — cheap non-LLM checks before Resume Matcher.
-        if _filter_remote:
-            job_remote_type = (job.get("remoteType") or "").lower()
-            if job_remote_type not in _allowed_remote:
-                pre_filtered_count += 1
-                await log(
-                    f"Pre-filter: '{title}' at '{company}' — remote type '{job_remote_type}' not in {_allowed_remote}",
-                    "info",
-                )
-                continue
+        if not passes_remote_type_filter(job, allowed_remote_types):
+            pre_filtered_count += 1
+            await log(
+                format_remote_type_rejection(title, company, job, allowed_remote_types),
+                "info",
+            )
+            continue
 
         job["resumeUsed"] = active_resume
 
@@ -104,15 +99,13 @@ async def run_search_pipeline(
         elif resume_content:
             evaluated_count += 1
             await log(f"Evaluating '{title}' at {company}...")
-            evaluation = await evaluate_job(job, resume_content, log_func, allowed_remote_types)
+            evaluation = await evaluate_job(job, resume_content, log_func)
             if evaluation:
                 job["matchScore"] = evaluation.get("matchScore", 0)
                 job["matchType"] = evaluation.get("matchType", "")
                 job["shouldProceed"] = evaluation.get("shouldProceed", False)
                 job["strengths"] = evaluation.get("strengths", [])
                 job["gaps"] = evaluation.get("gaps", [])
-                if "remoteType" in evaluation:
-                    job["remoteType"] = evaluation["remoteType"]
                 if "summary" in evaluation:
                     job["description"] = evaluation["summary"]
                 job["isRecruiter"] = evaluation.get("isRecruiter", False)

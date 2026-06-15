@@ -143,6 +143,57 @@ async def test_allowed_remote_types_any_does_not_filter():
 
 
 @pytest.mark.asyncio
+async def test_in_office_variant_rejected_by_pre_filter():
+    """Pre-Evaluation Filter normalizes 'in office' before comparing to allowed preferences."""
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job(remote_type="in office")]), \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.evaluate_job", new=AsyncMock()) as mock_eval, \
+         patch("src.pipelines.database.add_job") as mock_add:
+
+        results = await run_search_pipeline(
+            "QA",
+            mock_eval=False,
+            allowed_remote_types=["remote"],
+        )
+
+        mock_eval.assert_not_called()
+        mock_add.assert_not_called()
+        assert results == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_preserves_scraper_remote_type_after_evaluation():
+    """Resume Matcher no longer overwrites scraper-derived remoteType on save."""
+    mock_eval_result = {
+        "matchScore": 80,
+        "matchType": "match",
+        "shouldProceed": True,
+        "strengths": [],
+        "gaps": [],
+        "remoteType": "hybrid",
+        "summary": "Good role.",
+        "isRecruiter": False,
+    }
+
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job(remote_type="remote")]), \
+         patch("src.pipelines.load_resume", return_value="# Resume"), \
+         patch("src.pipelines.evaluate_job", new=AsyncMock(return_value=mock_eval_result)), \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job", return_value=1):
+
+        results = await run_search_pipeline(
+            "QA",
+            mock_eval=False,
+            allowed_remote_types=["remote"],
+        )
+
+        assert len(results) == 1
+        assert results[0]["remoteType"] == "remote"
+
+
+@pytest.mark.asyncio
 async def test_aggregate_summary_logged_at_end():
     """Aggregate summary with scraped/duplicates/pre-filtered/evaluated/saved counts is logged at end."""
     logs = []

@@ -83,7 +83,7 @@ async def test_run_search_calls_evaluate_when_not_mock():
         assert mock_eval.called
         assert results[0]["matchScore"] == 88
         assert results[0]["shouldProceed"] is True
-        assert results[0]["remoteType"] == "hybrid"
+        assert results[0]["remoteType"] == "remote"
         assert results[0]["description"] == "This is a concise summary of the QA Lead role."
 
 

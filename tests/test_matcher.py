@@ -65,7 +65,7 @@ async def test_evaluate_job_returns_structured_result(mock_gemini_response, samp
         mock_model_cls.return_value = mock_model
 
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
-            result = await evaluate_job(sample_job, "# QA Resume\nPython expert", allowed_remote_types=["remote"])
+            result = await evaluate_job(sample_job, "# QA Resume\nPython expert")
 
     assert result["matchScore"] == 89
     assert result["matchType"] == "match"
@@ -154,37 +154,16 @@ async def test_evaluate_job_logs_warning_when_skipping(sample_job):
 
 def test_build_prompt_formatting():
     from src.core.matcher import _build_prompt
-    
-    # 1. With allowed remote types
-    prompt_with_remote = _build_prompt(
-        resume="My Resume",
-        job_title="QA",
-        company="Google",
-        description="A job description",
-        allowed_remote_types=["remote", "hybrid"]
-    )
-    assert "Candidate's Allowed Remote Preferences: remote, hybrid" in prompt_with_remote
-    assert "remoteType" in prompt_with_remote
-    assert "summary" in prompt_with_remote
-    
-    # 2. Without allowed remote types or containing "any"
-    prompt_any = _build_prompt(
-        resume="My Resume",
-        job_title="QA",
-        company="Google",
-        description="A job description",
-        allowed_remote_types=None
-    )
-    assert "Candidate's Allowed Remote Preferences: any" in prompt_any
 
-    prompt_any_list = _build_prompt(
+    prompt = _build_prompt(
         resume="My Resume",
         job_title="QA",
         company="Google",
         description="A job description",
-        allowed_remote_types=["any", "remote"]
     )
-    assert "Candidate's Allowed Remote Preferences: any" in prompt_any_list
+    assert "remoteType" in prompt
+    assert "summary" in prompt
+    assert "Allowed Remote Preferences" not in prompt
 
 
 def test_recruiter_company_detection_local():
