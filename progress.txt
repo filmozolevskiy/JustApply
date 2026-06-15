@@ -63,3 +63,34 @@ Replaced chevron-based lane moves with HTML5 drag-and-drop on the Kanban Dashboa
 - `initKanbanDnd()` called at page init alongside `initBoardControls()`
 
 **Tests added:** `tests/test_dashboard_dnd.py` — 13 HTML contract tests asserting absent chevrons, DnD wiring, hover-reject class, same-lane noop guard, and dragging class lifecycle. All 303 tests pass.
+
+## Iteration: 2026-06-14 — Issue #49: Collapsible pipeline lane rails
+
+### Summary
+Added collapsible lane rails to the Kanban Dashboard per PRD #45 Issue #49.
+
+**Layout change:**
+- Changed `.kanban-board-container` from `display: grid` (fixed 6-column grid) to `display: flex` so expanded lanes absorb space freed by collapsed neighbors via `flex: 1`.
+
+**Column changes:**
+- Added `data-lane` attribute to each `.kanban-column` (e.g. `data-lane="sourced"`)
+- Added `class="lane-name-text"` to each lane name span for CSS vertical-text targeting
+- Added a `<button class="lane-collapse-btn">` with `<i class="fa-solid fa-angles-left">` to each column header; calls `toggleLaneCollapse(lane)`
+
+**CSS added:**
+- `.kanban-column.lane-collapsed`: `flex: 0 0 48px; min-width/max-width: 48px` — renders as narrow rail
+- `.kanban-column.lane-collapsed .kanban-col-header`: vertical flex layout (column direction, full height)
+- `.kanban-column.lane-collapsed .lane-name-text`: `writing-mode: vertical-rl; rotate(180deg)` for upward vertical text
+- `.kanban-column.lane-collapsed .lane-collapse-btn i`: `rotate(180deg)` — icon flips to point right when collapsed
+- `.kanban-column.lane-collapsed .kanban-cards-wrapper`: `display: none !important` — hides cards in rail mode
+- `.lane-collapse-btn`: unstyled button with muted colour and hover to primary
+
+**JS added:**
+- `toggleLaneCollapse(lane)`: toggles `lane-collapsed` class on the column, persists to `localStorage` with key `kanban-lane-${lane}-collapsed`
+- `initLaneCollapse()`: reads localStorage for each of the 6 stages and restores collapsed state on page load
+- Both called at page initialisation alongside `initKanbanDnd()`
+
+**DnD compatibility:**
+- No extra wiring needed — `initKanbanDnd()` already attaches `dragover`/`dragleave`/`drop` to `.kanban-column` elements, which remain valid drop targets in collapsed state.
+
+**Tests added:** `tests/test_dashboard_lane_collapse.py` — 15 HTML contract tests covering: collapse button presence, `data-lane` attribute, `lane-name-text` class, CSS class definitions, flex layout, narrow rail width, cards hidden, `toggleLaneCollapse` and `initLaneCollapse` functions, init call, storage key prefix, and DnD drop-target guarantee. All 318 tests pass.

@@ -456,8 +456,7 @@
     }
 
     .kanban-board-container {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(190px, 1fr));
+      display: flex;
       gap: 12px;
       flex: 1;
       overflow-x: auto;
@@ -544,6 +543,8 @@
     }
 
     .kanban-column {
+      flex: 1;
+      min-width: 190px;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -554,6 +555,58 @@
       background: rgba(10, 14, 26, 0.3);
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.03);
+      transition: flex var(--transition-normal), min-width var(--transition-normal), max-width var(--transition-normal);
+    }
+
+    .kanban-column.lane-collapsed {
+      flex: 0 0 48px;
+      min-width: 48px;
+      max-width: 48px;
+      overflow: hidden;
+      cursor: pointer;
+      gap: 0;
+    }
+
+    .kanban-column.lane-collapsed .kanban-col-header {
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: none;
+      height: 100%;
+      justify-content: flex-start;
+      gap: 8px;
+    }
+
+    .kanban-column.lane-collapsed .lane-name-text {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 0.8rem;
+      flex: 1;
+      text-align: center;
+    }
+
+    .kanban-column.lane-collapsed .lane-collapse-btn i {
+      transform: rotate(180deg);
+    }
+
+    .kanban-column.lane-collapsed .kanban-cards-wrapper {
+      display: none !important;
+    }
+
+    .lane-collapse-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      font-size: 0.7rem;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .lane-collapse-btn:hover {
+      color: var(--text-primary);
     }
 
     .kanban-col-header {
@@ -1095,54 +1148,60 @@
       <!-- Kanban lanes -->
       <div class="kanban-board-container" id="kanban-lanes-container">
         <!-- Sourced Column -->
-        <div class="kanban-column">
+        <div class="kanban-column" data-lane="sourced">
           <div class="kanban-col-header">
-            <span>Sourced</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('sourced')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Sourced</span>
             <span class="kanban-col-count" id="count-sourced">0</span>
           </div>
           <div class="kanban-cards-wrapper" id="lane-sourced" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
         </div>
 
         <!-- Enriching Column -->
-        <div class="kanban-column">
+        <div class="kanban-column" data-lane="enriching">
           <div class="kanban-col-header">
-            <span>Enriching</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('enriching')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Enriching</span>
             <span class="kanban-col-count" id="count-enriching">0</span>
           </div>
           <div class="kanban-cards-wrapper" id="lane-enriching" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
         </div>
 
         <!-- Enriched Column -->
-        <div class="kanban-column">
+        <div class="kanban-column" data-lane="enriched">
           <div class="kanban-col-header">
-            <span>Enriched</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('enriched')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Enriched</span>
             <span class="kanban-col-count" id="count-enriched">0</span>
           </div>
           <div class="kanban-cards-wrapper" id="lane-enriched" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
         </div>
 
         <!-- Contacted Column -->
-        <div class="kanban-column">
+        <div class="kanban-column" data-lane="contacted">
           <div class="kanban-col-header">
-            <span>Contacted</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('contacted')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Contacted</span>
             <span class="kanban-col-count" id="count-contacted">0</span>
           </div>
           <div class="kanban-cards-wrapper" id="lane-contacted" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
         </div>
 
         <!-- Interviewing Column -->
-        <div class="kanban-column">
+        <div class="kanban-column" data-lane="interviewing">
           <div class="kanban-col-header">
-            <span>Interviewing</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('interviewing')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Interviewing</span>
             <span class="kanban-col-count" id="count-interviewing">0</span>
           </div>
           <div class="kanban-cards-wrapper" id="lane-interviewing" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
         </div>
 
         <!-- Rejected Column -->
-        <div class="kanban-column" style="border-color: rgba(244, 63, 94, 0.15); background: rgba(244, 63, 94, 0.01);">
+        <div class="kanban-column" data-lane="rejected" style="border-color: rgba(244, 63, 94, 0.15); background: rgba(244, 63, 94, 0.01);">
           <div class="kanban-col-header" style="color: var(--accent-rose);">
-            <span>Rejected</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('rejected')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Rejected</span>
             <span class="kanban-col-count" id="count-rejected" style="background: rgba(244, 63, 94, 0.15); color: #fda4af;">0</span>
           </div>
           <div class="kanban-cards-wrapper" id="lane-rejected" style="display:flex; flex-direction:column; gap:12px; height:100%; min-height:100px;"></div>
@@ -1575,6 +1634,29 @@
     function getKanbanCardMovementButtons(job) {
       if (job.status === 'rejected') return '';
       return `<button class="kanban-action-btn reject-btn hover-reject" onclick="moveJobStage(${job.id}, 'rejected')" title="Reject Job"><i class="fa-solid fa-ban"></i></button>`;
+    }
+
+    function toggleLaneCollapse(lane) {
+      const wrapper = document.getElementById('lane-' + lane);
+      if (!wrapper) return;
+      const column = wrapper.closest('.kanban-column');
+      if (!column) return;
+      const isCollapsed = column.classList.toggle('lane-collapsed');
+      localStorage.setItem('kanban-lane-' + lane + '-collapsed', isCollapsed ? 'true' : 'false');
+    }
+
+    function initLaneCollapse() {
+      const stages = ['sourced', 'enriching', 'enriched', 'contacted', 'interviewing', 'rejected'];
+      stages.forEach(lane => {
+        const stored = localStorage.getItem('kanban-lane-' + lane + '-collapsed');
+        if (stored === 'true') {
+          const wrapper = document.getElementById('lane-' + lane);
+          if (wrapper) {
+            const column = wrapper.closest('.kanban-column');
+            if (column) column.classList.add('lane-collapsed');
+          }
+        }
+      });
     }
 
     function initKanbanDnd() {
@@ -2882,6 +2964,7 @@
     // Initialize
     initBoardControls();
     initKanbanDnd();
+    initLaneCollapse();
     initLogsConsoleState();
     restoreSessionLogs();
     loadResumes();
