@@ -78,6 +78,18 @@ def test_dashboard_html_enrichment_uses_sse():
     assert "EventSource" in enrich_job_body, "enrichJob must open an EventSource for SSE"
 
 
+def test_dashboard_html_enrich_job_uses_server_status_not_optimistic():
+    """enrichJob applies server-returned job status instead of optimistic lane mutation."""
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    enrich_job_start = content.find("function enrichJob(")
+    assert enrich_job_start != -1
+    enrich_job_body = content[enrich_job_start:enrich_job_start + 2500]
+    assert "job.status = 'enriching'" not in enrich_job_body
+    assert "data.job" in enrich_job_body
+
+
 def test_dashboard_html_polling_loop_not_called_from_enrich():
     """enrichJob must not start the polling loop (SSE replaces it)."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")

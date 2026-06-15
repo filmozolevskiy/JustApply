@@ -121,6 +121,7 @@ async def test_run_promote_reads_sourced_jobs_and_sources_contacts():
 
     with patch("src.cli.database.init_db"), \
          patch("src.cli.database.get_jobs", return_value=seeded_jobs), \
+         patch("src.cli.cli.begin_enrichment", return_value={**seeded_jobs[0], "status": "enriching"}), \
          patch("src.cli.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
 
         results = await run_promote()
@@ -149,6 +150,7 @@ async def test_run_promote_handles_no_contacts_gracefully():
 
     with patch("src.cli.database.init_db"), \
          patch("src.cli.database.get_jobs", return_value=seeded_jobs), \
+         patch("src.cli.cli.begin_enrichment", return_value={**seeded_jobs[0], "status": "enriching"}), \
          patch("src.cli.cli.run_enrichment_pipeline", new=AsyncMock(return_value=enriched_job)):
 
         results = await run_promote()
@@ -193,7 +195,24 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
 
 
 @pytest.mark.asyncio
-async def test_run_enrichment_pipeline_starts_enrichment_from_sourced():
+async def test_run_enrichment_pipeline_requires_begin_enrichment():
+    from src.pipelines import run_enrichment_pipeline
+
+    job = {
+        "id": 10,
+        "title": "QA Engineer",
+        "company": "Docker",
+        "resumeUsed": "qa.md",
+        "status": "sourced",
+        "contacts": [],
+    }
+
+    result = await run_enrichment_pipeline(job)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_run_enrichment_pipeline_runs_when_already_enriching():
     from src.pipelines import run_enrichment_pipeline
 
     job = {
@@ -206,16 +225,16 @@ async def test_run_enrichment_pipeline_starts_enrichment_from_sourced():
     }
     enriched = {**job, "status": "enriched", "contacts": [], "outreachMessage": "Hi"}
 
-    with patch("src.pipelines.database.start_enrichment", return_value={**job, "status": "enriching"}) as mock_start, \
+    with patch("src.pipelines.database.start_enrichment") as mock_start, \
          patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value={"recruiter": "Hi", "russian_speaker": ""})), \
          patch("src.pipelines.database.enrich_job", return_value=enriched), \
          patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": True, "target_recruiters": True}):
 
-        result = await run_enrichment_pipeline(job)
+        result = await run_enrichment_pipeline({**job, "status": "enriching"})
 
-        mock_start.assert_called_once_with(10)
-        assert result["status"] == "enriched"
+    mock_start.assert_not_called()
+    assert result["status"] == "enriched"
 
 
 @pytest.mark.asyncio

@@ -121,7 +121,9 @@ def test_post_job_enrich_nonexistent():
 @pytest.mark.asyncio
 async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_db):
     from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
+    from src.core.enrichment.coordinator import begin_enrichment
     import uuid
+    begin_enrichment(1, setup_test_db)
     task_id = str(uuid.uuid4())
     state = TaskState({"job_id": 1})
     active_tasks[task_id] = state
@@ -187,3 +189,31 @@ def test_put_template_endpoint_nonexistent_job():
     response = client.put("/api/jobs/999/template", json={"audience": "recruiter", "template": "anything"})
     assert response.status_code == 404
     assert response.json() == {"message": "Job not found"}
+
+
+@pytest.mark.asyncio
+async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
+    """Failed enrichment task reverts job from enriching via coordinator."""
+    from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
+    from src.core.enrichment.coordinator import begin_enrichment
+    import uuid
+
+    begin_enrichment(1, setup_test_db)
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": 1})
+    active_tasks[task_id] = state
+
+    with patch("src.pipelines.run_enrichment_pipeline", new=AsyncMock(return_value=None)):
+        await run_enrichment_task_with_logs(task_id, 1)
+
+    job = database.get_job(1, setup_test_db)
+    assert job["status"] == "sourced"
+    assert state.status == "failed"
+
+
+def test_post_job_enrich_returns_server_job_snapshot():
+    with patch("src.web.server.run_enrichment_task_with_logs"):
+        response = client.post("/api/jobs/1/enrich")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job"]["status"] == "enriching"

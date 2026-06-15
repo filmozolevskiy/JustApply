@@ -25,6 +25,7 @@ from .contact_sample import (
     poster_to_apify_item,
 )
 from .source import source_contacts
+from .coordinator import begin_enrichment, abort_enrichment, clear_enrichment_prior
 
 __all__ = [
     "FIT_LINE",
@@ -32,7 +33,10 @@ __all__ = [
     "RUSSIAN_SPEAKER_CTA",
     "ApifyTimeoutError",
     "CONTACT_SAMPLE_SIZE",
+    "abort_enrichment",
+    "begin_enrichment",
     "classify_contacts",
+    "clear_enrichment_prior",
     "company_cache_slug",
     "company_slug_candidates",
     "generate_connection_note_template",

@@ -11,7 +11,8 @@ from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, start_enrichment, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job
+from ..core.enrichment.coordinator import begin_enrichment, abort_enrichment
 from ..rate_limiter import scrape_limiter, RateLimitError
 
 # Initialize SQLite database
@@ -136,6 +137,7 @@ async def _run_enrichment_task(task_id: str, job_id: int, bust_cache: bool = Fal
         job = get_job(job_id)
         if not job:
             await log_callback(f"Job id={job_id} not found.", "error")
+            abort_enrichment(job_id)
             state.status = "failed"
             return
 
@@ -146,8 +148,10 @@ async def _run_enrichment_task(task_id: str, job_id: int, bust_cache: bool = Fal
             state.result = {"type": "result", "job": updated}
             state.status = "completed"
         else:
+            abort_enrichment(job_id)
             state.status = "failed"
     except Exception as e:
+        abort_enrichment(job_id)
         state.status = "failed"
         await log_callback(f"Enrichment task failed: {str(e)}", "error")
     finally:
@@ -164,7 +168,7 @@ async def run_refresh_contacts_task_with_logs(task_id: str, job_id: int):
 
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
-    updated = start_enrichment(job_id)
+    updated = begin_enrichment(job_id)
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
 
@@ -172,12 +176,12 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     state = TaskState({"job_id": job_id})
     active_tasks[task_id] = state
     background_tasks.add_task(run_enrichment_task_with_logs, task_id, job_id)
-    return {"task_id": task_id, "job_id": job_id}
+    return {"task_id": task_id, "job_id": job_id, "job": updated}
 
 
 @app.post("/api/jobs/{job_id}/refresh-contacts")
 async def refresh_contacts(job_id: int, background_tasks: BackgroundTasks):
-    updated = start_enrichment(job_id)
+    updated = begin_enrichment(job_id)
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
 
@@ -185,7 +189,7 @@ async def refresh_contacts(job_id: int, background_tasks: BackgroundTasks):
     state = TaskState({"job_id": job_id})
     active_tasks[task_id] = state
     background_tasks.add_task(run_refresh_contacts_task_with_logs, task_id, job_id)
-    return {"task_id": task_id, "job_id": job_id}
+    return {"task_id": task_id, "job_id": job_id, "job": updated}
 
 
 @app.get("/")

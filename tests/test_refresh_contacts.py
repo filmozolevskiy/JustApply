@@ -53,7 +53,12 @@ def test_post_refresh_contacts_nonexistent_job_returns_404():
 @pytest.mark.asyncio
 async def test_run_refresh_contacts_task_calls_pipeline_with_bust_cache(setup_test_db):
     from src.web.server import run_refresh_contacts_task_with_logs, TaskState, active_tasks
+    from src.core.enrichment.coordinator import begin_enrichment
+    from src.db import enrich_job
     import uuid
+
+    enrich_job(1, [], "Hi", db_path=setup_test_db)
+    begin_enrichment(1, setup_test_db)
 
     task_id = str(uuid.uuid4())
     state = TaskState({"job_id": 1})
@@ -74,7 +79,12 @@ async def test_run_refresh_contacts_task_calls_pipeline_with_bust_cache(setup_te
 @pytest.mark.asyncio
 async def test_run_refresh_contacts_task_updates_job_contacts(setup_test_db):
     from src.web.server import run_refresh_contacts_task_with_logs, TaskState, active_tasks
+    from src.core.enrichment.coordinator import begin_enrichment
+    from src.db import enrich_job
     import uuid
+
+    enrich_job(1, [], "Hi", db_path=setup_test_db)
+    begin_enrichment(1, setup_test_db)
 
     task_id = str(uuid.uuid4())
     state = TaskState({"job_id": 1})

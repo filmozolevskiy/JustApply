@@ -6,6 +6,12 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import init_db, get_job, enrich_job
+from src.core.enrichment.coordinator import begin_enrichment
+
+
+def _enriching_job(db, job_id=1):
+    begin_enrichment(job_id, db)
+    return get_job(job_id, db_path=db)
 
 
 @pytest.fixture
@@ -40,7 +46,7 @@ async def test_enrichment_no_employees_sets_specific_note(db):
     with patch("src.pipelines.source_contacts", new=mock_source_contacts), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         result = await run_enrichment_pipeline(job, log_func=capture_log)
 
     assert result["enrichmentNote"] == "No LinkedIn employees found for this company."
@@ -52,7 +58,7 @@ async def test_enrichment_failure_zero_contacts_sets_note(db):
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
@@ -66,7 +72,7 @@ async def test_enrichment_infrastructure_error_sets_note(db):
     with patch("src.pipelines.source_contacts", new=AsyncMock(side_effect=Exception("Apify trigger failed: HTTP 403"))), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
@@ -84,7 +90,7 @@ async def test_enrichment_success_clears_note(db):
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
@@ -103,7 +109,7 @@ async def test_enrichment_zero_contacts_logs_final_error(db):
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         await run_enrichment_pipeline(job, log_func=capture_log)
 
     assert log_records, "No log lines emitted"
@@ -124,7 +130,7 @@ async def test_enrichment_success_logs_final_success(db):
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         await run_enrichment_pipeline(job, log_func=capture_log)
 
     assert log_records, "No log lines emitted"
@@ -142,7 +148,7 @@ async def test_enrichment_pipeline_persists_both_outreach_templates(db):
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline
-        job = get_job(1, db_path=db)
+        job = _enriching_job(db)
         result = await run_enrichment_pipeline(job)
 
     assert result is not None

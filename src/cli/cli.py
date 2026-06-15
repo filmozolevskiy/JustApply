@@ -9,6 +9,7 @@ load_dotenv()
 
 from .. import db as database
 from ..pipelines import run_search_pipeline, run_enrichment_pipeline
+from ..core.enrichment.coordinator import begin_enrichment
 from ..rate_limiter import scrape_limiter, RateLimitError
 
 
@@ -66,7 +67,12 @@ async def run_promote() -> list:
     promoted = []
     for job in to_promote:
         print(f"Enriching '{job['title']}' at '{job['company']}'...")
-        enriched = await run_enrichment_pipeline(job, log_func=log_sync)
+        began = begin_enrichment(job["id"])
+        if not began:
+            print(f"  [ERROR] Could not start enrichment for job id={job['id']}.", file=sys.stderr)
+            promoted.append(job)
+            continue
+        enriched = await run_enrichment_pipeline({**job, "status": "enriching"}, log_func=log_sync)
         promoted.append(enriched if enriched else job)
 
     print(f"Promote complete. Processed {len(promoted)} jobs.")

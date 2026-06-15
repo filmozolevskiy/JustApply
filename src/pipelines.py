@@ -5,6 +5,7 @@ from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
 from .core.enrichment import source_contacts, generate_outreach_templates
+from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
 from .schemas import OutreachSettings
 
@@ -142,9 +143,8 @@ async def run_enrichment_pipeline(job: dict, log_func=None, bust_cache: bool = F
         return None
 
     if job.get("status") != "enriching":
-        if not database.start_enrichment(job_id):
-            await log(f"Job id={job_id} not found.", "error")
-            return None
+        await log(f"Job id={job_id} is not enriching; call begin_enrichment first.", "error")
+        return None
 
     title = job.get("title") or ""
     company = job.get("company") or ""
@@ -188,6 +188,7 @@ async def run_enrichment_pipeline(job: dict, log_func=None, bust_cache: bool = F
         russian_speaker_template=templates.get("russian_speaker", ""),
     )
     if enriched:
+        clear_enrichment_prior(job_id)
         if enrichment_note:
             await log(f"Enrichment failed for job id={job_id}: {enrichment_note}", "error")
         else:

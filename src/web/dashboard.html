@@ -1845,10 +1845,8 @@
       const job = masterJobs.find(j => j.id === id);
       if (!job) return;
 
-      job.status = 'enriching';
       addLogLine(`Initiating enrichment for [${job.title} @ ${job.company}]...`, 'warning');
       expandLogsConsole();
-      renderActiveVariant();
 
       fetch(`/api/jobs/${id}/enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         .then(r => {
@@ -1856,6 +1854,12 @@
           return r.json();
         })
         .then(data => {
+          if (data.job) {
+            const idx = masterJobs.findIndex(j => j.id === data.job.id);
+            if (idx !== -1) masterJobs[idx] = data.job;
+          }
+          renderActiveVariant();
+
           const task_id = data.task_id;
           addLogLine(`Enrichment task started: ${task_id}`, 'info');
           localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
@@ -1881,9 +1885,7 @@
           });
         })
         .catch(err => {
-          job.status = 'sourced';
-          addLogLine(`Failed to trigger enrichment: ${err.message}. Reverted to 'sourced'.`, 'error');
-          renderActiveVariant();
+          addLogLine(`Failed to trigger enrichment: ${err.message}.`, 'error');
         });
     }
 
@@ -1891,10 +1893,8 @@
       const job = masterJobs.find(j => j.id === id);
       if (!job) return;
 
-      job.status = 'enriching';
       addLogLine(`Refreshing contacts for [${job.title} @ ${job.company}]...`, 'warning');
       expandLogsConsole();
-      renderActiveVariant();
 
       fetch(`/api/jobs/${id}/refresh-contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         .then(r => {
@@ -1902,6 +1902,12 @@
           return r.json();
         })
         .then(data => {
+          if (data.job) {
+            const idx = masterJobs.findIndex(j => j.id === data.job.id);
+            if (idx !== -1) masterJobs[idx] = data.job;
+          }
+          renderActiveVariant();
+
           const task_id = data.task_id;
           addLogLine(`Refresh contacts task started: ${task_id}`, 'info');
           localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
@@ -1927,9 +1933,7 @@
           });
         })
         .catch(err => {
-          job.status = 'enriched';
-          addLogLine(`Failed to trigger refresh contacts: ${err.message}. Reverted to 'enriched'.`, 'error');
-          renderActiveVariant();
+          addLogLine(`Failed to trigger refresh contacts: ${err.message}.`, 'error');
         });
     }
 
