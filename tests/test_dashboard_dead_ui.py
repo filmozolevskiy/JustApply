@@ -47,8 +47,9 @@ def test_connection_mode_update_logic_absent():
         "All connection-mode references including update logic should be removed"
 
 
-def test_pipeline_tracker_header_present():
+def test_job_search_settings_header_present():
     content = _read_html()
-    assert "Pipeline Tracker" in content, "Pipeline Tracker title must remain"
-    assert "toggleScraperSettings" in content, "Scraper Settings toggle must remain"
-    assert "scraper-settings-toggle" in content, "Scraper Settings toggle button must remain"
+    assert "Job Search Settings" in content, "Job Search Settings title must remain"
+    assert "toggleJobSearchSettings" in content, "Job Search Settings toggle must remain"
+    assert "job-search-settings-toggle" in content, "Job Search Settings toggle button must remain"
+    assert "Manage applications by status lanes" not in content, "Old subtitle must be removed"

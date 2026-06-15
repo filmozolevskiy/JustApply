@@ -9,29 +9,28 @@ def _read_html():
 
 
 def test_panel_order():
-    """Pipeline Tracker (with Outreach Settings) → Task Logs → Board Controls → kanban."""
+    """Job Search Settings → Task Logs → Board Controls → kanban."""
     content = _read_html()
-    pt_idx = content.index("Pipeline Tracker")
-    os_idx = content.index("Outreach Settings")
+    js_idx = content.index("Job Search Settings")
     tl_idx = content.index("Task Logs")
     bc_idx = content.index('id="board-controls-panel"')
     kb_idx = content.index("kanban-lanes-container")
-    assert pt_idx < os_idx < tl_idx < bc_idx < kb_idx, (
-        f"Panel order wrong: PT={pt_idx} OS={os_idx} TL={tl_idx} BC={bc_idx} KB={kb_idx}"
+    assert js_idx < tl_idx < bc_idx < kb_idx, (
+        f"Panel order wrong: JS={js_idx} TL={tl_idx} BC={bc_idx} KB={kb_idx}"
     )
 
 
-def test_outreach_settings_nested_in_pipeline_tracker():
-    """Outreach Settings must live inside the Pipeline Tracker panel."""
+def test_contact_search_settings_nested_in_job_search_panel():
+    """Contact Search Settings must live inside the Job Search Settings collapsible body."""
     content = _read_html()
-    pt_start = content.index('id="pipeline-tracker-panel"')
-    pt_end = content.index('id="kb-logs-panel"')
-    pt_block = content[pt_start:pt_end]
-    assert "Outreach Settings" in pt_block, (
-        "Outreach Settings must be nested inside pipeline-tracker-panel"
+    body_start = content.index('id="job-search-settings-body"')
+    body_end = content.index('id="kb-logs-panel"')
+    body_block = content[body_start:body_end]
+    assert "Contact Search Settings" in body_block, (
+        "Contact Search Settings must be nested inside job-search-settings-body"
     )
-    assert 'id="outreach-settings-section"' in pt_block, (
-        "Outreach Settings section id must be inside pipeline-tracker-panel"
+    assert 'id="contact-search-settings-section"' in body_block, (
+        "Contact Search Settings section id must be inside job-search-settings-body"
     )
 
 
@@ -49,10 +48,10 @@ def test_board_controls_immediately_precedes_kanban():
 
 
 def test_shared_panel_header_class():
-    """Utility panels use the panel-header class (Pipeline Tracker, Outreach, Task Logs, Board Controls)."""
+    """Utility panels use the panel-header class (Job Search, Contact Search, Task Logs, Board Controls)."""
     content = _read_html()
     assert content.count("panel-header") >= 4, (
-        "Expected at least 4 panel-header class uses (Pipeline Tracker, Outreach, Task Logs, Board Controls)"
+        "Expected at least 4 panel-header class uses (Job Search, Contact Search, Task Logs, Board Controls)"
     )
 
 
@@ -62,8 +61,8 @@ def test_task_logs_collapse_key():
     assert 'data-collapse-key="panel-task-logs-collapsed"' in content
 
 
-def test_scraper_settings_collapse_key():
-    """Scraper Settings panel has data-collapse-key for local storage persistence."""
+def test_job_search_settings_collapse_key():
+    """Job Search Settings body has data-collapse-key for local storage persistence."""
     content = _read_html()
     assert 'data-collapse-key="panel-scraper-settings-collapsed"' in content
 
@@ -80,22 +79,37 @@ def test_task_logs_collapsed_by_default():
     assert "shrunk" in tag, f"kb-logs-console should have 'shrunk' class by default, got: {tag}"
 
 
-def test_scraper_settings_collapsed_by_default():
-    """Scraper Settings panel starts without .expanded class (collapsed by default)."""
+def test_job_search_settings_collapsed_by_default():
+    """Job Search Settings body starts without .expanded class (collapsed by default)."""
     content = _read_html()
-    panel_idx = content.index('id="scraper-settings-panel"')
+    panel_idx = content.index('id="job-search-settings-body"')
     tag_start = content.rindex("<", 0, panel_idx)
     tag_end = content.index(">", panel_idx)
     tag = content[tag_start:tag_end]
-    assert "expanded" not in tag, "scraper-settings-panel should not have 'expanded' in its static class"
+    assert "expanded" not in tag, "job-search-settings-body should not have 'expanded' in its static class"
 
 
-def test_outreach_settings_no_cyan_tint():
-    """Outreach Settings panel must not use the ad-hoc cyan background tint inline."""
+def test_job_search_settings_show_hide_toggle():
+    """Job Search Settings uses a Show/Hide toggle instead of a Scraper Settings label."""
     content = _read_html()
-    # rgba(6, 182, 212, 0.04) only ever appeared in the outreach-settings-panel inline style
+    assert "toggleJobSearchSettings" in content
+    assert 'id="job-search-settings-toggle"' in content
+    assert "Scraper Settings" not in content
+    assert "> Show" in content or "> Show<" in content
+
+
+def test_job_search_settings_init_restores_state():
+    """Job Search Settings collapse state is restored on page load."""
+    content = _read_html()
+    assert "initJobSearchSettingsState" in content
+    assert "initJobSearchSettingsState()" in content
+
+
+def test_contact_search_settings_no_cyan_tint():
+    """Contact Search Settings must not use the ad-hoc cyan background tint inline."""
+    content = _read_html()
     assert "rgba(6, 182, 212, 0.04)" not in content, (
-        "Outreach Settings cyan background tint should be removed"
+        "Contact Search Settings cyan background tint should be removed"
     )
 
 
@@ -105,26 +119,32 @@ def test_board_controls_has_id():
     assert 'id="board-controls-panel"' in content
 
 
-def test_outreach_settings_no_cyan_border():
-    """Outreach Settings section must not use the inline border-color cyan tint."""
+def test_contact_search_settings_no_cyan_border():
+    """Contact Search Settings section must not use the inline border-color cyan tint."""
     content = _read_html()
-    os_idx = content.index('id="outreach-settings-section"')
-    tag_start = content.rindex("<", 0, os_idx)
-    tag_end = content.index(">", os_idx)
+    cs_idx = content.index('id="contact-search-settings-section"')
+    tag_start = content.rindex("<", 0, cs_idx)
+    tag_end = content.index(">", cs_idx)
     tag = content[tag_start:tag_end]
     assert "rgba(6, 182, 212, 0.2)" not in tag, (
-        "Outreach Settings section should not have inline cyan border-color"
+        "Contact Search Settings section should not have inline cyan border-color"
     )
 
 
-def test_outreach_settings_has_section_divider():
-    """Outreach Settings must be separated from Scraper Settings by a horizontal divider."""
+def test_contact_search_settings_has_section_divider():
+    """Contact Search Settings must be separated from scraper filters by a horizontal divider."""
     content = _read_html()
-    pt_start = content.index('id="pipeline-tracker-panel"')
-    pt_end = content.index('id="kb-logs-panel"')
-    pt_block = content[pt_start:pt_end]
-    os_idx = pt_block.index("Outreach Settings")
-    divider_idx = pt_block.rindex("panel-section-divider", 0, os_idx)
+    body_start = content.index('id="job-search-settings-body"')
+    body_end = content.index('id="kb-logs-panel"')
+    body_block = content[body_start:body_end]
+    cs_idx = body_block.index("Contact Search Settings")
+    divider_idx = body_block.rindex("panel-section-divider", 0, cs_idx)
     assert divider_idx != -1, (
-        "A panel-section-divider must appear before Outreach Settings inside Pipeline Tracker"
+        "A panel-section-divider must appear before Contact Search Settings inside job-search-settings-body"
     )
+
+
+def test_job_search_subtitle_removed():
+    """The old Pipeline Tracker subtitle must be removed."""
+    content = _read_html()
+    assert "Manage applications by status lanes" not in content

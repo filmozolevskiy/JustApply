@@ -464,7 +464,7 @@
       min-height: 0;
     }
 
-    .scraper-settings-panel {
+    .job-search-settings-body {
       max-height: 0;
       overflow: hidden;
       transition: max-height var(--transition-normal), padding var(--transition-normal), margin var(--transition-normal), opacity var(--transition-normal);
@@ -474,9 +474,9 @@
       border: 1px solid transparent;
       background: rgba(13, 18, 36, 0.5);
     }
-    .scraper-settings-panel.expanded {
-      max-height: 400px;
-      padding: 20px 24px;
+    .job-search-settings-body.expanded {
+      max-height: 560px;
+      padding: 20px 24px 16px;
       margin-bottom: 16px;
       opacity: 1;
       border: 1px solid var(--border-color);
@@ -985,22 +985,21 @@
          VARIANT B: THE KANBAN PIPELINE
          ---------------------------------------------------- -->
     <section id="variant-b">
-      <!-- Pipeline Tracker panel (shared header chrome) -->
-      <div class="glass-panel" id="pipeline-tracker-panel" style="margin-bottom: 16px;">
+      <!-- Job Search Settings panel -->
+      <div class="glass-panel" id="job-search-settings-panel" style="margin-bottom: 16px;">
         <div class="panel-header">
           <div class="panel-header-left">
-            <i class="fa-solid fa-chart-gantt"></i>
-            <span>Pipeline Tracker</span>
-            <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 400;">Manage applications by status lanes</span>
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>Job Search Settings</span>
           </div>
           <div class="panel-header-right">
-            <button class="btn btn-secondary" onclick="toggleScraperSettings()" id="scraper-settings-toggle">
-              <i class="fa-solid fa-sliders"></i> Scraper Settings <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i>
+            <button class="btn btn-secondary" onclick="toggleJobSearchSettings()" id="job-search-settings-toggle">
+              <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i> Show
             </button>
           </div>
         </div>
-        <!-- Foldable Scraper Settings body -->
-        <div class="scraper-settings-panel" id="scraper-settings-panel" data-collapse-key="panel-scraper-settings-collapsed">
+        <!-- Foldable job search + contact search settings -->
+        <div class="job-search-settings-body" id="job-search-settings-body" data-collapse-key="panel-scraper-settings-collapsed">
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
             <div class="form-group">
               <label>Position / Query</label>
@@ -1067,32 +1066,32 @@
             <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="resetKbFilters()"><i class="fa-solid fa-undo"></i> Reset Filters</button>
             <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()"><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
           </div>
-        </div>
 
-        <div class="panel-section-divider"></div>
+          <div class="panel-section-divider" style="margin-top: 16px;"></div>
 
-        <!-- Outreach Settings (nested in Pipeline Tracker) -->
-        <div class="panel-section" id="outreach-settings-section">
-          <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
-            <div class="panel-header-left">
-              <i class="fa-solid fa-bullhorn"></i>
-              <span>Outreach Settings</span>
-            </div>
-            <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                <label class="toggle-switch">
-                  <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
-                  <span class="toggle-slider"></span>
+          <!-- Contact Search Settings -->
+          <div class="panel-section" id="contact-search-settings-section">
+            <div class="panel-header" style="flex-wrap: wrap; gap: 12px; padding: 12px 0 0;">
+              <div class="panel-header-left">
+                <i class="fa-solid fa-bullhorn"></i>
+                <span>Contact Search Settings</span>
+              </div>
+              <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
                 </label>
-                <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                <label class="toggle-switch">
-                  <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
-                  <span class="toggle-slider"></span>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
                 </label>
-                <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
-              </label>
+              </div>
             </div>
           </div>
         </div>
@@ -2784,13 +2783,34 @@
       counter.style.color = len > 200 ? 'var(--accent-rose)' : 'var(--text-muted)';
     }
 
-    function toggleScraperSettings() {
-      const panel = document.getElementById('scraper-settings-panel');
+    function toggleJobSearchSettings() {
+      const panel = document.getElementById('job-search-settings-body');
+      const btn = document.getElementById('job-search-settings-toggle');
       const chevron = document.getElementById('settings-chevron');
       panel.classList.toggle('expanded');
       const isExpanded = panel.classList.contains('expanded');
-      chevron.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+      if (btn) {
+        btn.innerHTML = isExpanded
+          ? '<i class="fa-solid fa-chevron-up" id="settings-chevron" style="transition: transform var(--transition-fast);"></i> Hide'
+          : '<i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i> Show';
+      }
+      if (chevron) chevron.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
       localStorage.setItem('panel-scraper-settings-collapsed', isExpanded ? 'false' : 'true');
+    }
+
+    function initJobSearchSettingsState() {
+      const stored = localStorage.getItem('panel-scraper-settings-collapsed');
+      const isCollapsed = stored !== 'false';
+      const panel = document.getElementById('job-search-settings-body');
+      const btn = document.getElementById('job-search-settings-toggle');
+      if (!panel || !btn) return;
+      if (isCollapsed) {
+        panel.classList.remove('expanded');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i> Show';
+      } else {
+        panel.classList.add('expanded');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-up" id="settings-chevron" style="transition: transform var(--transition-fast);"></i> Hide';
+      }
     }
 
     function resetKbFilters() {
@@ -2982,6 +3002,7 @@
     initKanbanDnd();
     initLaneCollapse();
     initLogsConsoleState();
+    initJobSearchSettingsState();
     restoreSessionLogs();
     loadResumes();
     loadOutreachSettings();

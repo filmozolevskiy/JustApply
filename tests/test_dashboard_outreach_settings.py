@@ -61,7 +61,7 @@ def test_dashboard_html_contains_outreach_settings_panel():
         content = f.read()
     assert 'id="toggle-russian-speakers"' in content, "Missing Russian speakers toggle"
     assert 'id="toggle-recruiters"' in content, "Missing recruiters toggle"
-    assert "Outreach Settings" in content, "Missing Outreach Settings panel heading"
+    assert "Contact Search Settings" in content, "Missing Contact Search Settings section heading"
     assert "saveOutreachSettings" in content, "Missing saveOutreachSettings JS function"
     assert "loadOutreachSettings" in content, "Missing loadOutreachSettings JS function"
 
@@ -116,18 +116,19 @@ def test_dashboard_html_drawer_enrichment_status_section():
         "openJobDetailsDrawer must use enrichmentNote to conditionally show the section"
 
 
-def test_dashboard_html_outreach_panel_is_separate_from_board_controls():
+def test_dashboard_html_contact_search_settings_nested_in_job_search_panel():
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
         content = f.read()
-    outreach_pos = content.find("Outreach Settings")
+    contact_pos = content.find("Contact Search Settings")
     board_controls_pos = content.find("Board Controls")
-    assert outreach_pos != -1, "Outreach Settings section not found"
+    assert contact_pos != -1, "Contact Search Settings section not found"
     assert board_controls_pos != -1, "Board Controls panel not found"
-    assert outreach_pos < board_controls_pos, "Outreach Settings must appear before Board Controls"
-    pt_start = content.index('id="pipeline-tracker-panel"')
-    pt_end = content.index('id="kb-logs-panel"')
-    assert pt_start < outreach_pos < pt_end, "Outreach Settings must be nested in Pipeline Tracker"
+    body_start = content.index('id="job-search-settings-body"')
+    body_end = content.index('id="kb-logs-panel"')
+    assert body_start < contact_pos < body_end, (
+        "Contact Search Settings must be nested in job-search-settings-body"
+    )
 
 
 def _get_drawer_body(content):
