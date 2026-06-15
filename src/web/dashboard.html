@@ -849,18 +849,6 @@
       border-radius: 8px;
     }
 
-    #connection-mode {
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 6px 12px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: var(--font-sans);
-    }
   </style>
 </head>
 <body>
@@ -872,10 +860,6 @@
       <span>Job Hunter <span style="font-weight:300; font-size:1.1rem; opacity:0.8;">Dashboard</span></span>
     </div>
     <div class="nav-actions">
-      <!-- Connection Status -->
-      <div id="connection-mode">
-        <span style="color:var(--text-muted);"><i class="fa-solid fa-circle-notch fa-spin"></i> Connecting...</span>
-      </div>
       <!-- Resume Select Profile -->
       <div class="resume-select-container">
         <label style="font-size: 0.85rem; color: var(--text-secondary); font-family: var(--font-sans);" for="active-resume-select">Active Profile:</label>
@@ -906,8 +890,6 @@
           <button class="btn btn-secondary" onclick="toggleScraperSettings()" id="scraper-settings-toggle">
             <i class="fa-solid fa-sliders"></i> Scraper Settings <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i>
           </button>
-          <button class="btn btn-secondary" onclick="addNewJobPrompt()"><i class="fa-solid fa-plus"></i> Add Job</button>
-          <button class="btn btn-primary" id="kb-scrape-btn-top" onclick="triggerScrapeRun()"><i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync</button>
         </div>
       </div>
 
@@ -1798,41 +1780,6 @@
 
 
 
-    function addNewJobPrompt() {
-      const title = prompt("Enter Job Title:", "QA Engineer");
-      if (!title) return;
-      const company = prompt("Enter Company Name:", "ByteLabs");
-      if (!company) return;
-      
-      const newJob = {
-        id: Date.now(),
-        title: title,
-        company: company,
-        size: "50-100",
-        link: "#",
-        date: new Date().toISOString().split('T')[0],
-        location: "Remote",
-        remoteType: "remote",
-        seniority: "mid",
-        salary: "$110k",
-        description: "Custom user-added job for simulation.",
-        matchScore: Math.floor(Math.random() * 30) + 70, // 70-100
-        matchType: "match",
-        shouldProceed: true,
-        status: "sourced",
-        resumeUsed: activeResume,
-        strengths: ["User defined job", "Flexible skills matching"],
-        gaps: ["Needs manual review"],
-        contactName: "Alex Hunter",
-        contactRole: "Talent Acquisition",
-        outreachMessage: ""
-      };
-      
-      masterJobs.unshift(newJob);
-      addLogLine(`Manually added job [${title} @ ${company}]`, 'info');
-      renderActiveVariant();
-    }
-
     // --- LOG STREAMING & SSE INTEGRATION ---
     let logEventSource = null;
     let enrichEventSource = null;
@@ -1972,12 +1919,7 @@
     }
 
     function resetScrapeButtons() {
-      const btnTop = document.getElementById('kb-scrape-btn-top');
       const btnPanel = document.getElementById('kb-scrape-btn-panel');
-      if (btnTop) {
-        btnTop.disabled = false;
-        btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
-      }
       if (btnPanel) {
         btnPanel.disabled = false;
         btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
@@ -2046,12 +1988,7 @@
       addLogLine(logMsg, 'warning');
       
       // Disable buttons during action
-      const btnTop = document.getElementById('kb-scrape-btn-top');
       const btnPanel = document.getElementById('kb-scrape-btn-panel');
-      if (btnTop) {
-        btnTop.disabled = true;
-        btnTop.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
-      }
       if (btnPanel) {
         btnPanel.disabled = true;
         btnPanel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
@@ -2148,12 +2085,7 @@
           
           // On completion, inject jobs
           if (step.msg.includes("Scrape run completed")) {
-            const btnTop = document.getElementById('kb-scrape-btn-top');
             const btnPanel = document.getElementById('kb-scrape-btn-panel');
-            if (btnTop) {
-              btnTop.disabled = false;
-              btnTop.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Scrape & Sync';
-            }
             if (btnPanel) {
               btnPanel.disabled = false;
               btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
@@ -2714,18 +2646,6 @@
       addLogLine("Kanban scraper settings reset to default values.", 'info');
     }
 
-    // Connect to FastAPI to check connection
-    fetch('/api/health')
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById('connection-mode').innerHTML = `<span style="color:var(--accent-emerald);"><i class="fa-solid fa-plug"></i> Connected to FastAPI</span>`;
-      addLogLine("Successfully verified backend connection with FastAPI on localhost.", 'success');
-    })
-    .catch(err => {
-      document.getElementById('connection-mode').innerHTML = `<span style="color:var(--accent-amber);"><i class="fa-solid fa-wifi"></i> Local Standalone Mode</span>`;
-      addLogLine("Backend server offline. Running in browser sandbox mode with offline triggers.", 'warning');
-    });
-
     function loadResumes() {
       return fetch('/api/resumes')
         .then(r => {
@@ -2793,12 +2713,7 @@
       }
       expandLogsConsole();
 
-      const btnTop = document.getElementById('kb-scrape-btn-top');
       const btnPanel = document.getElementById('kb-scrape-btn-panel');
-      if (btnTop) {
-        btnTop.disabled = true;
-        btnTop.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
-      }
       if (btnPanel) {
         btnPanel.disabled = true;
         btnPanel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';

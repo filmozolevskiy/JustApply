@@ -1,56 +1,17 @@
 # Ralph Loop Progress Log
 
-## Iteration 1 — Contact Sample Cache on enrichment (#42)
+## Iteration: 2026-06-14 — Issue #46: Remove dead Kanban Dashboard UI
 
-Implemented the Contact Sample Cache as specified in ADR 0006 and issue #42.
+### Summary
+Removed three dead UI controls from the Kanban Dashboard per PRD #45 Issue #46.
 
-**DB layer** (`src/db/cache.py`, `src/db/connection.py`):
-- Added `contact_sample_cache` table (`company_slug` PK, `profiles` JSON, `fetched_at`, `display_name`) to `init_db`.
-- New `src/db/cache.py` with `get_contact_sample`, `set_contact_sample`, `delete_contact_sample`.
-- Added `log_activity(job_id, message)` public helper to `src/db/jobs.py`.
-- Exported all new functions from `src/db/__init__.py`.
+**Removed:**
+- `Add Job` button and `addNewJobPrompt()` function — client-only fake jobs that never persisted to the DB
+- `Scrape & Sync` button (`kb-scrape-btn-top`) from Pipeline Tracker header — duplicate trigger; `Run Scraper with Filters` remains the sole scrape control
+- Navbar `#connection-mode` indicator (`Connected to FastAPI / Local Standalone Mode` badge) and the `fetch('/api/health')` update logic
 
-**Enrichment pipeline** (`src/core/outreach.py`, `src/pipelines.py`):
-- `source_contacts` now checks the cache first (keyed by normalized company slug). On cache hit: skips Apify, logs company name + `fetched_at`, appends to the job's Job Activity Log. On cache miss: calls Apify, writes non-empty results to cache. Empty Apify results are never cached.
-- Added `bust_cache=False` parameter to `source_contacts` (deletes cache entry before lookup when `True`).
-- `run_enrichment_pipeline` accepts and forwards `bust_cache`.
+**Cleaned up:**
+- All `kb-scrape-btn-top` DOM references in `resetScrapeButtons()`, `triggerScrapeRun()`, `simulateLocalScrape()`, and `restoreActiveScrapeTask()`
+- `#connection-mode` CSS block
 
-**Tests** (`tests/test_contact_sample_cache.py`, `tests/test_outreach.py`):
-- 16 new tests covering DB layer CRUD, cache-miss Apify call, cache-hit Apify skip, cache population, empty-result not cached, `classify_contacts` always runs, Task Logs log line, Job Activity Log append, `bust_cache` flow, slug normalization.
-- Renamed `test_source_contacts_always_calls_apify_even_with_existing_job_poster` → `test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poster`.
-- All 238 tests pass.
-
-## Iteration 2 — Search Pre-Evaluation Filters and cost summary (#43)
-
-Implemented Pre-Evaluation Filters and aggregate pipeline summary in the Search & Evaluation Pipeline per issue #43.
-
-**Pipeline** (`src/pipelines.py`):
-- Added counters: `scraped_count`, `duplicates_count`, `pre_filtered_count`, `evaluated_count`, `saved_count`.
-- Added Pre-Evaluation Filter (v1): after deduplicate check, compares scraper-derived `remoteType` against `allowed_remote_types`. When preferences are not `any` and remote type is not allowed, the job is dropped (not saved) and the rejection is logged to Task Logs.
-- Duplicate log message updated to "Skipping duplicate:" for consistency.
-- Final log replaced with aggregate summary line: `Pipeline complete. Scraped: N | Duplicates skipped: N | Pre-filtered: N | Evaluated: N | Saved: N`.
-- Updated docstring to reflect scrape → deduplicate → Pre-Evaluation Filters → evaluate order.
-- Recruiting agency postings unchanged — still reach Resume Matcher and are saved with penalty.
-
-**Tests** (`tests/test_search_pipeline.py`):
-- 7 new tests: duplicate skips evaluate/add, remote mismatch drops before eval and not saved, rejection logged with title and reason, matching remote type proceeds to eval, `allowed_remote_types=["any"]` passes all, aggregate summary logged, summary counts correct.
-- All 245 tests pass.
-
-## Iteration 3 — Refresh Contacts on enriched jobs (#44)
-
-Implemented the Refresh Contacts action per issue #44.
-
-**Server** (`src/web/server.py`):
-- Extracted `_run_enrichment_task(task_id, job_id, bust_cache)` as a shared helper.
-- `run_enrichment_task_with_logs` delegates to the helper with `bust_cache=False` (unchanged behavior).
-- Added `run_refresh_contacts_task_with_logs` which calls the helper with `bust_cache=True`.
-- Added `POST /api/jobs/{job_id}/refresh-contacts` endpoint: sets job to enriching, creates task, runs `run_refresh_contacts_task_with_logs` as a background task. Returns `{task_id, job_id}`. Returns 404 for unknown jobs.
-
-**Dashboard** (`src/web/dashboard.html`):
-- Added `function refreshContacts(id)`: mirrors `enrichJob` but calls `/api/jobs/{id}/refresh-contacts`, reverts to `enriched` on error.
-- Added **Refresh Contacts** button in the Outreach Contacts section header, conditionally rendered when `job.status === 'enriched'` or `job.status === 'enriching'`. Not shown on sourced jobs.
-
-**Tests** (`tests/test_refresh_contacts.py`):
-- 10 new tests: endpoint returns task_id, sets job to enriching, 404 for missing job, pipeline called with `bust_cache=True`, job contacts updated after refresh, `refreshContacts` JS function defined, calls `/refresh-contacts` endpoint, uses SSE, button present in enriched drawer, enrichJob still shown for sourced drawer.
-- All 255 tests pass.
-
+**Tests added:** `tests/test_dashboard_dead_ui.py` — 8 HTML contract tests asserting absent controls and retained Pipeline Tracker header. All 280 tests pass.
