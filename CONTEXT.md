@@ -25,8 +25,8 @@ Cheap, non-LLM checks applied to new scraped jobs after deduplication and before
 _Avoid_: pre-filter, cheap gate, early rejection
 
 **LinkedIn Scraper API**:
-A hybrid web scraping integration using third-party APIs (Bright Data for job listings and Apify for company employee details) to fetch data without requiring personal LinkedIn credentials or cookies. It operates in a fail-fast manner with trigger rate-limiting to protect API credentials and credits from run-away loops.
-_Avoid_: Local scraper, browser automation, LinkedIn MCP server, silent mock fallbacks
+A hybrid web scraping integration using third-party APIs (Bright Data for job listings and Apify for company employee details) to fetch data without requiring personal LinkedIn credentials or cookies. No LinkedIn account login is needed — the user's personal account is never used. It operates in a fail-fast manner with trigger rate-limiting to protect API credentials and credits from run-away loops.
+_Avoid_: Local scraper, browser automation, LinkedIn MCP server, silent mock fallbacks, LinkedIn login
 
 **Russian Speaker**:
 A company employee classified by the LLM (using name, headline, languages, current position, and location) as likely having a Russian or CIS cultural background. Targeted for referral outreach because shared cultural background increases referral likelihood — not limited to HR or recruiting roles.
