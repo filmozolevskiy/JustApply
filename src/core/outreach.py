@@ -21,7 +21,11 @@ FIT_LINE = "My experience align well with the requirements."
 
 def minimal_fallback_template(audience: str) -> str:
     cta = RECRUITER_CTA if audience == "recruiter" else RUSSIAN_SPEAKER_CTA
-    return f"Hello ______,\n______ at ______.\n{FIT_LINE}\n{cta}"
+    return (
+        f"Hello ______,\n\n"
+        f"______ is looking for a ______. {FIT_LINE}\n\n"
+        f"{cta}"
+    )
 
 
 async def generate_connection_note_template(job: dict, audience: str, log_func=None) -> str:
@@ -50,9 +54,11 @@ async def generate_connection_note_template(job: dict, audience: str, log_func=N
             f"Hard limit: 200 characters total (every character counts).\n\n"
             f"Format — use exactly this structure:\n"
             f"Line 1: Hello ______,\n"
-            f"Line 2: [company name shortened] – [job title shortened]\n"
-            f"Line 3: My experience align well with the requirements.\n"
-            f"Line 4: {cta}\n\n"
+            f"Line 2: (blank line)\n"
+            f"Line 3: [company name shortened] is looking for a [job title shortened]. "
+            f"My experience align well with the requirements.\n"
+            f"Line 4: (blank line)\n"
+            f"Line 5: {cta}\n\n"
             f"Rules:\n"
             f"- Use exactly '______' (6 underscores) as the name placeholder in Line 1.\n"
             f"- No posting link. No bullet points. ESL-friendly.\n"

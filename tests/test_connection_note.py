@@ -61,7 +61,7 @@ async def test_generate_connection_note_falls_back_without_api_key():
 @pytest.mark.asyncio
 async def test_generate_connection_note_returns_short_llm_result(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
-    short_note = "Hello ______,\nAcme – QA Lead.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
+    short_note = "Hello ______,\n\nAcme is looking for a QA Lead. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
     assert len(short_note) <= 200
 
     mock_model = MagicMock()
@@ -81,7 +81,7 @@ async def test_generate_connection_note_returns_short_llm_result(monkeypatch):
 async def test_generate_connection_note_retries_when_first_result_too_long(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
     long_note = "X" * 201
-    short_note = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
+    short_note = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
     assert len(short_note) <= 200
 
     mock_model = MagicMock()
@@ -136,8 +136,8 @@ async def test_generate_connection_note_falls_back_on_llm_exception(monkeypatch)
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_generates_both_on_empty_contacts():
     job = {"title": "QA Lead", "company": "Acme"}
-    recruiter_note = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
-    russian_note = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI'd be grateful if you could refer me for the role."
+    recruiter_note = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
+    russian_note = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI'd be grateful if you could refer me for the role."
 
     async def mock_gen(j, audience, log_func=None):
         return recruiter_note if audience == "recruiter" else russian_note

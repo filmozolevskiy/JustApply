@@ -19,8 +19,8 @@ def db(tmp_path, monkeypatch):
 
 _EMPTY_TEMPLATES = {"recruiter": "", "russian_speaker": ""}
 _BOTH_TEMPLATES = {
-    "recruiter": "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV.",
-    "russian_speaker": "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI'd be grateful if you could refer me for the role.",
+    "recruiter": "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV.",
+    "russian_speaker": "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI'd be grateful if you could refer me for the role.",
 }
 
 

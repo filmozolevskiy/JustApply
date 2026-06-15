@@ -105,16 +105,16 @@ def test_job_schema_has_recruiter_outreach_template_field():
     from src.schemas import Job
     job = Job(title="QA", company="Acme")
     assert job.recruiterOutreachTemplate == ""
-    job2 = Job(title="QA", company="Acme", recruiterOutreachTemplate="Hello ______,\nAcme – QA.\nFit line.\nCTA.")
-    assert job2.recruiterOutreachTemplate == "Hello ______,\nAcme – QA.\nFit line.\nCTA."
+    job2 = Job(title="QA", company="Acme", recruiterOutreachTemplate="Hello ______,\n\nAcme is looking for a QA. Fit line.\n\nCTA.")
+    assert job2.recruiterOutreachTemplate == "Hello ______,\n\nAcme is looking for a QA. Fit line.\n\nCTA."
 
 
 def test_job_schema_has_russian_speaker_outreach_template_field():
     from src.schemas import Job
     job = Job(title="QA", company="Acme")
     assert job.russianSpeakerOutreachTemplate == ""
-    job2 = Job(title="QA", company="Acme", russianSpeakerOutreachTemplate="Hello ______,\nAcme – QA.\nFit.\nRU CTA.")
-    assert job2.russianSpeakerOutreachTemplate == "Hello ______,\nAcme – QA.\nFit.\nRU CTA."
+    job2 = Job(title="QA", company="Acme", russianSpeakerOutreachTemplate="Hello ______,\n\nAcme is looking for a QA. Fit.\n\nRU CTA.")
+    assert job2.russianSpeakerOutreachTemplate == "Hello ______,\n\nAcme is looking for a QA. Fit.\n\nRU CTA."
 
 
 def test_job_schema_outreach_templates_round_trip(db):
@@ -124,8 +124,8 @@ def test_job_schema_outreach_templates_round_trip(db):
         {"title": "QA Engineer", "company": "Acme", "status": "sourced"},
         db_path=db,
     )
-    recruiter_tmpl = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI would be grateful to connect and share my CV."
-    russian_tmpl = "Hello ______,\nAcme – QA.\nMy experience align well with the requirements.\nI'd be grateful if you could refer me for the role."
+    recruiter_tmpl = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
+    russian_tmpl = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI'd be grateful if you could refer me for the role."
     enrich_job(
         job_id, [], recruiter_tmpl,
         recruiter_template=recruiter_tmpl,
