@@ -1,11 +1,12 @@
 {
   "mcpServers": {
     "git": {
+      "command": "./.venv/bin/mcp-server-git",
+      "args": ["--repository", "."]
+    },
+    "github": {
       "command": "bash",
-      "args": [
-        "-c",
-        "export $(grep -v '^#' .env | xargs) && exec ./.venv/bin/mcp-server-git --repository ."
-      ]
+      "args": ["scripts/run-github-mcp.sh"]
     },
     "apify": {
       "url": "https://mcp.apify.com?tools=actors,docs,apify/rag-web-browser"
