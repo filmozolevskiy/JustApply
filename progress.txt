@@ -1,5 +1,26 @@
 # Ralph Loop Progress Log
 
+## Iteration 9 — 2026-06-15
+
+**Issue #66: Defect — Enrich Job shows false-positive cost confirm for jobs missing companyUrl**
+
+### What was implemented
+
+1. **`GET /api/jobs/{id}/cache-status`** (`src/web/server.py:190`): Added `will_call_apify` field to both response branches.
+   - `will_call_apify = bool(job.companyUrl)` — `True` only when `companyUrl` is set.
+   - No-cache response: `{"has_cache": false, "will_call_apify": <bool>}`.
+   - Cached response: `{"has_cache": true, "pages_fetched": N, "will_call_apify": false}` — cache always means no new Apify call.
+
+2. **`enrichJob()`** (`src/web/dashboard.html:1477`): Changed guard from `!cacheData.has_cache` to `cacheData.will_call_apify`. Confirm dialog now appears only when the server signals Apify will actually run.
+
+3. **Tests** (`tests/test_cost_confirmations.py`):
+   - Updated `test_enrich_job_shows_confirm_on_cache_miss` to assert `will_call_apify` in function body (not `has_cache`).
+   - Added `test_cache_status_will_call_apify_false_when_no_company_url` — empty companyUrl → `will_call_apify: false`.
+   - Added `test_cache_status_will_call_apify_true_when_company_url_set_and_no_cache` — companyUrl set, no cache → `will_call_apify: true`.
+   - Added `test_cache_status_will_call_apify_false_when_cache_present` — cache exists → `will_call_apify: false`.
+
+All 445 tests pass (3 new tests added).
+
 ## Iteration 1 — 2026-06-15
 
 **Issue #58: Found and Accepted lanes with status migration**

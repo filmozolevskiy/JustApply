@@ -1474,7 +1474,7 @@
       const cacheResp = await fetch(`/api/jobs/${id}/cache-status`);
       if (cacheResp.ok) {
         const cacheData = await cacheResp.json();
-        if (!cacheData.has_cache) {
+        if (cacheData.will_call_apify) {
           const ok = confirm(
             `Enrich Job will fetch company employees from LinkedIn via Apify.\nEstimated cost: ~$0.22 per page.\n\nProceed?`
           );

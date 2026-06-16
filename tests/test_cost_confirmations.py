@@ -92,7 +92,44 @@ def test_enrich_job_shows_confirm_on_cache_miss():
     script = _dashboard_script()
     body = _get_function_body(script, "enrichJob")
     assert "confirm(" in body, "enrichJob must call confirm() for cache-miss case"
-    assert "has_cache" in body, "enrichJob must branch on has_cache"
+    assert "will_call_apify" in body, "enrichJob must branch on will_call_apify"
+
+
+# ── Server: will_call_apify field ────────────────────────────────────────────
+
+def _make_found_job_no_url(db):
+    from src.db.jobs import add_job
+    return add_job({"title": "QA", "company": "Acumatica", "companyUrl": "", "status": "found"}, db_path=db)
+
+
+def test_cache_status_will_call_apify_false_when_no_company_url(db):
+    job_id = _make_found_job_no_url(db)
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["will_call_apify"] is False
+
+
+def test_cache_status_will_call_apify_true_when_company_url_set_and_no_cache(db):
+    job_id = _make_accepted_job(db)
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["has_cache"] is False
+    assert data["will_call_apify"] is True
+
+
+def test_cache_status_will_call_apify_false_when_cache_present(db):
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+    job_id = _make_accepted_job(db)
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(slug, [{"name": "Bob"}], pages_fetched=1, db_path=db)
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["has_cache"] is True
+    assert data["will_call_apify"] is False
 
 
 def test_enrich_job_cost_estimate_visible():

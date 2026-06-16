@@ -187,9 +187,10 @@ async def cache_status(job_id: int):
     from ..core.enrichment.contact_sample import company_cache_slug
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
     cached = get_contact_sample(slug)
+    will_call_apify = bool(job.companyUrl)
     if not cached:
-        return {"has_cache": False}
-    return {"has_cache": True, "pages_fetched": cached.get("pages_fetched", 1)}
+        return {"has_cache": False, "will_call_apify": will_call_apify}
+    return {"has_cache": True, "pages_fetched": cached.get("pages_fetched", 1), "will_call_apify": False}
 
 
 @app.post("/api/jobs/{job_id}/reclassify", response_model=Job)
