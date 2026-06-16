@@ -41,11 +41,11 @@ A person in a job's outreach list. Carries identity flags (`is_job_poster`) and 
 _Avoid_: employee record, profile entry, lead
 
 **Contact Sample**:
-Up to 100 LinkedIn employee profiles fetched from a target company via Apify, passed as a batch to the LLM for Outreach Audience classification. The Job Poster is included in the same classification pass when present. Up to 5 contacts per Outreach Audience type are selected from the classified results.
+Up to 25 LinkedIn employee profiles fetched from a target company via Apify using the job listing's LinkedIn company page URL (`companyUrl` from Bright Data). No name-based slug guessing — if `companyUrl` is missing or the fetch returns zero profiles, Enrichment stops without further Apify calls. Passed as a batch to the LLM for Outreach Audience classification. The Job Poster is included in the same classification pass when present. Up to 5 contacts per Outreach Audience type are selected from the classified results.
 _Avoid_: Employee list, full company scrape
 
 **Contact Sample Cache**:
-A per-company store in the Job Tracker Database of the most recent raw Contact Sample, keyed by the normalized LinkedIn company slug (lowercase, trimmed, spaces and underscores to hyphens — the same transform used for Apify lookup). Reused across enrichments for jobs at the same company to avoid repeat Apify calls; entries do not expire by age. Busted only by an explicit **Refresh Contacts** action — re-enrichment alone does not invalidate the cache. Outreach Audience classification and Job Poster merge run on every enrichment regardless of cache hit — only the Apify fetch is skipped. Empty or failed Apify fetches are never cached. Cache hits and misses are logged to Task Logs; cache hits are also recorded in the job's Job Activity Log.
+A per-company store in the Job Tracker Database of the most recent raw Contact Sample, keyed by the LinkedIn company slug from the job listing's `companyUrl` (not derived from display name). Reused across enrichments for jobs at the same company to avoid repeat Apify calls; entries do not expire by age. Busted only by an explicit **Refresh Contacts** action — re-enrichment alone does not invalidate the cache. Outreach Audience classification and Job Poster merge run on every enrichment regardless of cache hit — only the Apify fetch is skipped. Empty or failed Apify fetches are never cached. Cache hits and misses are logged to Task Logs; cache hits are also recorded in the job's Job Activity Log.
 _Avoid_: contact cache, outreach candidate cache, classified contact cache
 
 **Refresh Contacts**:
@@ -105,7 +105,7 @@ A system-written status message on a job (`enrichmentNote`) recording the outcom
 _Avoid_: enrichment error, failure message, enrich status
 
 **Enrichment Failure**:
-An enrichment run that ends with zero Outreach Audience contacts or encounters an infrastructure error (Apify trigger failure, timeout, missing credentials, classification error). The job stays in the Enriched lane with an Enrichment Note explaining the reason. Even with zero contacts, the Outreach Generator still produces both Recruiter and Russian Speaker Outreach Templates so the user can cold-connect manually.
+An enrichment run that ends with zero Outreach Audience contacts or encounters an infrastructure error (missing or unusable `companyUrl`, Apify trigger failure, zero employees at the company page, timeout, missing credentials, classification error). The job stays in the Enriched lane with an Enrichment Note explaining the reason. Even with zero contacts, the Outreach Generator still produces both Recruiter and Russian Speaker Outreach Templates so the user can cold-connect manually.
 _Avoid_: failed enrich, sourcing error, empty contacts
 
 **Outreach Settings**:

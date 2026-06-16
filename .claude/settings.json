@@ -6,6 +6,9 @@
         "-c",
         "export $(grep -v '^#' .env | xargs) && exec ./.venv/bin/mcp-server-git --repository ."
       ]
+    },
+    "apify": {
+      "url": "https://mcp.apify.com?tools=actors,docs,apify/rag-web-browser"
     }
   }
 }

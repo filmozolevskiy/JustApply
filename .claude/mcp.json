@@ -9,6 +9,9 @@
       "env": {
         "API_TOKEN": "2c8162d0-8bcf-4550-9c65-fcc32ff45d9c"
       }
+    },
+    "apify": {
+      "url": "https://mcp.apify.com?tools=actors,docs,apify/rag-web-browser"
     }
   }
 }
