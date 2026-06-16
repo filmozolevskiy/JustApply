@@ -124,6 +124,13 @@ export function cardReclassifyBadge(jobId, reclassifyJobId) {
   return '';
 }
 
+export function cardReclassifyQueuedBadge(jobId, reclassifyQueuedJobIds) {
+  if (Array.isArray(reclassifyQueuedJobIds) && reclassifyQueuedJobIds.includes(jobId)) {
+    return `<span style="font-size:0.6rem; background:rgba(6,182,212,0.1); color:#67e8f9; border:1px solid rgba(6,182,212,0.25); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Queued</span>`;
+  }
+  return '';
+}
+
 export function getKanbanCardMovementButtons(job) {
   if (job.archived) {
     return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
@@ -139,6 +146,7 @@ export function renderBoard(jobs, filters = {}) {
   const enrichingJobId = filters.enrichingJobId ?? null;
   const loadMoreJobId = filters.loadMoreJobId ?? null;
   const reclassifyJobId = filters.reclassifyJobId ?? null;
+  const reclassifyQueuedJobIds = filters.reclassifyQueuedJobIds ?? [];
 
   LANES.forEach((lane) => {
     const laneEl = document.getElementById(`lane-${lane}`);
@@ -186,6 +194,7 @@ export function renderBoard(jobs, filters = {}) {
                 ${cardEnrichingBadge(job.id, enrichingJobId)}
                 ${cardLoadMoreBadge(job.id, loadMoreJobId)}
                 ${cardReclassifyBadge(job.id, reclassifyJobId)}
+                ${cardReclassifyQueuedBadge(job.id, reclassifyQueuedJobIds)}
               </div>
             </div>
             <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">

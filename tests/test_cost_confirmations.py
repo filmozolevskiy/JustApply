@@ -163,12 +163,20 @@ def test_load_more_contacts_shows_card_spinner_while_loading():
 
 def test_reclassify_job_never_shows_confirm():
     script = _dashboard_script()
-    body = _get_function_body(script, "reclassifyJob", window=800)
+    body = _get_function_body(script, "reclassifyJob", window=400)
     assert "confirm(" not in body, "reclassifyJob must NOT call confirm() — no Apify spend"
 
 
 def test_reclassify_job_shows_card_spinner_while_loading():
     script = _dashboard_script()
     body = _get_function_body(script, "reclassifyJob", window=800)
-    assert "activeReclassifyJobId" in body, "reclassifyJob must set activeReclassifyJobId"
-    assert "renderActiveVariant()" in body, "reclassifyJob must re-render to show card spinner"
+    assert "reclassifyQueue" in script, "dashboard must maintain a reclassify queue"
+    assert "drainReclassifyQueue" in script, "dashboard must drain reclassify queue sequentially"
+    assert "activeReclassifyJobId" in body or "reclassifyQueue" in body
+    spinner_body = _get_function_body(script, "drainReclassifyQueue", window=1500)
+    assert "activeReclassifyJobId" in spinner_body, "drainReclassifyQueue must set activeReclassifyJobId"
+    assert "renderActiveVariant()" in spinner_body, "drainReclassifyQueue must re-render to show card spinner"
+    assert "refreshDrawerIfOpen" in spinner_body, "drainReclassifyQueue must only refresh drawer when still open"
+    finally_block = spinner_body.split("finally", 1)[1]
+    assert "openJobDetailsDrawer(id)" not in finally_block, \
+        "drainReclassifyQueue must not force-open drawer after completion"

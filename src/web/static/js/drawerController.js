@@ -92,6 +92,7 @@ export function createDrawerController({
   onJobMutated,
   addLogLine,
   getActiveReclassifyJobId = () => null,
+  getReclassifyQueuedJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
 }) {
   let activeContactIdx = -1;
@@ -164,8 +165,10 @@ export function createDrawerController({
       : rawActiveTemplate;
 
     const isReclassifying = getActiveReclassifyJobId() === job.id;
+    const isReclassifyQueued = getReclassifyQueuedJobIds().includes(job.id);
     const isLoadingMore = getActiveLoadMoreJobId() === job.id;
     const contactActionInProgress = isReclassifying || isLoadingMore;
+    const reclassifyBusy = isReclassifying || isReclassifyQueued;
 
     body.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
@@ -273,6 +276,13 @@ export function createDrawerController({
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
             </div>
+            ${isReclassifyQueued && !isReclassifying
+              ? `
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:#67e8f9; padding:8px 12px; background:rgba(6,182,212,0.06); border:1px solid rgba(6,182,212,0.18); border-radius:6px;">
+              <i class="fa-solid fa-clock"></i> Queued for re-classification…
+            </div>
+            `
+              : ''}
             ${isReclassifying
               ? `
             <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--accent-cyan); padding:8px 12px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.2); border-radius:6px;">
@@ -322,7 +332,7 @@ export function createDrawerController({
             ${hasContactSampleActions(job, contacts)
               ? `
               <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-indigo); border-color: rgba(99,102,241,0.2);${contactActionInProgress ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="loadMoreContacts(${job.id})"${contactActionInProgress ? ' disabled' : ''}><i class="fa-solid fa-users-line"></i> Load More Contacts</button>
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);${contactActionInProgress ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="reclassifyJob(${job.id})"${contactActionInProgress ? ' disabled' : ''}><i class="fa-solid ${isReclassifying ? 'fa-spinner fa-spin' : 'fa-rotate'}"></i> ${isReclassifying ? 'Re-classifying…' : 'Re-classify'}</button>
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);${reclassifyBusy || isLoadingMore ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="reclassifyJob(${job.id})"${reclassifyBusy || isLoadingMore ? ' disabled' : ''}><i class="fa-solid ${isReclassifying ? 'fa-spinner fa-spin' : isReclassifyQueued ? 'fa-clock' : 'fa-rotate'}"></i> ${isReclassifying ? 'Re-classifying…' : isReclassifyQueued ? 'Queued…' : 'Re-classify'}</button>
             `
               : ''}
             ${job.status !== 'rejected'
@@ -444,6 +454,13 @@ export function createDrawerController({
     }
   }
 
+  function refreshDrawerIfOpen(id) {
+    const overlay = document.getElementById('kanban-drawer');
+    if (overlay?.classList.contains('active')) {
+      openJobDetailsDrawer(id);
+    }
+  }
+
   function toggleActivityLog(logId) {
     const panel = document.getElementById(logId);
     const chevron = document.getElementById(logId + '-chevron');
@@ -475,6 +492,7 @@ export function createDrawerController({
     closeDrawer,
     copyDrawerOutreach,
     openJobDetailsDrawer,
+    refreshDrawerIfOpen,
     saveOutreachTemplate,
     selectActiveContact,
     toggleActivityLog,
