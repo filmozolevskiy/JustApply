@@ -2,6 +2,8 @@
 
 import inspect
 
+from ...db.job_model import coerce_job
+from ...schemas import Job, OutreachSettings
 from .contact_sample import (
     CONTACT_SAMPLE_SIZE,
     _run_apify_actor,
@@ -13,7 +15,7 @@ from .contact_sample import (
 from .classifier import classify_contacts
 
 
-async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: bool = False, meta: dict | None = None) -> list:
+async def source_contacts(job: Job, settings=None, log_func=None, bust_cache: bool = False, meta: dict | None = None) -> list:
     """
     Return outreach contacts for a job using LLM classification.
 
@@ -25,7 +27,6 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
     available. Preserves contacted:True from previous contacts matched by
     normalized URL. bust_cache=True deletes the cache entry before lookup.
     """
-    from ...schemas import OutreachSettings
     from ...db.cache import get_contact_sample, set_contact_sample, delete_contact_sample
     from ...db.jobs import log_activity
 
@@ -39,7 +40,8 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
             else:
                 log_func(msg, level)
 
-    existing = job.get("contacts") or []
+    job = coerce_job(job)
+    existing = [c.model_dump() for c in job.contacts]
     job_poster = next((c for c in existing if c.get("is_job_poster")), None)
     contacted_by_slug = {
         normalize_linkedin_url(c.get("url", "")): c.get("contacted", False)
@@ -47,8 +49,8 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
         if normalize_linkedin_url(c.get("url", ""))
     }
 
-    company = job.get("company") or ""
-    company_url = job.get("companyUrl") or ""
+    company = job.company or ""
+    company_url = job.companyUrl or ""
     if not company:
         await log("No company name for Apify sourcing.", "warning")
         return []
@@ -63,7 +65,7 @@ async def source_contacts(job: dict, settings=None, log_func=None, bust_cache: b
         display = cache_entry.get("display_name") or company
         fetched_at = cache_entry.get("fetched_at") or ""
         await log(f"Contact Sample Cache hit for '{display}' (fetched {fetched_at}).", "info")
-        job_id = job.get("id")
+        job_id = job.id
         if job_id:
             log_activity(job_id, f"Contact Sample Cache hit · {display}")
         items = cache_entry["profiles"]

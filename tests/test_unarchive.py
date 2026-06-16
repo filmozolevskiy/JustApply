@@ -48,7 +48,7 @@ def test_get_jobs_active_excludes_archived(tmp_path):
     archived_id = _add_and_archive_job(db_str)
 
     jobs = get_jobs(db_str)  # default archived_filter="active"
-    assert not any(j["id"] == archived_id for j in jobs)
+    assert not any(j.id == archived_id for j in jobs)
 
 
 def test_get_jobs_archived_returns_only_archived(tmp_path):
@@ -59,7 +59,7 @@ def test_get_jobs_archived_returns_only_archived(tmp_path):
     active_id = add_job({"title": "Active Job", "company": "ActiveCo"}, db_str)
 
     jobs = get_jobs(db_str, archived_filter="archived")
-    ids = [j["id"] for j in jobs]
+    ids = [j.id for j in jobs]
     assert archived_id in ids
     assert active_id not in ids
 
@@ -72,7 +72,7 @@ def test_get_jobs_all_returns_both(tmp_path):
     active_id = add_job({"title": "Active Job", "company": "ActiveCo"}, db_str)
 
     jobs = get_jobs(db_str, archived_filter="all")
-    ids = [j["id"] for j in jobs]
+    ids = [j.id for j in jobs]
     assert archived_id in ids
     assert active_id in ids
 
@@ -90,7 +90,7 @@ def test_archive_job_on_archived_job_unarchives_it(tmp_path):
     result = archive_job(archived_id, db_str)
 
     assert result is not None
-    assert result["archived"] is False
+    assert result.archived is False
 
 
 def test_unarchive_sets_auto_archive_exemption(tmp_path):
@@ -102,7 +102,7 @@ def test_unarchive_sets_auto_archive_exemption(tmp_path):
     archive_job(archived_id, db_str)
 
     job = get_job(archived_id, db_str)
-    assert job["autoArchiveExempt"] is True
+    assert job.autoArchiveExempt is True
 
 
 def test_unarchive_logs_correct_message(tmp_path):
@@ -114,7 +114,7 @@ def test_unarchive_logs_correct_message(tmp_path):
     archive_job(archived_id, db_str)
 
     job = get_job(archived_id, db_str)
-    messages = [e["message"] for e in job["activityLog"]]
+    messages = [e.message for e in job.activityLog]
     assert "Un-archived (auto-archive exempted)" in messages
 
 
@@ -125,13 +125,13 @@ def test_unarchived_job_visible_in_active_board(tmp_path):
     archived_id = _add_and_archive_job(db_str)
 
     # Confirm it's hidden
-    assert not any(j["id"] == archived_id for j in get_jobs(db_str))
+    assert not any(j.id == archived_id for j in get_jobs(db_str))
 
     # Un-archive
     archive_job(archived_id, db_str)
 
     # Now visible
-    assert any(j["id"] == archived_id for j in get_jobs(db_str))
+    assert any(j.id == archived_id for j in get_jobs(db_str))
 
 
 def test_unarchived_job_absent_from_archived_filter(tmp_path):
@@ -143,7 +143,7 @@ def test_unarchived_job_absent_from_archived_filter(tmp_path):
     archive_job(archived_id, db_str)  # un-archive
 
     jobs = get_jobs(db_str, archived_filter="archived")
-    assert not any(j["id"] == archived_id for j in jobs)
+    assert not any(j.id == archived_id for j in jobs)
 
 
 def test_exemption_survives_auto_archive_sweep(tmp_path):
@@ -168,7 +168,7 @@ def test_exemption_survives_auto_archive_sweep(tmp_path):
 
     # get_jobs sweep runs — exemption should block re-archive
     jobs = get_jobs(db_str)
-    assert any(j["id"] == job_id for j in jobs), "exempted job must stay on active board after sweep"
+    assert any(j.id == job_id for j in jobs), "exempted job must stay on active board after sweep"
 
 
 # ---------------------------------------------------------------------------

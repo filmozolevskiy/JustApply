@@ -24,15 +24,15 @@ def test_begin_enrichment_is_idempotent_no_duplicate_activity_log(tmp_path):
     job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
 
     first = begin_enrichment(job_id, db_str)
-    assert first["status"] == "enriching"
+    assert first.status == "enriching"
 
-    log_len_after_first = len(get_job(job_id, db_str)["activityLog"])
+    log_len_after_first = len(get_job(job_id, db_str).activityLog)
     second = begin_enrichment(job_id, db_str)
-    assert second["status"] == "enriching"
+    assert second.status == "enriching"
 
-    messages = [e["message"] for e in get_job(job_id, db_str)["activityLog"]]
+    messages = [e.message for e in get_job(job_id, db_str).activityLog]
     assert messages.count("Enrichment started") == 1
-    assert len(get_job(job_id, db_str)["activityLog"]) == log_len_after_first
+    assert len(get_job(job_id, db_str).activityLog) == log_len_after_first
 
 
 def test_abort_enrichment_reverts_sourced_job(tmp_path):
@@ -45,8 +45,8 @@ def test_abort_enrichment_reverts_sourced_job(tmp_path):
     begin_enrichment(job_id, db_str)
     reverted = abort_enrichment(job_id, db_str)
 
-    assert reverted["status"] == "sourced"
-    assert get_job(job_id, db_str)["status"] == "sourced"
+    assert reverted.status == "sourced"
+    assert get_job(job_id, db_str).status == "sourced"
 
 
 def test_abort_enrichment_reverts_enriched_job_after_refresh(tmp_path):
@@ -61,8 +61,8 @@ def test_abort_enrichment_reverts_enriched_job_after_refresh(tmp_path):
     begin_enrichment(job_id, db_str)
     reverted = abort_enrichment(job_id, db_str)
 
-    assert reverted["status"] == "enriched"
-    assert get_job(job_id, db_str)["status"] == "enriched"
+    assert reverted.status == "enriched"
+    assert get_job(job_id, db_str).status == "enriched"
 
 
 @pytest.mark.asyncio

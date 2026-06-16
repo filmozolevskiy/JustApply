@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_jobs, update_job_status, add_job
+from src.db import init_db, get_jobs, update_job_status, add_job, archive_stale_rejected_jobs
 from src.db.jobs import get_job, archive_job
 import src.db.connection as _db_conn
 
@@ -30,19 +30,19 @@ def _add_rejected_job(db_str, backdated_days: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# DB-layer: auto_archive_stale_jobs (via get_jobs sweep)
+# DB-layer: archive_stale_rejected_jobs (explicit sweep)
 # ---------------------------------------------------------------------------
 
-def test_get_jobs_auto_archives_15_day_old_rejected(tmp_path):
-    """Tracer bullet: rejected job with rejectedAt 15 days ago gets archived on get_jobs."""
+def test_archive_stale_rejected_jobs_archives_15_day_old_rejected(tmp_path):
+    """Tracer bullet: rejected job with rejectedAt 15 days ago gets archived on sweep."""
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     job_id = _add_rejected_job(db_str, 15)
 
-    get_jobs(db_str)  # triggers sweep
+    archive_stale_rejected_jobs(db_str)
 
     job = get_job(job_id, db_str)
-    assert job["archived"] is True
+    assert job.archived is True
 
 
 def test_auto_archived_job_absent_from_active_board(tmp_path):
@@ -51,9 +51,11 @@ def test_auto_archived_job_absent_from_active_board(tmp_path):
     init_db(db_str)
     job_id = _add_rejected_job(db_str, 15)
 
+    archive_stale_rejected_jobs(db_str)
+
     jobs = get_jobs(db_str)
 
-    assert not any(j["id"] == job_id for j in jobs)
+    assert not any(j.id == job_id for j in jobs)
 
 
 def test_auto_archive_logs_correct_message(tmp_path):
@@ -62,10 +64,10 @@ def test_auto_archive_logs_correct_message(tmp_path):
     init_db(db_str)
     job_id = _add_rejected_job(db_str, 15)
 
-    get_jobs(db_str)
+    archive_stale_rejected_jobs(db_str)
 
     job = get_job(job_id, db_str)
-    messages = [e["message"] for e in job["activityLog"]]
+    messages = [e.message for e in job.activityLog]
     assert "Auto-archived (rejected 14+ days)" in messages
 
 
@@ -80,10 +82,10 @@ def test_exempt_job_not_auto_archived(tmp_path):
     conn.commit()
     conn.close()
 
-    get_jobs(db_str)
+    archive_stale_rejected_jobs(db_str)
 
     job = get_job(job_id, db_str)
-    assert job["archived"] is False
+    assert job.archived is False
 
 
 def test_non_rejected_job_not_auto_archived(tmp_path):
@@ -100,10 +102,10 @@ def test_non_rejected_job_not_auto_archived(tmp_path):
     conn.commit()
     conn.close()
 
-    get_jobs(db_str)
+    archive_stale_rejected_jobs(db_str)
 
     job = get_job(job_id, db_str)
-    assert job["archived"] is False
+    assert job.archived is False
 
 
 def test_job_rejected_13_days_ago_not_auto_archived(tmp_path):
@@ -112,10 +114,10 @@ def test_job_rejected_13_days_ago_not_auto_archived(tmp_path):
     init_db(db_str)
     job_id = _add_rejected_job(db_str, 13)
 
-    get_jobs(db_str)
+    archive_stale_rejected_jobs(db_str)
 
     job = get_job(job_id, db_str)
-    assert job["archived"] is False
+    assert job.archived is False
 
 
 def test_already_archived_job_not_double_archived(tmp_path):
@@ -125,10 +127,10 @@ def test_already_archived_job_not_double_archived(tmp_path):
     job_id = _add_rejected_job(db_str, 15)
     archive_job(job_id, db_str)  # manual archive first
 
-    get_jobs(db_str)  # sweep runs
+    archive_stale_rejected_jobs(db_str)
 
     job = get_job(job_id, db_str)
-    auto_entries = [e for e in job["activityLog"] if "Auto-archived" in e["message"]]
+    auto_entries = [e for e in job.activityLog if "Auto-archived" in e.message]
     assert len(auto_entries) == 0, "sweep must not touch already-archived jobs"
 
 
@@ -162,4 +164,4 @@ def test_api_get_jobs_triggers_auto_archive(tmp_path):
     assert job_id not in returned_ids, "stale rejected job must not appear in active board"
 
     job = get_job(job_id, _db_connection.DB_PATH)
-    assert job["archived"] is True
+    assert job.archived is True

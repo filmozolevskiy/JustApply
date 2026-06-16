@@ -7,7 +7,8 @@ from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
 from .core.enrichment import source_contacts, generate_outreach_templates
 from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
-from .schemas import OutreachSettings
+from .schemas import Job, OutreachSettings
+from .db.job_model import coerce_job
 
 
 async def run_search_pipeline(
@@ -127,7 +128,7 @@ async def run_search_pipeline(
     return saved
 
 
-async def run_enrichment_pipeline(job: dict, log_func=None, bust_cache: bool = False) -> dict | None:
+async def run_enrichment_pipeline(job: Job, log_func=None, bust_cache: bool = False) -> Job | None:
     """Source contacts, generate outreach message, and persist enriched job."""
 
     async def log(msg: str, level: str = "info"):
@@ -138,16 +139,17 @@ async def run_enrichment_pipeline(job: dict, log_func=None, bust_cache: bool = F
         else:
             log_func(msg, level)
 
-    job_id = job.get("id")
+    job = coerce_job(job)
+    job_id = job.id
     if not job_id:
         return None
 
-    if job.get("status") != "enriching":
+    if job.status != "enriching":
         await log(f"Job id={job_id} is not enriching; call begin_enrichment first.", "error")
         return None
 
-    title = job.get("title") or ""
-    company = job.get("company") or ""
+    title = job.title or ""
+    company = job.company or ""
     await log(f"Enriching '{title}' at '{company}'...")
 
     enrichment_note = ""

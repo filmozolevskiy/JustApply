@@ -57,12 +57,12 @@ def test_archived_job_status_update_preserves_archived(tmp_path):
     update_job_status(job_id, "rejected", db_str)
     archive_job(job_id, db_str)
     job = get_job(job_id, db_str)
-    assert job["archived"] is True
+    assert job.archived is True
 
     # Simulate drag to sourced (what the dashboard does via PUT /api/jobs/{id}/status)
     updated = update_job_status(job_id, "sourced", db_str)
-    assert updated["status"] == "sourced"
-    assert updated["archived"] is True, "archived flag must survive a status update"
+    assert updated.status == "sourced"
+    assert updated.archived is True, "archived flag must survive a status update"
 
 
 def test_archived_job_can_move_to_contacted(tmp_path):
@@ -73,8 +73,8 @@ def test_archived_job_can_move_to_contacted(tmp_path):
     archive_job(job_id, db_str)
 
     updated = update_job_status(job_id, "contacted", db_str)
-    assert updated["status"] == "contacted"
-    assert updated["archived"] is True
+    assert updated.status == "contacted"
+    assert updated.archived is True
 
 
 def test_archived_moved_job_absent_from_active_board(tmp_path):
@@ -87,7 +87,7 @@ def test_archived_moved_job_absent_from_active_board(tmp_path):
 
     update_job_status(job_id, "sourced", db_str)
     active_jobs = get_jobs(db_str, archived_filter="active")
-    ids = [j["id"] for j in active_jobs]
+    ids = [j.id for j in active_jobs]
     assert job_id not in ids, "archived job must remain hidden in active board after status move"
 
 
@@ -100,7 +100,7 @@ def test_archived_moved_job_visible_in_archived_view(tmp_path):
 
     update_job_status(job_id, "sourced", db_str)
     archived_jobs = get_jobs(db_str, archived_filter="archived")
-    ids = [j["id"] for j in archived_jobs]
+    ids = [j.id for j in archived_jobs]
     assert job_id in ids, "archived job must appear in archived view after status move"
 
 

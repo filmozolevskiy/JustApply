@@ -21,24 +21,24 @@ def test_database_lifecycle(tmp_path):
     assert len(jobs) == 7
     
     # Verify first job data structure
-    first_job = next(j for j in jobs if j["id"] == 1)
-    assert first_job["title"] == "Senior QA Automation Engineer"
-    assert first_job["company"] == "TechCorp"
-    assert isinstance(first_job["strengths"], list)
-    assert "Highly proficient in Python & Pytest" in first_job["strengths"]
-    assert isinstance(first_job["contacts"], list)
-    assert first_job["contacts"][0]["name"] == "Jane Doe"
-    assert first_job["shouldProceed"] is True
+    first_job = next(j for j in jobs if j.id == 1)
+    assert first_job.title == "Senior QA Automation Engineer"
+    assert first_job.company == "TechCorp"
+    assert isinstance(first_job.strengths, list)
+    assert "Highly proficient in Python & Pytest" in first_job.strengths
+    assert isinstance(first_job.contacts, list)
+    assert first_job.contacts[0].name == "Jane Doe"
+    assert first_job.shouldProceed is True
     
     # 2. Update status
     updated = update_job_status(1, "applied", db_str)
     assert updated is not None
-    assert updated["status"] == "applied"
+    assert updated.status == "applied"
     
     # Verify update in fetched list
     jobs_after_update = get_jobs(db_str)
-    job_1 = next(j for j in jobs_after_update if j["id"] == 1)
-    assert job_1["status"] == "applied"
+    job_1 = next(j for j in jobs_after_update if j.id == 1)
+    assert job_1.status == "applied"
     
     # 3. Add new job
     new_job_data = {
@@ -54,12 +54,12 @@ def test_database_lifecycle(tmp_path):
     
     jobs_after_add = get_jobs(db_str)
     assert len(jobs_after_add) == 8
-    added_job = next(j for j in jobs_after_add if j["id"] == new_id)
-    assert added_job["title"] == "Staff Engineer"
-    assert added_job["company"] == "Google"
-    assert added_job["status"] == "sourced"
-    assert added_job["strengths"] == ["Testing", "Scaling"]
-    assert added_job["shouldProceed"] is True
+    added_job = next(j for j in jobs_after_add if j.id == new_id)
+    assert added_job.title == "Staff Engineer"
+    assert added_job.company == "Google"
+    assert added_job.status == "sourced"
+    assert added_job.strengths == ["Testing", "Scaling"]
+    assert added_job.shouldProceed is True
 
 
 def test_add_job_persists_company_url(tmp_path):
@@ -72,8 +72,8 @@ def test_add_job_persists_company_url(tmp_path):
         "companyUrl": "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name",
     }, db_str)
 
-    job = next(j for j in get_jobs(db_str) if j["id"] == job_id)
-    assert job["companyUrl"] == (
+    job = next(j for j in get_jobs(db_str) if j.id == job_id)
+    assert job.companyUrl == (
         "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
     )
 
@@ -95,19 +95,19 @@ def test_update_job_comment(tmp_path):
 
     # Verify initial comment of job 1
     jobs = get_jobs(db_str)
-    job1 = next(j for j in jobs if j["id"] == 1)
-    assert job1["comment"] == "Excellent match. Framework matches 100%."
+    job1 = next(j for j in jobs if j.id == 1)
+    assert job1.comment == "Excellent match. Framework matches 100%."
     
     # Update comment
     new_comment = "New test comment here"
     updated = update_job_comment(1, new_comment, db_str)
     assert updated is not None
-    assert updated["comment"] == new_comment
+    assert updated.comment == new_comment
     
     # Verify persistence
     jobs_after = get_jobs(db_str)
-    job1_after = next(j for j in jobs_after if j["id"] == 1)
-    assert job1_after["comment"] == new_comment
+    job1_after = next(j for j in jobs_after if j.id == 1)
+    assert job1_after.comment == new_comment
 
 def test_update_job_comment_nonexistent(tmp_path):
     test_db = tmp_path / "test_job_tracker.db"
@@ -129,8 +129,8 @@ def test_update_job_status_invalid_status(tmp_path):
 
     # Job status must be unchanged
     jobs = get_jobs(db_str)
-    job1 = next(j for j in jobs if j["id"] == 1)
-    assert job1["status"] == "sourced"
+    job1 = next(j for j in jobs if j.id == 1)
+    assert job1.status == "sourced"
 
 
 def test_get_jobs_json_roundtrip(tmp_path):
@@ -147,11 +147,11 @@ def test_get_jobs_json_roundtrip(tmp_path):
     }, db_str)
 
     jobs = get_jobs(db_str)
-    added = next(j for j in jobs if j["id"] == new_id)
-    assert added["strengths"] == ["Python", "PyTorch"]
-    assert added["gaps"] == ["No MLOps experience"]
-    assert isinstance(added["contacts"], list)
-    assert added["contacts"][0]["name"] == "Bob"
+    added = next(j for j in jobs if j.id == new_id)
+    assert added.strengths == ["Python", "PyTorch"]
+    assert added.gaps == ["No MLOps experience"]
+    assert isinstance(added.contacts, list)
+    assert added.contacts[0].name == "Bob"
 
 
 def test_job_exists(tmp_path):
@@ -200,10 +200,10 @@ def test_start_enrichment(tmp_path):
 
     updated = start_enrichment(1, db_str)
     assert updated is not None
-    assert updated["status"] == "enriching"
+    assert updated.status == "enriching"
 
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["status"] == "enriching"
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.status == "enriching"
 
 
 def test_start_enrichment_nonexistent(tmp_path):
@@ -222,13 +222,14 @@ def test_enrich_job_persists_contacts_and_message(tmp_path):
     updated = enrich_job(1, contacts, "Hello Alice", db_path=db_str)
 
     assert updated is not None
-    assert updated["status"] == "enriched"
-    assert updated["contacts"] == contacts
-    assert updated["outreachMessage"] == "Hello Alice"
+    assert updated.status == "enriched"
+    assert updated.contacts[0].name == contacts[0]["name"]
+    assert updated.contacts[0].url == contacts[0]["url"]
+    assert updated.outreachMessage == "Hello Alice"
 
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["status"] == "enriched"
-    assert job["outreachMessage"] == "Hello Alice"
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.status == "enriched"
+    assert job.outreachMessage == "Hello Alice"
 
 
 def test_enrich_job_nonexistent(tmp_path):
@@ -242,7 +243,7 @@ def test_enrich_job_persists_enrichment_note(tmp_path):
     init_db(db_str)
     updated = enrich_job(1, [], "msg", enrichment_note="Apify failed: HTTP 403", db_path=db_str)
     assert updated is not None
-    assert updated["enrichmentNote"] == "Apify failed: HTTP 403"
+    assert updated.enrichmentNote == "Apify failed: HTTP 403"
 
 
 def test_enrich_job_clears_enrichment_note(tmp_path):
@@ -252,7 +253,7 @@ def test_enrich_job_clears_enrichment_note(tmp_path):
     contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice", "contacted": False}]
     updated = enrich_job(1, contacts, "Hello", enrichment_note="", db_path=db_str)
     assert updated is not None
-    assert updated["enrichmentNote"] == ""
+    assert updated.enrichmentNote == ""
 
 
 def test_enrich_job_persists_both_outreach_templates(tmp_path):
@@ -267,8 +268,8 @@ def test_enrich_job_persists_both_outreach_templates(tmp_path):
         db_path=db_str,
     )
     assert updated is not None
-    assert updated["recruiterOutreachTemplate"] == recruiter_tmpl
-    assert updated["russianSpeakerOutreachTemplate"] == russian_tmpl
+    assert updated.recruiterOutreachTemplate == recruiter_tmpl
+    assert updated.russianSpeakerOutreachTemplate == russian_tmpl
 
 
 def test_legacy_outreach_message_migrates_to_recruiter_template_on_read(tmp_path):
@@ -276,9 +277,9 @@ def test_legacy_outreach_message_migrates_to_recruiter_template_on_read(tmp_path
     init_db(db_str)
     # Simulate a legacy job with outreachMessage but no recruiterOutreachTemplate
     enrich_job(1, [], "Legacy outreach message", db_path=db_str)
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["recruiterOutreachTemplate"] == "Legacy outreach message"
-    assert job["russianSpeakerOutreachTemplate"] == ""
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.recruiterOutreachTemplate == "Legacy outreach message"
+    assert job.russianSpeakerOutreachTemplate == ""
 
 
 def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path):
@@ -290,8 +291,8 @@ def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path)
         recruiter_template=recruiter_tmpl,
         db_path=db_str,
     )
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["recruiterOutreachTemplate"] == recruiter_tmpl
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.recruiterOutreachTemplate == recruiter_tmpl
 
 
 def test_update_outreach_template_persists_recruiter_template(tmp_path):
@@ -301,10 +302,10 @@ def test_update_outreach_template_persists_recruiter_template(tmp_path):
     new_text = "Hello ______,\nEdited recruiter draft."
     updated = update_outreach_template(1, "recruiter", new_text, db_path=db_str)
     assert updated is not None
-    assert updated["recruiterOutreachTemplate"] == new_text
+    assert updated.recruiterOutreachTemplate == new_text
     # Persists across reads
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["recruiterOutreachTemplate"] == new_text
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.recruiterOutreachTemplate == new_text
 
 
 def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
@@ -314,9 +315,9 @@ def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
     new_text = "Hello ______,\nEdited Russian speaker draft."
     updated = update_outreach_template(1, "russian_speaker", new_text, db_path=db_str)
     assert updated is not None
-    assert updated["russianSpeakerOutreachTemplate"] == new_text
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["russianSpeakerOutreachTemplate"] == new_text
+    assert updated.russianSpeakerOutreachTemplate == new_text
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.russianSpeakerOutreachTemplate == new_text
 
 
 def test_update_outreach_template_audiences_independent(tmp_path):
@@ -330,9 +331,9 @@ def test_update_outreach_template_audiences_independent(tmp_path):
         db_path=db_str,
     )
     update_outreach_template(1, "recruiter", "Edited recruiter", db_path=db_str)
-    job = next(j for j in get_jobs(db_str) if j["id"] == 1)
-    assert job["recruiterOutreachTemplate"] == "Edited recruiter"
-    assert job["russianSpeakerOutreachTemplate"] == "Russian draft"
+    job = next(j for j in get_jobs(db_str) if j.id == 1)
+    assert job.recruiterOutreachTemplate == "Edited recruiter"
+    assert job.russianSpeakerOutreachTemplate == "Russian draft"
 
 
 def test_update_outreach_template_nonexistent_job(tmp_path):

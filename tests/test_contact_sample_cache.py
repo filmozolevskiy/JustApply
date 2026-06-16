@@ -161,19 +161,19 @@ async def test_source_contacts_cache_hit_appends_activity_log(db):
     profiles = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     set_contact_sample("acme", profiles, display_name="Acme Corp", db_path=db)
 
+    from src.schemas import Job
+
     job = database.get_job(1, db_path=db)
     assert job is not None, "Seed data must provide at least one job"
 
-    # Patch company so the slug matches the cache entry
-    job = dict(job)
-    job["company"] = "Acme"
+    job = job.model_copy(update={"company": "Acme"})
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
 
     updated = database.get_job(1, db_path=db)
-    messages = [e["message"] for e in updated["activityLog"]]
+    messages = [e.message for e in updated.activityLog]
     assert any("cache" in m.lower() or "Cache" in m for m in messages), \
         f"Expected cache hit entry in activity log, got: {messages}"
 

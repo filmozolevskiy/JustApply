@@ -40,10 +40,11 @@ def test_parse_remote_types_accepts_comma_string():
 
 @pytest.mark.asyncio
 async def test_complete_enrichment_runs_pipeline_for_enriching_job():
+    from src.schemas import Job
     from src.service.job_hunter import complete_enrichment
 
-    job = {"id": 7, "title": "QA", "company": "Acme", "status": "enriching"}
-    enriched = {**job, "status": "enriched", "contacts": []}
+    job = Job(id=7, title="QA", company="Acme", status="enriching")
+    enriched = Job(**{**job.model_dump(), "status": "enriched"})
 
     with patch("src.service.job_hunter.get_job", return_value=job), \
          patch("src.service.job_hunter.run_enrichment_pipeline", new=AsyncMock(return_value=enriched)) as mock_pipeline, \
@@ -52,14 +53,15 @@ async def test_complete_enrichment_runs_pipeline_for_enriching_job():
 
     mock_pipeline.assert_awaited_once()
     mock_abort.assert_not_called()
-    assert result["status"] == "enriched"
+    assert result.status == "enriched"
 
 
 @pytest.mark.asyncio
 async def test_complete_enrichment_aborts_when_pipeline_returns_none():
+    from src.schemas import Job
     from src.service.job_hunter import complete_enrichment
 
-    job = {"id": 7, "title": "QA", "company": "Acme", "status": "enriching"}
+    job = Job(id=7, title="QA", company="Acme", status="enriching")
 
     with patch("src.service.job_hunter.get_job", return_value=job), \
          patch("src.service.job_hunter.run_enrichment_pipeline", new=AsyncMock(return_value=None)), \

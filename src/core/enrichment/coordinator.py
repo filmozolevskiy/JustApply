@@ -14,7 +14,7 @@ def begin_enrichment(job_id: int, db_path=None) -> dict | None:
     if not job:
         return None
 
-    status = job["status"]
+    status = job.status
     if status == "enriching":
         return job
     if status not in ENRICHMENT_SOURCE_STATUSES:
@@ -30,7 +30,7 @@ def abort_enrichment(job_id: int, db_path=None) -> dict | None:
     job = database.get_job(job_id, db_path)
     if not job:
         return None
-    if job["status"] != "enriching":
+    if job.status != "enriching":
         return job
     if prior is None:
         prior = "sourced"

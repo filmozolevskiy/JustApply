@@ -12,7 +12,7 @@ from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job, archive_stale_rejected_jobs
 from ..service import (
     RateLimitError,
     acquire_scrape_slot,
@@ -72,6 +72,7 @@ async def put_settings_outreach(settings: OutreachSettings):
 
 @app.get("/api/jobs", response_model=list[Job])
 async def get_all_jobs(archived: str = Query("active")):
+    archive_stale_rejected_jobs()
     return get_jobs(archived_filter=archived)
 
 
@@ -147,7 +148,7 @@ async def _run_enrichment_task(task_id: str, job_id: int, bust_cache: bool = Fal
     try:
         updated = await complete_enrichment(job_id, bust_cache=bust_cache, log_func=log_callback)
         if updated:
-            state.result = {"type": "result", "job": updated}
+            state.result = {"type": "result", "job": updated.model_dump()}
             state.status = "completed"
         else:
             if not get_job(job_id):

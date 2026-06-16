@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from . import connection
+from .job_model import normalize_add_job_input, parse_job_row
 
 VALID_STATUSES = frozenset({
     "sourced", "enriching", "enriched", "evaluating",
@@ -40,31 +41,7 @@ def _append_activity_log(cursor, job_id: int, message: str) -> None:
     )
 
 
-def _parse_job_row(row) -> dict:
-    job = dict(row)
-    for field in ("strengths", "gaps", "contacts"):
-        raw = job.get(field)
-        try:
-            job[field] = json.loads(raw) if raw else []
-        except Exception:
-            job[field] = []
-    job["activityLog"] = _parse_activity_log(job.get("activityLog"))
-    job["shouldProceed"] = bool(job["shouldProceed"])
-    job["isRecruiter"] = bool(job.get("isRecruiter", 0))
-    job["enrichmentNote"] = job.get("enrichmentNote") or ""
-    job["recruiterOutreachTemplate"] = job.get("recruiterOutreachTemplate") or ""
-    job["russianSpeakerOutreachTemplate"] = job.get("russianSpeakerOutreachTemplate") or ""
-    job["companyUrl"] = job.get("companyUrl") or ""
-    job["archived"] = bool(job.get("archived", 0))
-    job["rejectedAt"] = job.get("rejectedAt") or ""
-    job["autoArchiveExempt"] = bool(job.get("autoArchiveExempt", 0))
-    # Legacy migration: promote outreachMessage into recruiterOutreachTemplate on read
-    if not job["recruiterOutreachTemplate"] and job.get("outreachMessage"):
-        job["recruiterOutreachTemplate"] = job["outreachMessage"]
-    return job
-
-
-def _auto_archive_stale_jobs(cursor) -> None:
+def _auto_archive_stale_jobs(cursor) -> int:
     """Archive rejected jobs whose rejectedAt is 14+ days ago and are not exempt."""
     cursor.execute(
         "SELECT id FROM jobs WHERE status = 'rejected' AND archived = 0 "
@@ -75,6 +52,19 @@ def _auto_archive_stale_jobs(cursor) -> None:
     for job_id in stale_ids:
         cursor.execute("UPDATE jobs SET archived = 1 WHERE id = ?", (job_id,))
         _append_activity_log(cursor, job_id, "Auto-archived (rejected 14+ days)")
+    return len(stale_ids)
+
+
+def archive_stale_rejected_jobs(db_path=None) -> int:
+    """Explicit maintenance sweep for stale rejected jobs. Returns archived count."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    archived_count = _auto_archive_stale_jobs(cursor)
+    conn.commit()
+    conn.close()
+    return archived_count
 
 
 def get_jobs(db_path=None, archived_filter="active"):
@@ -82,8 +72,6 @@ def get_jobs(db_path=None, archived_filter="active"):
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
-    _auto_archive_stale_jobs(cursor)
-    conn.commit()
     if archived_filter == "archived":
         cursor.execute("SELECT * FROM jobs WHERE archived = 1 ORDER BY id DESC")
     elif archived_filter == "all":
@@ -92,7 +80,7 @@ def get_jobs(db_path=None, archived_filter="active"):
         cursor.execute("SELECT * FROM jobs WHERE archived = 0 ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
-    return [_parse_job_row(r) for r in rows]
+    return [parse_job_row(r) for r in rows]
 
 
 def update_job_status(job_id, status, db_path=None):
@@ -130,7 +118,7 @@ def update_job_status(job_id, status, db_path=None):
     conn.close()
     if not row:
         return None
-    return _parse_job_row(row)
+    return parse_job_row(row)
 
 
 def update_job_comment(job_id, comment, db_path=None):
@@ -145,7 +133,7 @@ def update_job_comment(job_id, comment, db_path=None):
     conn.close()
     if not row:
         return None
-    return _parse_job_row(row)
+    return parse_job_row(row)
 
 
 def update_contact_status(job_id, contact_idx, contacted, db_path=None):
@@ -184,7 +172,7 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()
     conn.close()
-    return _parse_job_row(updated)
+    return parse_job_row(updated)
 
 
 def get_job(job_id, db_path=None):
@@ -197,7 +185,7 @@ def get_job(job_id, db_path=None):
     conn.close()
     if not row:
         return None
-    return _parse_job_row(row)
+    return parse_job_row(row)
 
 
 def start_enrichment(job_id, db_path=None):
@@ -238,7 +226,7 @@ def enrich_job(
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     conn.close()
-    return _parse_job_row(row) if row else None
+    return parse_job_row(row) if row else None
 
 
 def log_activity(job_id: int, message: str, db_path=None) -> None:
@@ -272,7 +260,7 @@ def update_outreach_template(job_id, audience, template, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     conn.close()
-    return _parse_job_row(row) if row else None
+    return parse_job_row(row) if row else None
 
 
 def archive_job(job_id: int, db_path=None):
@@ -307,7 +295,7 @@ def archive_job(job_id: int, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()
     conn.close()
-    return _parse_job_row(updated) if updated else None
+    return parse_job_row(updated) if updated else None
 
 
 def job_exists(title, company, link=None, db_path=None):
@@ -333,9 +321,10 @@ def add_job(job, db_path=None):
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
 
-    title = job.get("title") or job.get("Job title") or ""
-    company = job.get("company") or job.get("Company + Company size") or ""
-    link = job.get("link") or job.get("Posting link") or ""
+    fields = normalize_add_job_input(job)
+    title = fields["title"]
+    company = fields["company"]
+    link = fields["link"]
 
     if not title.strip() and not company.strip():
         conn.close()
@@ -365,26 +354,26 @@ def add_job(job, db_path=None):
     """, (
         title,
         company,
-        job.get("size") or "",
+        fields["size"],
         link,
-        job.get("date") or job.get("Posting date") or "",
-        job.get("location") or job.get("Location + Remote type (in office, hybrid, remote)") or "",
-        job.get("remoteType") or "",
-        job.get("seniority") or job.get("Seniority type (junior, mid, senior)") or "",
-        job.get("salary") or job.get("Salary type") or "",
-        job.get("description") or job.get("Short description") or "",
-        job.get("matchScore") or 0,
-        job.get("matchType") or "",
-        1 if job.get("shouldProceed") or job.get("Should proceed?") else 0,
-        job.get("status") or "sourced",
-        job.get("resumeUsed") or "",
-        json.dumps(job.get("strengths") or []),
-        json.dumps(job.get("gaps") or []),
-        json.dumps(job.get("contacts") or []),
-        job.get("outreachMessage") or "",
-        job.get("comment") or job.get("Comment") or "",
-        1 if job.get("isRecruiter") else 0,
-        job.get("companyUrl") or "",
+        fields["date"],
+        fields["location"],
+        fields["remoteType"],
+        fields["seniority"],
+        fields["salary"],
+        fields["description"],
+        fields["matchScore"],
+        fields["matchType"],
+        1 if fields["shouldProceed"] else 0,
+        fields["status"],
+        fields["resumeUsed"],
+        json.dumps(fields["strengths"]),
+        json.dumps(fields["gaps"]),
+        json.dumps(fields["contacts"]),
+        fields["outreachMessage"],
+        fields["comment"],
+        1 if fields["isRecruiter"] else 0,
+        fields["companyUrl"],
     ))
     new_id = cursor.lastrowid
     _append_activity_log(cursor, new_id, "Sourced")

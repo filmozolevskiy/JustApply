@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from typing import Awaitable, Callable
 
+from ..schemas import Job
+
 from ..db import get_job, get_jobs, init_db
 from ..pipelines import run_enrichment_pipeline, run_search_pipeline
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
@@ -66,7 +68,7 @@ async def complete_enrichment(
     *,
     bust_cache: bool = False,
     log_func=None,
-) -> dict | None:
+) -> Job | None:
     """Finish enrichment for a job already in the enriching lane."""
     job = get_job(job_id)
     if not job:
@@ -89,16 +91,16 @@ async def promote_sourced_jobs(log_func=None) -> list:
     init_db()
     to_promote = [
         j for j in get_jobs()
-        if j.get("shouldProceed") and j.get("status") == "sourced"
+        if j.shouldProceed and j.status == "sourced"
     ]
 
     promoted = []
     for job in to_promote:
-        began = begin_enrichment(job["id"])
+        began = begin_enrichment(job.id)
         if not began:
             promoted.append(job)
             continue
-        enriched = await complete_enrichment(job["id"], log_func=log_func)
+        enriched = await complete_enrichment(job.id, log_func=log_func)
         promoted.append(enriched if enriched else job)
     return promoted
 

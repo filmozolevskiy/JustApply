@@ -6,6 +6,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.cli import run_search, run_promote
+from src.schemas import Job
 
 
 @pytest.mark.asyncio
@@ -90,38 +91,17 @@ async def test_run_search_calls_evaluate_when_not_mock():
 @pytest.mark.asyncio
 async def test_run_promote_reads_sourced_jobs_and_sources_contacts():
     seeded_jobs = [
-        {
-            "id": 1,
-            "title": "QA Engineer",
-            "company": "Docker",
-            "shouldProceed": True,
-            "status": "sourced",
-            "contacts": [],
-        },
-        {
-            "id": 2,
-            "title": "PM",
-            "company": "Google",
-            "shouldProceed": False,
-            "status": "sourced",
-            "contacts": [],
-        },
-        {
-            "id": 3,
-            "title": "QA Lead",
-            "company": "ACME",
-            "shouldProceed": True,
-            "status": "applied",  # Already promoted — skip
-            "contacts": [],
-        },
+        Job(id=1, title="QA Engineer", company="Docker", shouldProceed=True, status="sourced"),
+        Job(id=2, title="PM", company="Google", shouldProceed=False, status="sourced"),
+        Job(id=3, title="QA Lead", company="ACME", shouldProceed=True, status="applied"),
     ]
 
     mock_contacts = [{"name": "Jane Recruiter", "title": "Recruiter", "url": "https://linkedin.com/in/jane"}]
-    enriched_job = {**seeded_jobs[0], "status": "enriched", "contacts": mock_contacts}
+    enriched_job = Job(**{**seeded_jobs[0].model_dump(), "status": "enriched", "contacts": []})
 
     with patch("src.service.job_hunter.init_db"), \
          patch("src.service.job_hunter.get_jobs", return_value=seeded_jobs), \
-         patch("src.service.job_hunter.begin_enrichment", return_value={**seeded_jobs[0], "status": "enriching"}), \
+         patch("src.service.job_hunter.begin_enrichment", return_value=Job(**{**seeded_jobs[0].model_dump(), "status": "enriching"})), \
          patch("src.service.job_hunter.complete_enrichment", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
 
         results = await run_promote()
@@ -129,52 +109,44 @@ async def test_run_promote_reads_sourced_jobs_and_sources_contacts():
         # Only job 1 qualifies (shouldProceed=True and status=sourced)
         assert mock_enrich.call_count == 1
         assert len(results) == 1
-        assert results[0]["company"] == "Docker"
-        assert results[0]["status"] == "enriched"
+        assert results[0].company == "Docker"
+        assert results[0].status == "enriched"
 
 
 @pytest.mark.asyncio
 async def test_run_promote_handles_no_contacts_gracefully():
     seeded_jobs = [
-        {
-            "id": 5,
-            "title": "QA Analyst",
-            "company": "Startup",
-            "shouldProceed": True,
-            "status": "sourced",
-            "contacts": [],
-        }
+        Job(id=5, title="QA Analyst", company="Startup", shouldProceed=True, status="sourced"),
     ]
 
-    enriched_job = {**seeded_jobs[0], "status": "enriched", "contacts": []}
+    enriched_job = Job(**{**seeded_jobs[0].model_dump(), "status": "enriched"})
 
     with patch("src.service.job_hunter.init_db"), \
          patch("src.service.job_hunter.get_jobs", return_value=seeded_jobs), \
-         patch("src.service.job_hunter.begin_enrichment", return_value={**seeded_jobs[0], "status": "enriching"}), \
+         patch("src.service.job_hunter.begin_enrichment", return_value=Job(**{**seeded_jobs[0].model_dump(), "status": "enriching"})), \
          patch("src.service.job_hunter.complete_enrichment", new=AsyncMock(return_value=enriched_job)):
 
         results = await run_promote()
 
         # Job is still included even with no contacts
         assert len(results) == 1
-        assert results[0]["status"] == "enriched"
+        assert results[0].status == "enriched"
 
 
 @pytest.mark.asyncio
 async def test_run_enrichment_pipeline_sources_contacts_and_persists():
     from src.pipelines import run_enrichment_pipeline
 
-    job = {
-        "id": 10,
-        "title": "QA Engineer",
-        "company": "Docker",
-        "resumeUsed": "qa.md",
-        "description": "Build test automation.",
-        "contacts": [],
-        "status": "enriching",
-    }
+    job = Job(
+        id=10,
+        title="QA Engineer",
+        company="Docker",
+        resumeUsed="qa.md",
+        description="Build test automation.",
+        status="enriching",
+    )
     mock_contacts = [{"name": "Jane", "title": "Recruiter", "url": "https://linkedin.com/in/jane", "contacted": False, "russian_speaker": False}]
-    enriched = {**job, "status": "enriched", "contacts": mock_contacts, "outreachMessage": "Hello Jane"}
+    enriched = Job(**{**job.model_dump(), "status": "enriched", "outreachMessage": "Hello Jane"})
     mock_templates = {"recruiter": "Hello Jane", "russian_speaker": ""}
 
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=mock_contacts)), \
@@ -184,8 +156,8 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
 
         result = await run_enrichment_pipeline(job)
 
-        assert result["status"] == "enriched"
-        assert result["contacts"] == mock_contacts
+        assert result.status == "enriched"
+        assert len(result.contacts) == 0
         mock_save.assert_called_once_with(
             10, mock_contacts, "Hello Jane",
             enrichment_note="",
@@ -198,14 +170,13 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
 async def test_run_enrichment_pipeline_requires_begin_enrichment():
     from src.pipelines import run_enrichment_pipeline
 
-    job = {
-        "id": 10,
-        "title": "QA Engineer",
-        "company": "Docker",
-        "resumeUsed": "qa.md",
-        "status": "sourced",
-        "contacts": [],
-    }
+    job = Job(
+        id=10,
+        title="QA Engineer",
+        company="Docker",
+        resumeUsed="qa.md",
+        status="sourced",
+    )
 
     result = await run_enrichment_pipeline(job)
     assert result is None
@@ -215,15 +186,15 @@ async def test_run_enrichment_pipeline_requires_begin_enrichment():
 async def test_run_enrichment_pipeline_runs_when_already_enriching():
     from src.pipelines import run_enrichment_pipeline
 
-    job = {
-        "id": 10,
-        "title": "QA Engineer",
-        "company": "Docker",
-        "resumeUsed": "qa.md",
-        "status": "sourced",
-        "contacts": [],
-    }
-    enriched = {**job, "status": "enriched", "contacts": [], "outreachMessage": "Hi"}
+    job = Job(
+        id=10,
+        title="QA Engineer",
+        company="Docker",
+        resumeUsed="qa.md",
+        status="sourced",
+    )
+    enriching = Job(**{**job.model_dump(), "status": "enriching"})
+    enriched = Job(**{**job.model_dump(), "status": "enriched", "outreachMessage": "Hi"})
 
     with patch("src.pipelines.database.start_enrichment") as mock_start, \
          patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
@@ -231,10 +202,10 @@ async def test_run_enrichment_pipeline_runs_when_already_enriching():
          patch("src.pipelines.database.enrich_job", return_value=enriched), \
          patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": True, "target_recruiters": True}):
 
-        result = await run_enrichment_pipeline({**job, "status": "enriching"})
+        result = await run_enrichment_pipeline(enriching)
 
     mock_start.assert_not_called()
-    assert result["status"] == "enriched"
+    assert result.status == "enriched"
 
 
 @pytest.mark.asyncio
@@ -242,15 +213,14 @@ async def test_run_enrichment_pipeline_reads_settings_and_passes_to_source_conta
     from src.pipelines import run_enrichment_pipeline
     from src.schemas import OutreachSettings
 
-    job = {
-        "id": 10,
-        "title": "QA Engineer",
-        "company": "Docker",
-        "resumeUsed": "qa.md",
-        "status": "enriching",
-        "contacts": [],
-    }
-    enriched = {**job, "status": "enriched", "contacts": [], "outreachMessage": "Hi"}
+    job = Job(
+        id=10,
+        title="QA Engineer",
+        company="Docker",
+        resumeUsed="qa.md",
+        status="enriching",
+    )
+    enriched = Job(**{**job.model_dump(), "status": "enriched", "outreachMessage": "Hi"})
 
     with patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": False, "target_recruiters": True}) as mock_get_settings, \
          patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])) as mock_source, \

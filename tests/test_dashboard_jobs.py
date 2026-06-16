@@ -136,10 +136,10 @@ async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1)
-    assert job["status"] == "enriched"
-    assert len(job["contacts"]) == 1
-    assert job["contacts"][0]["name"] == "Test Contact"
-    assert job["recruiterOutreachTemplate"] == recruiter_note
+    assert job.status == "enriched"
+    assert len(job.contacts) == 1
+    assert job.contacts[0].name == "Test Contact"
+    assert job.recruiterOutreachTemplate == recruiter_note
 
 
 @pytest.mark.asyncio
@@ -207,7 +207,7 @@ async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1, setup_test_db)
-    assert job["status"] == "sourced"
+    assert job.status == "sourced"
     assert state.status == "failed"
 
 

@@ -49,7 +49,7 @@ async def test_enrichment_no_employees_sets_specific_note(db):
         job = _enriching_job(db)
         result = await run_enrichment_pipeline(job, log_func=capture_log)
 
-    assert result["enrichmentNote"] == "No LinkedIn employees found for this company."
+    assert result.enrichmentNote == "No LinkedIn employees found for this company."
 
 
 @pytest.mark.asyncio
@@ -62,8 +62,8 @@ async def test_enrichment_failure_zero_contacts_sets_note(db):
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
-    assert result["enrichmentNote"] != ""
-    assert result["status"] == "enriched"
+    assert result.enrichmentNote != ""
+    assert result.status == "enriched"
 
 
 @pytest.mark.asyncio
@@ -76,8 +76,8 @@ async def test_enrichment_infrastructure_error_sets_note(db):
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
-    assert result["enrichmentNote"] != ""
-    assert result["status"] == "enriched"
+    assert result.enrichmentNote != ""
+    assert result.status == "enriched"
 
 
 @pytest.mark.asyncio
@@ -94,8 +94,8 @@ async def test_enrichment_success_clears_note(db):
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
-    assert result["enrichmentNote"] == ""
-    assert result["status"] == "enriched"
+    assert result.enrichmentNote == ""
+    assert result.status == "enriched"
 
 
 @pytest.mark.asyncio
@@ -152,5 +152,5 @@ async def test_enrichment_pipeline_persists_both_outreach_templates(db):
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
-    assert result["recruiterOutreachTemplate"] == _BOTH_TEMPLATES["recruiter"]
-    assert result["russianSpeakerOutreachTemplate"] == _BOTH_TEMPLATES["russian_speaker"]
+    assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
+    assert result.russianSpeakerOutreachTemplate == _BOTH_TEMPLATES["russian_speaker"]

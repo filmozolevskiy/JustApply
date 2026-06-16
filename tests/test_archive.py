@@ -18,9 +18,9 @@ def test_schema_adds_archived_columns(tmp_path):
     init_db(db_str)
     jobs = get_jobs(db_str)
     job = jobs[0]
-    assert "archived" in job
-    assert "rejectedAt" in job
-    assert "autoArchiveExempt" in job
+    assert hasattr(job, "archived")
+    assert hasattr(job, "rejectedAt")
+    assert hasattr(job, "autoArchiveExempt")
 
 
 def test_new_job_defaults_not_archived(tmp_path):
@@ -28,9 +28,9 @@ def test_new_job_defaults_not_archived(tmp_path):
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "Acme", "status": "sourced"}, db_str)
     job = get_job(job_id, db_str)
-    assert job["archived"] is False
-    assert job["rejectedAt"] == ""
-    assert job["autoArchiveExempt"] is False
+    assert job.archived is False
+    assert job.rejectedAt == ""
+    assert job.autoArchiveExempt is False
 
 
 def test_existing_rejected_jobs_get_rejected_at_backfilled(tmp_path):
@@ -38,10 +38,10 @@ def test_existing_rejected_jobs_get_rejected_at_backfilled(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     jobs = get_jobs(db_str)
-    rejected_jobs = [j for j in jobs if j["status"] == "rejected"]
+    rejected_jobs = [j for j in jobs if j.status == "rejected"]
     assert rejected_jobs, "seed data should contain at least one rejected job"
     for rj in rejected_jobs:
-        assert rj["rejectedAt"], f"job {rj['id']} is rejected but has no rejectedAt"
+        assert rj.rejectedAt, f"job {rj.id} is rejected but has no rejectedAt"
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ def test_rejected_at_set_on_first_rejection(tmp_path):
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "X"}, db_str)
     updated = update_job_status(job_id, "rejected", db_str)
-    assert updated["rejectedAt"] != ""
+    assert updated.rejectedAt != ""
 
 
 def test_rejected_at_not_overwritten_on_later_rejection(tmp_path):
@@ -62,12 +62,12 @@ def test_rejected_at_not_overwritten_on_later_rejection(tmp_path):
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "X"}, db_str)
     first = update_job_status(job_id, "rejected", db_str)
-    first_ts = first["rejectedAt"]
+    first_ts = first.rejectedAt
     assert first_ts
 
     update_job_status(job_id, "sourced", db_str)
     second = update_job_status(job_id, "rejected", db_str)
-    assert second["rejectedAt"] == first_ts, "rejectedAt must not change on re-rejection"
+    assert second.rejectedAt == first_ts, "rejectedAt must not change on re-rejection"
 
 
 def test_rejected_at_not_set_for_non_rejected_status(tmp_path):
@@ -75,7 +75,7 @@ def test_rejected_at_not_set_for_non_rejected_status(tmp_path):
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "X"}, db_str)
     updated = update_job_status(job_id, "sourced", db_str)
-    assert updated["rejectedAt"] == ""
+    assert updated.rejectedAt == ""
 
 
 # ---------------------------------------------------------------------------
@@ -86,17 +86,17 @@ def test_get_jobs_excludes_archived_by_default(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     # Move seed job 5 (rejected) to rejected then archive it
-    job5_id = next(j["id"] for j in get_jobs(db_str) if j["status"] == "rejected")
+    job5_id = next(j.id for j in get_jobs(db_str) if j.status == "rejected")
     archive_job(job5_id, db_str)
     active = get_jobs(db_str)
-    assert not any(j["id"] == job5_id for j in active), "archived job must not appear in default get_jobs"
+    assert not any(j.id == job5_id for j in active), "archived job must not appear in default get_jobs"
 
 
 def test_get_jobs_still_returns_non_archived(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     all_jobs = get_jobs(db_str)
-    non_rejected = [j for j in all_jobs if j["status"] != "rejected"]
+    non_rejected = [j for j in all_jobs if j.status != "rejected"]
     assert non_rejected, "should have non-rejected jobs in seed data"
 
 
@@ -107,26 +107,26 @@ def test_get_jobs_still_returns_non_archived(tmp_path):
 def test_archive_rejected_job(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
-    job5_id = next(j["id"] for j in get_jobs(db_str) if j["status"] == "rejected")
+    job5_id = next(j.id for j in get_jobs(db_str) if j.status == "rejected")
     result = archive_job(job5_id, db_str)
     assert result is not None
-    assert result["archived"] is True
+    assert result.archived is True
 
 
 def test_archive_logs_archived_to_activity_log(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
-    job5_id = next(j["id"] for j in get_jobs(db_str) if j["status"] == "rejected")
+    job5_id = next(j.id for j in get_jobs(db_str) if j.status == "rejected")
     archive_job(job5_id, db_str)
     job = get_job(job5_id, db_str)
-    messages = [e["message"] for e in job["activityLog"]]
+    messages = [e.message for e in job.activityLog]
     assert "Archived" in messages
 
 
 def test_archive_non_rejected_job_returns_none(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
-    sourced_id = next(j["id"] for j in get_jobs(db_str) if j["status"] == "sourced")
+    sourced_id = next(j.id for j in get_jobs(db_str) if j.status == "sourced")
     result = archive_job(sourced_id, db_str)
     assert result is None
 

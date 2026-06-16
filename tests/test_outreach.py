@@ -297,10 +297,10 @@ def test_contact_new_fields_persist_through_db_roundtrip(setup_test_db):
     }, db_path=db_path)
 
     job = database.get_job(job_id, db_path=db_path)
-    contact = job["contacts"][0]
-    assert contact["is_recruiter"] is True
-    assert contact["currentPosition"] == "HR Manager at Acme"
-    assert contact["location"] == "Toronto, ON"
+    contact = job.contacts[0]
+    assert contact.is_recruiter is True
+    assert contact.currentPosition == "HR Manager at Acme"
+    assert contact.location == "Toronto, ON"
 
 
 # --- API: PUT /api/jobs/{id}/contacts/{idx} ---

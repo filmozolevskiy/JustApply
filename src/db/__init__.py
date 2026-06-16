@@ -2,6 +2,7 @@ from .connection import DB_PATH, get_db_connection, init_db
 from .settings import get_outreach_settings, save_outreach_settings
 from .jobs import (
     VALID_STATUSES,
+    archive_stale_rejected_jobs,
     get_jobs,
     add_job,
     update_job_status,

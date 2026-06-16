@@ -98,8 +98,8 @@ async def test_run_refresh_contacts_task_updates_job_contacts(setup_test_db):
         await run_refresh_contacts_task_with_logs(task_id, 1)
 
     job = database.get_job(1)
-    assert job["status"] == "enriched"
-    assert any(c["name"] == "Fresh Contact" for c in job["contacts"])
+    assert job.status == "enriched"
+    assert any(c.name == "Fresh Contact" for c in job.contacts)
 
 
 # --- Dashboard HTML: refreshContacts function ---

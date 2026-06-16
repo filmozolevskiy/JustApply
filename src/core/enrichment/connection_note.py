@@ -3,6 +3,9 @@
 import os
 from dotenv import load_dotenv
 
+from ...db.job_model import coerce_job
+from ...schemas import Job
+
 RECRUITER_CTA = "I would be grateful to connect and share my CV."
 RUSSIAN_SPEAKER_CTA = "I'd be grateful if you could refer me for the role."
 FIT_LINE = "My experience align well with the requirements."
@@ -17,20 +20,25 @@ def minimal_fallback_template(audience: str) -> str:
     )
 
 
-async def generate_connection_note_template(job: dict, audience: str, log_func=None) -> str:
+from ...db.job_model import coerce_job
+from ...schemas import Job
+
+
+async def generate_connection_note_template(job: Job, audience: str, log_func=None) -> str:
     """Generate a Connection Note (≤200 chars) for the given audience.
 
     Retries once with stricter instructions if the first attempt exceeds the limit.
     Falls back to the Minimal Fallback Template when both attempts fail or no API key.
     """
+    job = coerce_job(job)
     cta = RECRUITER_CTA if audience == "recruiter" else RUSSIAN_SPEAKER_CTA
     load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return minimal_fallback_template(audience)
 
-    title = job.get("title") or ""
-    company = job.get("company") or ""
+    title = job.title or ""
+    company = job.company or ""
 
     def _build_prompt(strict: bool = False) -> str:
         prefix = (
@@ -75,13 +83,14 @@ async def generate_connection_note_template(job: dict, audience: str, log_func=N
         return minimal_fallback_template(audience)
 
 
-async def generate_outreach_templates(job: dict, contacts: list, log_func=None) -> dict:
+async def generate_outreach_templates(job: Job, contacts: list, log_func=None) -> dict:
     """Generate Recruiter and Russian Speaker Outreach Templates.
 
     Generates templates only for audiences that have classified contacts.
     On Enrichment Failure (empty contacts), generates both templates anyway.
     Returns {"recruiter": str, "russian_speaker": str}.
     """
+    job = coerce_job(job)
     has_recruiter = any(c.get("is_recruiter") for c in contacts)
     has_russian = any(c.get("russian_speaker") for c in contacts)
     is_enrichment_failure = not contacts

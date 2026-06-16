@@ -57,8 +57,8 @@ def test_job_schema_from_get_job_output(db):
         {"title": "QA Engineer", "company": "Acme", "status": "sourced"},
         db_path=db,
     )
-    row = database.get_job(job_id, db_path=db)
-    job = Job(**row)
+    job = database.get_job(job_id, db_path=db)
+    assert isinstance(job, Job)
     assert job.title == "QA Engineer"
     assert job.company == "Acme"
     assert job.shouldProceed is False
@@ -69,19 +69,17 @@ def test_job_schema_from_get_job_output(db):
 
 def test_job_schema_all_seeded_rows_parse(db):
     from src.schemas import Job
-    for row in database.get_jobs(db_path=db):
-        job = Job(**row)
+    for job in database.get_jobs(db_path=db):
+        assert isinstance(job, Job)
         assert job.id is not None
 
 
 def test_job_schema_seed_contacts_parse_as_contact_models(db):
-    from src.schemas import Job
     jobs = database.get_jobs(db_path=db)
-    job1 = next(j for j in jobs if j["id"] == 1)
-    parsed = Job(**job1)
-    assert len(parsed.contacts) == 2
-    assert parsed.contacts[0].name == "Jane Doe"
-    assert parsed.contacts[0].role == "VP Engineering"
+    job1 = next(j for j in jobs if j.id == 1)
+    assert len(job1.contacts) == 2
+    assert job1.contacts[0].name == "Jane Doe"
+    assert job1.contacts[0].role == "VP Engineering"
 
 
 def test_job_schema_enrichment_note_defaults_to_empty():
@@ -91,13 +89,11 @@ def test_job_schema_enrichment_note_defaults_to_empty():
 
 
 def test_job_schema_enrichment_note_round_trip(db):
-    from src.schemas import Job
     job_id = database.add_job(
         {"title": "QA Engineer", "company": "Acme", "status": "sourced"},
         db_path=db,
     )
-    row = database.get_job(job_id, db_path=db)
-    job = Job(**row)
+    job = database.get_job(job_id, db_path=db)
     assert job.enrichmentNote == ""
 
 
@@ -118,7 +114,6 @@ def test_job_schema_has_russian_speaker_outreach_template_field():
 
 
 def test_job_schema_outreach_templates_round_trip(db):
-    from src.schemas import Job
     from src.db import enrich_job
     job_id = database.add_job(
         {"title": "QA Engineer", "company": "Acme", "status": "sourced"},
@@ -132,7 +127,6 @@ def test_job_schema_outreach_templates_round_trip(db):
         russian_speaker_template=russian_tmpl,
         db_path=db,
     )
-    row = database.get_job(job_id, db_path=db)
-    job = Job(**row)
+    job = database.get_job(job_id, db_path=db)
     assert job.recruiterOutreachTemplate == recruiter_tmpl
     assert job.russianSpeakerOutreachTemplate == russian_tmpl
