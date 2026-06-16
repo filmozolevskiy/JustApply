@@ -5,7 +5,7 @@ from . import connection
 from .job_model import normalize_add_job_input, parse_job_row
 
 VALID_STATUSES = frozenset({
-    "sourced", "enriching", "enriched", "evaluating",
+    "found", "accepted",
     "contacted", "applied", "interviewing", "rejected",
 })
 
@@ -104,14 +104,11 @@ def update_job_status(job_id, status, db_path=None):
     else:
         cursor.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job_id))
     if old_status != status:
-        if status == "enriching":
-            _append_activity_log(cursor, job_id, "Enrichment started")
-        else:
-            _append_activity_log(
-                cursor,
-                job_id,
-                f"Moved {_format_lane(old_status)} → {_format_lane(status)}",
-            )
+        _append_activity_log(
+            cursor,
+            job_id,
+            f"Moved {_format_lane(old_status)} → {_format_lane(status)}",
+        )
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
@@ -189,7 +186,7 @@ def get_job(job_id, db_path=None):
 
 
 def start_enrichment(job_id, db_path=None):
-    return update_job_status(job_id, "enriching", db_path)
+    return update_job_status(job_id, "accepted", db_path)
 
 
 def enrich_job(
@@ -210,7 +207,7 @@ def enrich_job(
         conn.close()
         return None
     cursor.execute(
-        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'enriched', "
+        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'accepted', "
         "enrichmentNote = ?, recruiterOutreachTemplate = ?, russianSpeakerOutreachTemplate = ? "
         "WHERE id = ?",
         (json.dumps(contacts), outreach_message, enrichment_note,
@@ -376,7 +373,7 @@ def add_job(job, db_path=None):
         fields["companyUrl"],
     ))
     new_id = cursor.lastrowid
-    _append_activity_log(cursor, new_id, "Sourced")
+    _append_activity_log(cursor, new_id, "Found")
     conn.commit()
     conn.close()
     return new_id

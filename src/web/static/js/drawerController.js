@@ -251,7 +251,7 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
-              ${job.status === 'enriched' || job.status === 'enriching'
+              ${job.status === 'accepted'
                 ? `
                 <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="refreshContacts(${job.id}); closeDrawer(null);"><i class="fa-solid fa-arrows-rotate"></i> Refresh Contacts</button>
               `
@@ -273,7 +273,7 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
                 <span id="drawer-char-counter" style="font-size:0.75rem; color:var(--text-muted);">${activeTemplate.length}/200</span>
                 <div style="display:flex; gap:8px;">
                   <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyDrawerOutreach()"><i class="fa-regular fa-copy"></i> Copy</button>
-                  ${job.status === 'enriched'
+                  ${job.status === 'accepted'
                     ? `
                     <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="changeJobStage(${job.id}, 'contacted'); closeDrawer(null);"><i class="fa-solid fa-check"></i> Mark Contacted</button>
                   `

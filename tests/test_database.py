@@ -44,20 +44,20 @@ def test_database_lifecycle(tmp_path):
     new_job_data = {
         "title": "Staff Engineer",
         "company": "Google",
-        "status": "sourced",
+        "status": "found",
         "strengths": ["Testing", "Scaling"],
         "shouldProceed": True
     }
     new_id = add_job(new_job_data, db_str)
     assert new_id is not None
     assert new_id > 7
-    
+
     jobs_after_add = get_jobs(db_str)
     assert len(jobs_after_add) == 8
     added_job = next(j for j in jobs_after_add if j.id == new_id)
     assert added_job.title == "Staff Engineer"
     assert added_job.company == "Google"
-    assert added_job.status == "sourced"
+    assert added_job.status == "found"
     assert added_job.strengths == ["Testing", "Scaling"]
     assert added_job.shouldProceed is True
 
@@ -130,7 +130,7 @@ def test_update_job_status_invalid_status(tmp_path):
     # Job status must be unchanged
     jobs = get_jobs(db_str)
     job1 = next(j for j in jobs if j.id == 1)
-    assert job1.status == "sourced"
+    assert job1.status == "found"
 
 
 def test_get_jobs_json_roundtrip(tmp_path):
@@ -200,10 +200,10 @@ def test_start_enrichment(tmp_path):
 
     updated = start_enrichment(1, db_str)
     assert updated is not None
-    assert updated.status == "enriching"
+    assert updated.status == "accepted"
 
     job = next(j for j in get_jobs(db_str) if j.id == 1)
-    assert job.status == "enriching"
+    assert job.status == "accepted"
 
 
 def test_start_enrichment_nonexistent(tmp_path):
@@ -222,13 +222,13 @@ def test_enrich_job_persists_contacts_and_message(tmp_path):
     updated = enrich_job(1, contacts, "Hello Alice", db_path=db_str)
 
     assert updated is not None
-    assert updated.status == "enriched"
+    assert updated.status == "accepted"
     assert updated.contacts[0].name == contacts[0]["name"]
     assert updated.contacts[0].url == contacts[0]["url"]
     assert updated.outreachMessage == "Hello Alice"
 
     job = next(j for j in get_jobs(db_str) if j.id == 1)
-    assert job.status == "enriched"
+    assert job.status == "accepted"
     assert job.outreachMessage == "Hello Alice"
 
 

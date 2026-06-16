@@ -144,8 +144,8 @@ async def run_enrichment_pipeline(job: Job, log_func=None, bust_cache: bool = Fa
     if not job_id:
         return None
 
-    if job.status != "enriching":
-        await log(f"Job id={job_id} is not enriching; call begin_enrichment first.", "error")
+    if job.status != "accepted":
+        await log(f"Job id={job_id} is not accepted; call begin_enrichment first.", "error")
         return None
 
     title = job.title or ""

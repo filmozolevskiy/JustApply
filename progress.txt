@@ -1,0 +1,37 @@
+# Ralph Loop Progress Log
+
+## Iteration 1 — 2026-06-15
+
+**Issue #58: Found and Accepted lanes with status migration**
+
+### What was implemented
+
+1. **Status enum** (`src/db/jobs.py`, `src/schemas.py`): Replaced `sourced`/`enriching`/`enriched`/`evaluating` with `found`/`accepted`. `VALID_STATUSES` now only accepts the new values.
+
+2. **DB migration** (`src/db/connection.py`): `init_db()` runs two SQL migrations on upgrade:
+   - `sourced` → `found`
+   - `enriching`/`enriched` → `accepted`
+   Also updated the default column value from `'sourced'` to `'found'`.
+
+3. **Seed data** (`src/db/seed.py`): All seed jobs that previously had `status: "sourced"` now use `status: "found"`.
+
+4. **Coordinator** (`src/core/enrichment/coordinator.py`): `ENRICHMENT_SOURCE_STATUSES` updated to `{"found", "accepted"}`. `begin_enrichment` moves a Found job to Accepted (no separate enriching lane); `abort_enrichment` is now a no-op (job stays Accepted).
+
+5. **Enrichment DB operations** (`src/db/jobs.py`): `start_enrichment()` sets `accepted`; `enrich_job()` sets `accepted` (was `enriched`). Activity log no longer logs "Enrichment started" — uses generic "Moved X → Y".
+
+6. **Scraper** (`src/core/scraper.py`): New jobs are created with `status: "found"`.
+
+7. **Pipeline** (`src/pipelines.py`): Guard changed from `status != "enriching"` to `status != "accepted"`.
+
+8. **Service** (`src/service/job_hunter.py`): `promote_sourced_jobs` now selects `status == "found"` jobs.
+
+9. **API** (`src/web/server.py`): `PUT /api/jobs/{id}/status` returns 422 for obsolete statuses.
+
+10. **Kanban Dashboard** (`src/web/dashboard.html`, `boardRenderer.js`, `drawerController.js`):
+    - Replaced Sourced/Enriching/Enriched lanes with Found/Accepted.
+    - Updated stages arrays in `initKanbanDnd` and `initLaneCollapse`.
+    - Removed `newStatus === 'enriching'` routing hook from `moveJobStage` — lane drag is now status-only.
+    - Removed archived-card-to-enriching guard (no enriching lane).
+    - Updated status CSS classes, polling function, and drawer button conditions.
+
+11. **Tests**: Added `tests/test_status_migration.py` (16 new tests); updated all existing tests to use new status values. All 409 tests pass.

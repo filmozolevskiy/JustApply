@@ -34,7 +34,7 @@ def test_get_jobs_endpoint():
     job1 = next(j for j in jobs if j["id"] == 1)
     assert job1["title"] == "Senior QA Automation Engineer"
     assert job1["company"] == "TechCorp"
-    assert job1["status"] == "sourced"
+    assert job1["status"] == "found"
     assert job1["shouldProceed"] is True
     assert isinstance(job1["strengths"], list)
     assert isinstance(job1["contacts"], list)
@@ -52,23 +52,38 @@ def test_put_job_status_endpoint():
     response = client.get("/api/jobs")
     jobs = response.json()
     job1 = next(j for j in jobs if j["id"] == 1)
-    assert job1["status"] == "sourced"
+    assert job1["status"] == "found"
 
-    put_response = client.put("/api/jobs/1/status", json={"status": "enriching"})
+    put_response = client.put("/api/jobs/1/status", json={"status": "accepted"})
     assert put_response.status_code == 200
     updated_job = put_response.json()
-    assert updated_job["status"] == "enriching"
+    assert updated_job["status"] == "accepted"
 
     response = client.get("/api/jobs")
     jobs = response.json()
     job1_updated = next(j for j in jobs if j["id"] == 1)
-    assert job1_updated["status"] == "enriching"
+    assert job1_updated["status"] == "accepted"
 
 
 def test_put_job_status_nonexistent():
-    put_response = client.put("/api/jobs/999/status", json={"status": "enriching"})
+    put_response = client.put("/api/jobs/999/status", json={"status": "accepted"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
+
+
+def test_put_job_status_rejects_obsolete_sourced():
+    put_response = client.put("/api/jobs/1/status", json={"status": "sourced"})
+    assert put_response.status_code == 422
+
+
+def test_put_job_status_rejects_obsolete_enriching():
+    put_response = client.put("/api/jobs/1/status", json={"status": "enriching"})
+    assert put_response.status_code == 422
+
+
+def test_put_job_status_rejects_obsolete_enriched():
+    put_response = client.put("/api/jobs/1/status", json={"status": "enriched"})
+    assert put_response.status_code == 422
 
 
 def test_put_job_comment_endpoint():
@@ -102,11 +117,11 @@ def test_post_job_enrich_endpoint():
         assert "task_id" in data
         assert data["job_id"] == 1
 
-        # Verify status changed to enriching
+        # Verify status changed to accepted (enrichment runs in place)
         get_response = client.get("/api/jobs")
         jobs = get_response.json()
         job1 = next(j for j in jobs if j["id"] == 1)
-        assert job1["status"] == "enriching"
+        assert job1["status"] == "accepted"
         assert mock_enrich_task.called
 
 
@@ -136,7 +151,7 @@ async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1)
-    assert job.status == "enriched"
+    assert job.status == "accepted"
     assert len(job.contacts) == 1
     assert job.contacts[0].name == "Test Contact"
     assert job.recruiterOutreachTemplate == recruiter_note
@@ -193,7 +208,7 @@ def test_put_template_endpoint_nonexistent_job():
 
 @pytest.mark.asyncio
 async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
-    """Failed enrichment task reverts job from enriching via coordinator."""
+    """Failed enrichment task leaves job in Accepted (abort is a no-op)."""
     from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
     from src.core.enrichment.coordinator import begin_enrichment
     import uuid
@@ -207,7 +222,7 @@ async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1, setup_test_db)
-    assert job.status == "sourced"
+    assert job.status == "accepted"
     assert state.status == "failed"
 
 
@@ -216,4 +231,4 @@ def test_post_job_enrich_returns_server_job_snapshot():
         response = client.post("/api/jobs/1/enrich")
         assert response.status_code == 200
         data = response.json()
-        assert data["job"]["status"] == "enriching"
+        assert data["job"]["status"] == "accepted"

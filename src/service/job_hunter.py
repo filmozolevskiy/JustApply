@@ -87,11 +87,11 @@ async def complete_enrichment(
 
 
 async def promote_sourced_jobs(log_func=None) -> list:
-    """Enrich all sourced jobs that passed Resume Matcher."""
+    """Enrich all Found jobs that passed Resume Matcher."""
     init_db()
     to_promote = [
         j for j in get_jobs()
-        if j.shouldProceed and j.status == "sourced"
+        if j.shouldProceed and j.status == "found"
     ]
 
     promoted = []

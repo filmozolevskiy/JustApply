@@ -22,7 +22,7 @@ def test_toggle_lane_collapse_on_click():
 
 def test_data_lane_attribute_on_columns():
     content = _read_html()
-    assert 'data-lane="sourced"' in content, \
+    assert 'data-lane="found"' in content, \
         "Kanban columns must carry a data-lane attribute"
 
 

@@ -37,7 +37,7 @@ def init_db(db_path=None):
             matchScore INTEGER,
             matchType TEXT,
             shouldProceed INTEGER DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'sourced',
+            status TEXT NOT NULL DEFAULT 'found',
             resumeUsed TEXT,
             strengths TEXT,
             gaps TEXT,
@@ -136,4 +136,10 @@ def init_db(db_path=None):
         "UPDATE jobs SET rejectedAt = datetime('now') WHERE status = 'rejected' AND (rejectedAt IS NULL OR rejectedAt = '')"
     )
     conn.commit()
+
+    # Migrate legacy pipeline statuses to Found/Accepted model
+    cursor.execute("UPDATE jobs SET status = 'found' WHERE status = 'sourced'")
+    cursor.execute("UPDATE jobs SET status = 'accepted' WHERE status IN ('enriching', 'enriched')")
+    conn.commit()
+
     conn.close()

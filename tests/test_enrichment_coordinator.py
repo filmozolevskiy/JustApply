@@ -16,58 +16,64 @@ def _fresh_db(tmp_path):
     return db_str
 
 
-def test_begin_enrichment_is_idempotent_no_duplicate_activity_log(tmp_path):
-    """Second begin while already enriching does not append another Enrichment started entry."""
+def test_begin_enrichment_found_job_moves_to_accepted(tmp_path):
+    """begin_enrichment on a Found job moves it to Accepted."""
     from src.core.enrichment.coordinator import begin_enrichment
 
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
 
-    first = begin_enrichment(job_id, db_str)
-    assert first.status == "enriching"
+    result = begin_enrichment(job_id, db_str)
+    assert result is not None
+    assert result.status == "accepted"
 
+
+def test_begin_enrichment_accepted_job_stays_accepted(tmp_path):
+    """begin_enrichment on an already-Accepted job returns it unchanged."""
+    from src.core.enrichment.coordinator import begin_enrichment
+    from src.db import update_job_status
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
+    update_job_status(job_id, "accepted", db_str)
+
+    result = begin_enrichment(job_id, db_str)
+    assert result is not None
+    assert result.status == "accepted"
+
+
+def test_begin_enrichment_is_idempotent_no_duplicate_activity_log(tmp_path):
+    """Second begin on Accepted does not append duplicate log entries."""
+    from src.core.enrichment.coordinator import begin_enrichment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
+
+    begin_enrichment(job_id, db_str)
     log_len_after_first = len(get_job(job_id, db_str).activityLog)
-    second = begin_enrichment(job_id, db_str)
-    assert second.status == "enriching"
+    begin_enrichment(job_id, db_str)
 
-    messages = [e.message for e in get_job(job_id, db_str).activityLog]
-    assert messages.count("Enrichment started") == 1
     assert len(get_job(job_id, db_str).activityLog) == log_len_after_first
 
 
-def test_abort_enrichment_reverts_sourced_job(tmp_path):
-    """Infrastructure failure before completion returns a sourced job to Sourced."""
+def test_abort_enrichment_leaves_job_accepted(tmp_path):
+    """abort_enrichment on an Accepted job keeps it Accepted."""
     from src.core.enrichment.coordinator import begin_enrichment, abort_enrichment
 
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
 
     begin_enrichment(job_id, db_str)
     reverted = abort_enrichment(job_id, db_str)
 
-    assert reverted.status == "sourced"
-    assert get_job(job_id, db_str).status == "sourced"
-
-
-def test_abort_enrichment_reverts_enriched_job_after_refresh(tmp_path):
-    """Refresh Contacts failure returns an enriched job to Enriched."""
-    from src.core.enrichment.coordinator import begin_enrichment, abort_enrichment
-    from src.db import enrich_job
-
-    db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
-    enrich_job(job_id, [], "Hi", db_path=db_str)
-
-    begin_enrichment(job_id, db_str)
-    reverted = abort_enrichment(job_id, db_str)
-
-    assert reverted.status == "enriched"
-    assert get_job(job_id, db_str).status == "enriched"
+    assert reverted is not None
+    assert reverted.status == "accepted"
+    assert get_job(job_id, db_str).status == "accepted"
 
 
 @pytest.mark.asyncio
 async def test_pipeline_does_not_call_start_enrichment():
-    """run_enrichment_pipeline assumes enriching status; coordinator owns transitions."""
+    """run_enrichment_pipeline assumes accepted status; coordinator owns transitions."""
     from unittest.mock import patch
     from src.pipelines import run_enrichment_pipeline
 
@@ -75,7 +81,7 @@ async def test_pipeline_does_not_call_start_enrichment():
         "id": 10,
         "title": "QA",
         "company": "Acme",
-        "status": "sourced",
+        "status": "found",
         "contacts": [],
     }
 

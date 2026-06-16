@@ -7,7 +7,7 @@ class OutreachSettings(BaseModel):
     target_recruiters: bool = True
 
 JobStatus = Literal[
-    "sourced", "enriching", "enriched", "evaluating",
+    "found", "accepted",
     "contacted", "applied", "interviewing", "rejected",
 ]
 

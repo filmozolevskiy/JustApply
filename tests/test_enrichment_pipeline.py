@@ -63,7 +63,7 @@ async def test_enrichment_failure_zero_contacts_sets_note(db):
 
     assert result is not None
     assert result.enrichmentNote != ""
-    assert result.status == "enriched"
+    assert result.status == "accepted"
 
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_enrichment_infrastructure_error_sets_note(db):
 
     assert result is not None
     assert result.enrichmentNote != ""
-    assert result.status == "enriched"
+    assert result.status == "accepted"
 
 
 @pytest.mark.asyncio
@@ -95,7 +95,7 @@ async def test_enrichment_success_clears_note(db):
 
     assert result is not None
     assert result.enrichmentNote == ""
-    assert result.status == "enriched"
+    assert result.status == "accepted"
 
 
 @pytest.mark.asyncio

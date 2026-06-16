@@ -82,7 +82,10 @@ class StatusUpdate(BaseModel):
 
 @app.put("/api/jobs/{job_id}/status", response_model=Job)
 async def update_status(job_id: int, update: StatusUpdate):
-    updated = update_job_status(job_id, update.status)
+    try:
+        updated = update_job_status(job_id, update.status)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     return updated

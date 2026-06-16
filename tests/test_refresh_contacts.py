@@ -34,12 +34,12 @@ def test_post_refresh_contacts_returns_task_id():
     assert data["job_id"] == 1
 
 
-def test_post_refresh_contacts_sets_job_to_enriching():
+def test_post_refresh_contacts_sets_job_to_accepted():
     with patch("src.web.server.run_refresh_contacts_task_with_logs"):
         client.post("/api/jobs/1/refresh-contacts")
     jobs = client.get("/api/jobs").json()
     job1 = next(j for j in jobs if j["id"] == 1)
-    assert job1["status"] == "enriching"
+    assert job1["status"] == "accepted"
 
 
 def test_post_refresh_contacts_nonexistent_job_returns_404():
@@ -98,7 +98,7 @@ async def test_run_refresh_contacts_task_updates_job_contacts(setup_test_db):
         await run_refresh_contacts_task_with_logs(task_id, 1)
 
     job = database.get_job(1)
-    assert job.status == "enriched"
+    assert job.status == "accepted"
     assert any(c.name == "Fresh Contact" for c in job.contacts)
 
 
@@ -152,8 +152,8 @@ def test_dashboard_html_refresh_contacts_button_shown_for_enriched_job():
         "Drawer must contain a Refresh Contacts button label"
 
 
-def test_dashboard_html_refresh_contacts_not_shown_on_sourced_job():
-    """Sourced job drawer shows Enrich Job; Refresh Contacts is gated on enriched/enriching status."""
+def test_dashboard_html_refresh_contacts_not_shown_on_found_job():
+    """Found job drawer shows Enrich Job; Refresh Contacts is gated on accepted status."""
     from kanban_js import read_drawer_controller
 
     content = read_drawer_controller()
@@ -163,8 +163,8 @@ def test_dashboard_html_refresh_contacts_not_shown_on_sourced_job():
     # Enrich Job button must remain for sourced jobs
     assert "enrichJob" in drawer_body, \
         "Drawer must still reference enrichJob for sourced jobs"
-    # Refresh Contacts must be conditionally gated (status === 'enriched' || 'enriching')
+    # Refresh Contacts must be conditionally gated on accepted status
     assert "refreshContacts" in drawer_body, \
-        "refreshContacts must be in drawer but conditionally shown for enriched/enriching"
-    assert ("status === 'enriched'" in drawer_body or "status === \"enriched\"" in drawer_body), \
-        "Refresh Contacts button must be gated on enriched status"
+        "refreshContacts must be in drawer but conditionally shown for accepted jobs"
+    assert ("status === 'accepted'" in drawer_body or "status === \"accepted\"" in drawer_body), \
+        "Refresh Contacts button must be gated on accepted status"

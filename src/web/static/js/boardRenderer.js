@@ -1,6 +1,6 @@
 /** Kanban board filtering, sorting, and DOM rendering. */
 
-const LANES = ['sourced', 'enriching', 'enriched', 'contacted', 'interviewing', 'rejected'];
+const LANES = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
 
 export function getCompanySizeCategory(sizeStr) {
   if (!sizeStr) return 'unknown';
@@ -181,9 +181,7 @@ export function renderBoard(jobs, filters) {
             <div class="kanban-card-footer">
               <span style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">${job.resumeUsed}</span>
               <div class="kanban-card-actions" onclick="event.stopPropagation()">
-                ${job.status === 'enriching' ? `
-                  <span style="font-size:0.85rem; color:#22d3ee;" title="Enriching contacts & outreach..."><i class="fa-solid fa-spinner fa-spin"></i></span>
-                ` : getKanbanCardMovementButtons(job)}
+                ${getKanbanCardMovementButtons(job)}
               </div>
             </div>
           `;

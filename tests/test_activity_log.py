@@ -22,42 +22,40 @@ def _get_job(db_str, job_id):
 
 # --- add_job ---
 
-def test_add_job_creates_sourced_entry(tmp_path):
+def test_add_job_creates_found_entry(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA Engineer", "company": "Acme"}, db_str)
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
-    assert "Sourced" in messages
+    assert "Found" in messages
 
 
 # --- update_job_status ---
 
 def test_update_job_status_logs_move(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "sourced"}, db_str)
+    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "found"}, db_str)
     update_job_status(job_id, "applied", db_str)
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
-    assert "Moved Sourced → Applied" in messages
+    assert "Moved Found → Applied" in messages
 
 
-def test_update_job_status_to_enriching_logs_enrichment_started(tmp_path):
+def test_update_job_status_to_accepted_logs_move(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "sourced"}, db_str)
-    update_job_status(job_id, "enriching", db_str)
+    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "found"}, db_str)
+    update_job_status(job_id, "accepted", db_str)
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
-    assert "Enrichment started" in messages
-    # Should NOT log a generic move to Enriching
-    assert not any("→ Enriching" in m for m in messages)
+    assert "Moved Found → Accepted" in messages
 
 
 def test_update_job_status_same_status_no_log_entry(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "sourced"}, db_str)
+    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "found"}, db_str)
     before = _get_job(db_str, job_id)
     before_len = len(before.activityLog)
-    update_job_status(job_id, "sourced", db_str)
+    update_job_status(job_id, "found", db_str)
     after = _get_job(db_str, job_id)
     assert len(after.activityLog) == before_len
 
@@ -111,18 +109,18 @@ def test_contact_marked_contacted_logs_name(tmp_path):
 
 def test_contact_marked_contacted_does_not_change_job_status(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
     contacts = [{"name": "Jane Doe", "url": "https://linkedin.com/in/jane", "contacted": False}]
     enrich_job(job_id, contacts, "Hi!", db_path=db_str)
-    # status is "enriched" after enrich — checkbox must NOT change it
+    # status is "accepted" after enrich — checkbox must NOT change it
     update_contact_status(job_id, 0, True, db_str)
     job = _get_job(db_str, job_id)
-    assert job.status == "enriched"
+    assert job.status == "accepted"
 
 
 def test_contact_marked_contacted_no_lane_move_in_log(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "sourced"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
     contacts = [{"name": "Jane Doe", "url": "https://linkedin.com/in/jane", "contacted": False}]
     enrich_job(job_id, contacts, "Hi!", db_path=db_str)
     update_contact_status(job_id, 0, True, db_str)
@@ -137,9 +135,9 @@ def test_activity_log_capped_at_50_entries(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
     # Cycle through statuses to generate many log entries
-    statuses = ["applied", "sourced", "applied", "sourced", "applied", "sourced",
-                "applied", "sourced", "applied", "sourced"]
-    for _ in range(6):  # 6 * 10 = 60 transitions + 1 initial Sourced = 61 entries attempted
+    statuses = ["applied", "found", "applied", "found", "applied", "found",
+                "applied", "found", "applied", "found"]
+    for _ in range(6):  # 6 * 10 = 60 transitions + 1 initial Found = 61 entries attempted
         for s in statuses:
             update_job_status(job_id, s, db_str)
     job = _get_job(db_str, job_id)
@@ -163,4 +161,4 @@ def test_activity_log_entries_have_ts_and_message(tmp_path):
     entry = job.activityLog[0]
     assert entry.ts
     assert entry.message
-    assert entry.message == "Sourced"
+    assert entry.message == "Found"
