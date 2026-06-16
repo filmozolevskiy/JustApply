@@ -58,3 +58,18 @@ The core enrichment-in-place behavior (coordinator, pipeline, API) was already c
 4. **Test** (`tests/test_dashboard_modules.py`): Added `test_board_renderer_shows_enriching_badge_for_active_task` — verifies `cardEnrichingBadge` returns a spinner for the matching job ID, empty string for a non-matching ID, and empty string when `enrichingJobId` is null.
 
 All 410 tests pass.
+
+## Iteration 3 — 2026-06-15
+
+**Issue #60: CLI promote uses Found and Accepted statuses**
+
+### What was implemented
+
+No new code was needed. All acceptance criteria were already satisfied by the work done in Iteration 1 (Issue #58):
+
+1. `promote_sourced_jobs` filters `j.status == "found"` — `src/service/job_hunter.py:94`
+2. Promoted/enriched jobs end in `accepted` — handled by `begin_enrichment` + `complete_enrichment` in `src/db/jobs.py`
+3. Seed data uses `found` — `src/db/seed.py` updated in iteration 1
+4. CLI and service tests pass — all 410 tests pass
+
+Verified full test suite (410 tests, 0 failures), commented on and closed GitHub issue #60.
