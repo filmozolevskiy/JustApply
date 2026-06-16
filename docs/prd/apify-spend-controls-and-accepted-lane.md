@@ -2,7 +2,7 @@
 
 > **ADR:** [0007-apify-spend-controls-and-accepted-lane.md](../adr/0007-apify-spend-controls-and-accepted-lane.md)
 >
-> **GitHub Issue:** _(link added when published)_
+> **GitHub Issue:** [#57](https://github.com/filmozolevskiy/job-hunter-skill/issues/57)
 
 ## Problem Statement
 
