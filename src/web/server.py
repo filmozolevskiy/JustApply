@@ -178,6 +178,20 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     return {"task_id": task_id, "job_id": job_id, "job": updated}
 
 
+@app.get("/api/jobs/{job_id}/cache-status")
+async def cache_status(job_id: int):
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    from ..db.cache import get_contact_sample
+    from ..core.enrichment.contact_sample import company_cache_slug
+    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    cached = get_contact_sample(slug)
+    if not cached:
+        return {"has_cache": False}
+    return {"has_cache": True, "pages_fetched": cached.get("pages_fetched", 1)}
+
+
 @app.post("/api/jobs/{job_id}/reclassify", response_model=Job)
 async def reclassify_job(job_id: int):
     if not get_job(job_id):

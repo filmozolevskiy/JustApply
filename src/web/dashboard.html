@@ -1467,9 +1467,20 @@
       // Enrichment no longer changes lane status (stays Accepted) — no polling needed.
     }
 
-    function enrichJob(id) {
+    async function enrichJob(id) {
       const job = findJob(id);
       if (!job) return;
+
+      const cacheResp = await fetch(`/api/jobs/${id}/cache-status`);
+      if (cacheResp.ok) {
+        const cacheData = await cacheResp.json();
+        if (!cacheData.has_cache) {
+          const ok = confirm(
+            `Enrich Job will fetch company employees from LinkedIn via Apify.\nEstimated cost: ~$0.22 per page.\n\nProceed?`
+          );
+          if (!ok) return;
+        }
+      }
 
       addLogLine(`Initiating enrichment for [${job.title} @ ${job.company}]...`, 'warning');
       expandLogsConsole();
@@ -1539,6 +1550,10 @@
     async function loadMoreContacts(id) {
       const job = findJob(id);
       if (!job) return;
+      const ok = confirm(
+        `Load More Contacts will fetch the next page of employees from LinkedIn via Apify.\nEstimated cost: ~$0.22 per page.\n\nProceed?`
+      );
+      if (!ok) return;
       addLogLine(`Loading more contacts for [${job.title} @ ${job.company}]...`, 'info');
       try {
         const resp = await fetch(`/api/jobs/${id}/load-more-contacts`, { method: 'POST' });

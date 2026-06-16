@@ -145,3 +145,19 @@ Verified full test suite (410 tests, 0 failures), commented on and closed GitHub
 9. **`loadMoreContacts(id)`** (`src/web/dashboard.html`): Async function that POSTs to the load-more endpoint, updates the job in the store, re-renders the board, and logs the result. Exported via `window`.
 
 10. **Tests** (`tests/test_load_more_contacts.py`): 19 new tests covering: cache pages_fetched schema, append deduplication, append pages_fetched increment, pipeline 404/422/200, Apify called with correct startPage, second call uses page 3, drawer button gating, dashboard export. All 433 tests pass.
+
+## Iteration 7 — 2026-06-15
+
+**Issue #64: Cost confirmations for paid Apify actions**
+
+### What was implemented
+
+1. **`GET /api/jobs/{id}/cache-status`** (`src/web/server.py`): New endpoint. Returns `404` if job not found, `{"has_cache": false}` if no Contact Sample Cache entry exists for the company, `{"has_cache": true, "pages_fetched": N}` if a cache entry exists. Lets the client decide whether an Apify call will be made before the user commits.
+
+2. **`enrichJob` cache-status check** (`src/web/dashboard.html`): Function converted to `async`. Before POSTing to `/enrich`, fetches `/api/jobs/{id}/cache-status`. If `has_cache === false` (Apify will run), shows a native `confirm()` dialog with the estimated cost (~$0.22 per page). If the user cancels, the POST is aborted. If `has_cache === true`, the dialog is skipped and enrichment proceeds immediately.
+
+3. **`loadMoreContacts` confirmation** (`src/web/dashboard.html`): Always shows a native `confirm()` dialog with the estimated cost (~$0.22 per page) before POSTing to `/load-more-contacts`. If the user cancels, the POST is aborted.
+
+4. **`reclassifyJob`** (`src/web/dashboard.html`): No changes — no Apify spend, no confirmation needed.
+
+5. **Tests** (`tests/test_cost_confirmations.py`): 9 new tests using TDD red-green approach: 3 server tests (404/cache-miss/cache-hit responses), and 6 static JS content checks (enrichJob calls cache-status before enrich, enrichJob branches on has_cache, enrichJob shows $0.22 estimate, loadMoreContacts always confirms, loadMoreContacts shows $0.22 estimate, reclassifyJob never shows confirm). All 442 tests pass.
