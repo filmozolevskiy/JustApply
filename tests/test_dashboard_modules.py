@@ -184,3 +184,25 @@ def test_server_serves_kanban_static_modules():
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert "export " in resp.text
+
+
+def test_board_renderer_shows_enriching_badge_for_active_task():
+    """boardRenderer.cardEnrichingBadge returns spinner for matching job, empty otherwise."""
+    result = _run_node(
+        """
+        import { cardEnrichingBadge } from './src/web/static/js/boardRenderer.js';
+
+        const badge = cardEnrichingBadge(42, 42);
+        if (!badge.includes('fa-spinner')) process.exit(1);
+        if (!badge.includes('Enriching')) process.exit(2);
+
+        const noBadge = cardEnrichingBadge(1, 42);
+        if (noBadge !== '') process.exit(3);
+
+        const nullBadge = cardEnrichingBadge(1, null);
+        if (nullBadge !== '') process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout

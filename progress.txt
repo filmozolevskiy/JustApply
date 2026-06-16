@@ -35,3 +35,26 @@
     - Updated status CSS classes, polling function, and drawer button conditions.
 
 11. **Tests**: Added `tests/test_status_migration.py` (16 new tests); updated all existing tests to use new status values. All 409 tests pass.
+
+## Iteration 2 — 2026-06-15
+
+**Issue #59: Enrichment runs in place on Accepted**
+
+### What was implemented
+
+The core enrichment-in-place behavior (coordinator, pipeline, API) was already complete from iteration 1. This iteration added the one missing acceptance criterion: the on-card spinner badge.
+
+1. **`cardEnrichingBadge(jobId, enrichingJobId)`** (`src/web/static/js/boardRenderer.js`): New exported pure function. Returns a spinner badge HTML string when `jobId === enrichingJobId` (and enrichingJobId is not null), otherwise returns `''`.
+
+2. **Card template** (`src/web/static/js/boardRenderer.js`): The spinner badge is rendered inline in the company badge row of each Accepted card. `renderBoard` now reads `filters.enrichingJobId` and passes it to `cardEnrichingBadge` for each card.
+
+3. **`activeEnrichJobId` tracking** (`src/web/dashboard.html`):
+   - Added `let activeEnrichJobId = null` module-level variable.
+   - `renderActiveVariant()` now spreads `{ enrichingJobId: activeEnrichJobId }` into the filters passed to `renderBoard`.
+   - `enrichJob()` sets `activeEnrichJobId = data.job_id` immediately after the POST response, triggering a re-render with the spinner visible.
+   - `refreshContacts()` does the same.
+   - Both `onDone` and `onError` callbacks in both functions clear `activeEnrichJobId = null` and re-render, removing the spinner when the task finishes.
+
+4. **Test** (`tests/test_dashboard_modules.py`): Added `test_board_renderer_shows_enriching_badge_for_active_task` — verifies `cardEnrichingBadge` returns a spinner for the matching job ID, empty string for a non-matching ID, and empty string when `enrichingJobId` is null.
+
+All 410 tests pass.

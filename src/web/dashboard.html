@@ -1283,13 +1283,14 @@
     let activeResume = "qa.md";
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
+    let activeEnrichJobId = null;
 
     // ----------------------------------------------------
     // ----------------------------------------------------
     // RENDERING LOGIC
     // ----------------------------------------------------
     function renderActiveVariant() {
-      renderBoard(getJobs(), getBoardFiltersFromDom());
+      renderBoard(getJobs(), { ...getBoardFiltersFromDom(), enrichingJobId: activeEnrichJobId });
     }
 
     const taskLog = createTaskLogClient();
@@ -1482,6 +1483,7 @@
           if (data.job) {
             if (data.job) updateJob(data.job.id, data.job);
           }
+          activeEnrichJobId = data.job_id;
           renderActiveVariant();
 
           const task_id = data.task_id;
@@ -1500,9 +1502,11 @@
               renderActiveVariant();
             },
             onDone() {
+              activeEnrichJobId = null;
               renderActiveVariant();
             },
             onError() {
+              activeEnrichJobId = null;
               addLogLine(`Enrichment SSE stream closed for job [${job.title}].`, 'warning');
             },
           }));
@@ -1528,6 +1532,7 @@
           if (data.job) {
             if (data.job) updateJob(data.job.id, data.job);
           }
+          activeEnrichJobId = data.job_id;
           renderActiveVariant();
 
           const task_id = data.task_id;
@@ -1546,9 +1551,11 @@
               renderActiveVariant();
             },
             onDone() {
+              activeEnrichJobId = null;
               renderActiveVariant();
             },
             onError() {
+              activeEnrichJobId = null;
               addLogLine(`Refresh contacts SSE stream closed for job [${job.title}].`, 'warning');
             },
           }));

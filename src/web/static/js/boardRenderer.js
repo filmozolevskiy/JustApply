@@ -103,6 +103,13 @@ export function getBoardFiltersFromDom() {
   };
 }
 
+export function cardEnrichingBadge(jobId, enrichingJobId) {
+  if (enrichingJobId != null && jobId === enrichingJobId) {
+    return `<span style="font-size:0.6rem; background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;"><i class="fa-solid fa-spinner fa-spin"></i> Enriching…</span>`;
+  }
+  return '';
+}
+
 export function getKanbanCardMovementButtons(job) {
   if (job.archived) {
     return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
@@ -113,8 +120,9 @@ export function getKanbanCardMovementButtons(job) {
   return `<button class="kanban-action-btn reject-btn hover-reject" onclick="moveJobStage(${job.id}, 'rejected')" title="Reject Job"><i class="fa-solid fa-ban"></i></button>`;
 }
 
-export function renderBoard(jobs, filters) {
+export function renderBoard(jobs, filters = {}) {
   const filteredJobs = sortJobs(filterJobs(jobs, filters), filters.sortBy || 'match_desc');
+  const enrichingJobId = filters.enrichingJobId ?? null;
 
   LANES.forEach((lane) => {
     const laneEl = document.getElementById(`lane-${lane}`);
@@ -159,6 +167,7 @@ export function renderBoard(jobs, filters) {
               <div style="display:flex; align-items:center; gap:4px;">
                 ${job.archived ? `<span class="archived-badge">Archived</span>` : ''}
                 ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
+                ${cardEnrichingBadge(job.id, enrichingJobId)}
               </div>
             </div>
             <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
