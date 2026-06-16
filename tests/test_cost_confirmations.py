@@ -152,9 +152,23 @@ def test_load_more_contacts_cost_estimate_visible():
     assert "0.22" in body, "loadMoreContacts confirm must show $0.22 cost estimate"
 
 
+def test_load_more_contacts_shows_card_spinner_while_loading():
+    script = _dashboard_script()
+    body = _get_function_body(script, "loadMoreContacts")
+    assert "activeLoadMoreJobId" in body, "loadMoreContacts must set activeLoadMoreJobId"
+    assert "renderActiveVariant()" in body, "loadMoreContacts must re-render to show card spinner"
+
+
 # ── Client static: reclassifyJob — no confirm ─────────────────────────────────
 
 def test_reclassify_job_never_shows_confirm():
     script = _dashboard_script()
     body = _get_function_body(script, "reclassifyJob", window=800)
     assert "confirm(" not in body, "reclassifyJob must NOT call confirm() — no Apify spend"
+
+
+def test_reclassify_job_shows_card_spinner_while_loading():
+    script = _dashboard_script()
+    body = _get_function_body(script, "reclassifyJob", window=800)
+    assert "activeReclassifyJobId" in body, "reclassifyJob must set activeReclassifyJobId"
+    assert "renderActiveVariant()" in body, "reclassifyJob must re-render to show card spinner"

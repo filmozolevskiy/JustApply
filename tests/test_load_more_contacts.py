@@ -144,7 +144,7 @@ async def test_pipeline_calls_apify_with_next_page(db):
     new_templates = {"recruiter": "Hello ______,", "russian_speaker": ""}
 
     with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
-         patch.object(pipelines_module, "classify_contacts", new=AsyncMock(return_value=new_contacts)), \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         await run_load_more_contacts_pipeline(job_id)
 
@@ -168,7 +168,7 @@ async def test_pipeline_appends_profiles_to_cache(db):
     new_templates = {"recruiter": "Hello ______,", "russian_speaker": ""}
 
     with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)), \
-         patch.object(pipelines_module, "classify_contacts", new=AsyncMock(return_value=new_contacts)), \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         await run_load_more_contacts_pipeline(job_id)
 
@@ -191,7 +191,7 @@ async def test_pipeline_job_stays_accepted(db):
     new_templates = {"recruiter": "", "russian_speaker": ""}
 
     with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)), \
-         patch.object(pipelines_module, "classify_contacts", new=AsyncMock(return_value=new_contacts)), \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         updated = await run_load_more_contacts_pipeline(job_id)
 
@@ -214,7 +214,7 @@ async def test_second_load_more_requests_page_3(db):
     new_templates = {"recruiter": "", "russian_speaker": ""}
 
     with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
-         patch.object(pipelines_module, "classify_contacts", new=AsyncMock(return_value=new_contacts)), \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         await run_load_more_contacts_pipeline(job_id)
 
@@ -247,6 +247,27 @@ def test_load_more_endpoint_returns_422_when_no_cache(db):
     assert "cache" in resp.json()["message"].lower()
 
 
+@pytest.mark.asyncio
+async def test_load_more_endpoint_logs_activity(db):
+    import src.pipelines as pipelines_module
+    job_id = _make_accepted_job_with_cache(db)
+
+    new_profiles = [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob/"}]
+    new_contacts = [{"name": "Bob Smith", "title": "Engineer", "url": "https://linkedin.com/in/bob/",
+                     "contacted": False, "russian_speaker": False, "is_recruiter": False}]
+    new_templates = {"recruiter": "Hello ______,", "russian_speaker": ""}
+
+    with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)), \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
+         patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
+        resp = client.post(f"/api/jobs/{job_id}/load-more-contacts")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert any("Load more contacts" in e["message"] for e in data["activityLog"])
+    assert any("new profile" in e["message"] for e in data["activityLog"])
+
+
 # --- Drawer UI ---
 
 def test_drawer_shows_load_more_contacts_button():
@@ -264,18 +285,20 @@ def test_drawer_load_more_only_on_accepted_jobs():
     idx = content.find("Load More Contacts")
     assert idx != -1
     nearby = content[max(0, idx - 600):idx + 50]
-    assert "accepted" in nearby, \
-        "Load More Contacts button must be gated on accepted status"
+    assert "hasContactSampleActions" in nearby, \
+        "Load More Contacts button must be gated via hasContactSampleActions (accepted + enriched)"
 
 
-def test_drawer_load_more_gated_on_having_contacts():
+def test_drawer_load_more_gated_on_enrichment_not_contact_count():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
+    assert "hasContactSampleActions" in content, \
+        "drawerController must gate Load More / Re-classify via hasContactSampleActions"
     idx = content.find("Load More Contacts")
     assert idx != -1
     nearby = content[max(0, idx - 600):idx + 50]
-    assert "contacts" in nearby.lower(), \
-        "Load More Contacts button must be gated on having contacts"
+    assert "hasContactSampleActions" in nearby, \
+        "Load More Contacts must use hasContactSampleActions (not contacts.length only)"
 
 
 # --- Dashboard JS export ---

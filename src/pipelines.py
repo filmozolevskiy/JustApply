@@ -4,7 +4,7 @@ import inspect
 from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
-from .core.enrichment import source_contacts, generate_outreach_templates, classify_contacts, company_cache_slug
+from .core.enrichment import source_contacts, generate_outreach_templates, company_cache_slug
 from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.enrichment.contact_sample import _run_apify_actor
 from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
@@ -141,13 +141,26 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
         raise ValueError("Job must be in Accepted lane to re-classify")
 
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
-    cache_entry = get_contact_sample(slug)
-    if not cache_entry:
+    if not get_contact_sample(slug):
         raise ValueError("No cached contact sample for this company")
 
-    items = cache_entry["profiles"]
     settings = OutreachSettings(**database.get_outreach_settings())
-    contacts = await classify_contacts(items, settings)
+    source_meta = {}
+    contacts = await source_contacts(
+        job,
+        settings=settings,
+        log_func=log_func,
+        meta=source_meta,
+    )
+
+    enrichment_note = ""
+    if not contacts:
+        if source_meta.get("empty_reason") == "no_company_url":
+            enrichment_note = "No LinkedIn company URL — cannot fetch employees."
+        elif source_meta.get("empty_reason") == "no_employees":
+            enrichment_note = "No LinkedIn employees found for this company."
+        else:
+            enrichment_note = "No contacts matched active Outreach Settings."
 
     templates = await generate_outreach_templates(job, contacts, log_func=log_func)
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
@@ -156,8 +169,10 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
         job_id,
         contacts,
         outreach_message,
+        enrichment_note=enrichment_note,
         recruiter_template=templates.get("recruiter", ""),
         russian_speaker_template=templates.get("russian_speaker", ""),
+        activity_kind="reclassify",
     )
     if not updated:
         raise ValueError("Failed to persist re-classified job")
@@ -191,11 +206,23 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
 
     append_contact_sample(slug, new_profiles)
 
-    updated_cache = get_contact_sample(slug)
-    all_profiles = updated_cache["profiles"] if updated_cache else []
-
     settings = OutreachSettings(**database.get_outreach_settings())
-    contacts = await classify_contacts(all_profiles, settings)
+    source_meta = {}
+    contacts = await source_contacts(
+        job,
+        settings=settings,
+        log_func=log_func,
+        meta=source_meta,
+    )
+
+    enrichment_note = ""
+    if not contacts:
+        if source_meta.get("empty_reason") == "no_company_url":
+            enrichment_note = "No LinkedIn company URL — cannot fetch employees."
+        elif source_meta.get("empty_reason") == "no_employees":
+            enrichment_note = "No LinkedIn employees found for this company."
+        else:
+            enrichment_note = "No contacts matched active Outreach Settings."
 
     templates = await generate_outreach_templates(job, contacts, log_func=log_func)
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
@@ -204,8 +231,11 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
         job_id,
         contacts,
         outreach_message,
+        enrichment_note=enrichment_note,
         recruiter_template=templates.get("recruiter", ""),
         russian_speaker_template=templates.get("russian_speaker", ""),
+        activity_kind="load_more",
+        new_profile_count=len(new_profiles),
     )
     if not updated:
         raise ValueError("Failed to persist updated job")
@@ -260,9 +290,11 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
                 enrichment_note = "No LinkedIn employees found for this company."
             else:
                 enrichment_note = "No contacts matched active Outreach Settings."
-        await log("No contacts found.", "warning")
-    elif contacts:
+
+    if contacts:
         await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
+    else:
+        await log("No contacts found.", "warning")
 
     templates = await generate_outreach_templates(job, contacts, log_func=log_func)
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""

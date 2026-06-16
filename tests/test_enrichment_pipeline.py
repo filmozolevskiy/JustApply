@@ -151,6 +151,9 @@ async def test_enrichment_success_logs_final_success(db):
         await run_enrichment_pipeline(job, log_func=capture_log)
 
     assert log_records, "No log lines emitted"
+    messages = [msg for msg, _ in log_records]
+    assert not any(msg == "No contacts found." for msg in messages)
+    assert any("Found 1 contact(s)" in msg for msg in messages)
     final_level = log_records[-1][1]
     assert final_level == "success", f"Expected final log level 'success', got {final_level!r}"
 

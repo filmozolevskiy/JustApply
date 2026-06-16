@@ -77,7 +77,7 @@ async def test_reclassify_uses_cache_not_apify(db):
     new_templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
 
     with patch("src.db.cache.get_contact_sample", return_value=fake_cache), \
-         patch("src.pipelines.classify_contacts", new=AsyncMock(return_value=new_contacts)), \
+         patch("src.pipelines.source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=new_templates)), \
          patch("src.core.enrichment.contact_sample._run_apify_actor") as mock_apify:
         resp = client.post(f"/api/jobs/{job_id}/reclassify")
@@ -88,6 +88,55 @@ async def test_reclassify_uses_cache_not_apify(db):
     assert data["id"] == job_id
     assert len(data["contacts"]) == 1
     assert data["contacts"][0]["name"] == "Bob Smith"
+    assert any("Re-classified" in e["message"] for e in data["activityLog"])
+
+
+@pytest.mark.asyncio
+async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
+    """Re-classify runs source_contacts (poster merge, contacted flags) — no Apify."""
+    from src.pipelines import run_reclassify_pipeline
+    from src.db.jobs import add_job, enrich_job
+    from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+
+    job_id = add_job({
+        "title": "QA Engineer",
+        "company": "Acme",
+        "companyUrl": "https://www.linkedin.com/company/acme/",
+        "status": "found",
+    }, db_path=db)
+    begin_enrichment(job_id, db)
+    enrich_job(
+        job_id,
+        contacts=[{
+            "name": "Alice", "title": "Recruiter",
+            "url": "https://linkedin.com/in/alice", "contacted": True,
+            "russian_speaker": False, "is_recruiter": True,
+        }],
+        outreach_message="Hello",
+        db_path=db,
+    )
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(
+        slug,
+        [{"firstName": "Alice", "linkedinUrl": "https://linkedin.com/in/alice", "headline": "Recruiter"}],
+        db_path=db,
+    )
+
+    classified = [{
+        "name": "Alice", "title": "Recruiter", "url": "https://linkedin.com/in/alice",
+        "contacted": False, "russian_speaker": False, "is_recruiter": True,
+    }]
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+
+    with patch("src.core.enrichment.classifier.classify_contacts", new=AsyncMock(return_value=classified)), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)), \
+         patch("src.core.enrichment.contact_sample._run_apify_actor") as mock_apify:
+        updated = await run_reclassify_pipeline(job_id)
+
+    mock_apify.assert_not_called()
+    assert updated.contacts[0].contacted is True
 
 
 # --- 422 when job is not in Accepted lane ---
@@ -118,12 +167,11 @@ def test_drawer_shows_reclassify_button_for_accepted_jobs_with_contacts():
 def test_drawer_reclassify_button_only_on_accepted_not_found():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
-    reclassify_idx = content.find("Re-classify")
-    assert reclassify_idx != -1
-    # The 'accepted' status check must appear within 600 chars before the Re-classify button
-    nearby = content[max(0, reclassify_idx - 600):reclassify_idx + 50]
-    assert "accepted" in nearby, \
-        "Re-classify button must only appear for accepted jobs"
+    idx = content.find("reclassifyJob(")
+    assert idx != -1
+    nearby = content[max(0, idx - 1200):idx + 50]
+    assert "hasContactSampleActions" in nearby, \
+        "Re-classify button must be gated via hasContactSampleActions (accepted + enriched)"
 
 
 # --- Dashboard: reclassifyJob is exported to window ---

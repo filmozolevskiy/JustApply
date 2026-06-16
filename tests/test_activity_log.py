@@ -94,6 +94,37 @@ def test_enrich_job_failure_logs_enrichment_note(tmp_path):
     assert "Enrichment failed · Apify failed: HTTP 403" in messages
 
 
+def test_enrich_job_reclassify_logs_reclassified(tmp_path):
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    contacts = [
+        {"name": "Alice", "url": "https://linkedin.com/in/alice", "contacted": False},
+        {"name": "Bob", "url": "https://linkedin.com/in/bob", "contacted": False},
+    ]
+    enrich_job(job_id, contacts, "Hi!", activity_kind="reclassify", db_path=db_str)
+    job = _get_job(db_str, job_id)
+    messages = [e.message for e in job.activityLog]
+    assert "Re-classified · 2 contacts" in messages
+    assert not any("Enriched" in m for m in messages)
+
+
+def test_enrich_job_load_more_logs_new_profiles(tmp_path):
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice", "contacted": False}]
+    enrich_job(
+        job_id,
+        contacts,
+        "Hi!",
+        activity_kind="load_more",
+        new_profile_count=3,
+        db_path=db_str,
+    )
+    job = _get_job(db_str, job_id)
+    messages = [e.message for e in job.activityLog]
+    assert "Load more contacts · 1 contact (3 new profiles)" in messages
+
+
 # --- update_contact_status ---
 
 def test_contact_marked_contacted_logs_name(tmp_path):

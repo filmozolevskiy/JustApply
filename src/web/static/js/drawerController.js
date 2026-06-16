@@ -27,6 +27,18 @@ export function getActiveTemplate(job, contactIdx) {
   return job.russianSpeakerOutreachTemplate || job.outreachMessage || '';
 }
 
+/** Accepted jobs after enrichment — show Re-classify / Load More even with zero matching contacts. */
+export function hasContactSampleActions(job, contacts = job.contacts || []) {
+  if (job.status !== 'accepted') return false;
+  return (
+    contacts.length > 0 ||
+    Boolean(job.enrichmentNote) ||
+    Boolean(job.outreachMessage) ||
+    Boolean(job.recruiterOutreachTemplate) ||
+    Boolean(job.russianSpeakerOutreachTemplate)
+  );
+}
+
 export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
   if (contacts.length === 0) {
     return '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>';
@@ -76,7 +88,12 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
     .join('');
 }
 
-export function createDrawerController({ onJobMutated, addLogLine }) {
+export function createDrawerController({
+  onJobMutated,
+  addLogLine,
+  getActiveReclassifyJobId = () => null,
+  getActiveLoadMoreJobId = () => null,
+}) {
   let activeContactIdx = -1;
   let commentTimeout = null;
   let templateSaveTimeout = null;
@@ -145,6 +162,10 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
     const activeTemplate = defaultFirstName
       ? applyGreetingName(rawActiveTemplate, defaultFirstName)
       : rawActiveTemplate;
+
+    const isReclassifying = getActiveReclassifyJobId() === job.id;
+    const isLoadingMore = getActiveLoadMoreJobId() === job.id;
+    const contactActionInProgress = isReclassifying || isLoadingMore;
 
     body.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
@@ -252,6 +273,20 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
             </div>
+            ${isReclassifying
+              ? `
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--accent-cyan); padding:8px 12px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.2); border-radius:6px;">
+              <i class="fa-solid fa-spinner fa-spin"></i> Re-classifying contacts…
+            </div>
+            `
+              : ''}
+            ${isLoadingMore
+              ? `
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:#818cf8; padding:8px 12px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); border-radius:6px;">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading more contacts…
+            </div>
+            `
+              : ''}
             <div style="display:flex; flex-direction:column; gap:8px;">
               ${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}
             </div>
@@ -284,10 +319,10 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
             `}
           </div>
           <div style="display:flex; justify-content:flex-end; gap:12px; border-top:1px solid var(--border-color); padding-top:16px; margin-top:8px;">
-            ${job.status === 'accepted' && contacts.length > 0
+            ${hasContactSampleActions(job, contacts)
               ? `
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-indigo); border-color: rgba(99,102,241,0.2);" onclick="loadMoreContacts(${job.id}); closeDrawer(null);"><i class="fa-solid fa-users-line"></i> Load More Contacts</button>
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);" onclick="reclassifyJob(${job.id}); closeDrawer(null);"><i class="fa-solid fa-rotate"></i> Re-classify</button>
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-indigo); border-color: rgba(99,102,241,0.2);${contactActionInProgress ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="loadMoreContacts(${job.id})"${contactActionInProgress ? ' disabled' : ''}><i class="fa-solid fa-users-line"></i> Load More Contacts</button>
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);${contactActionInProgress ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="reclassifyJob(${job.id})"${contactActionInProgress ? ' disabled' : ''}><i class="fa-solid ${isReclassifying ? 'fa-spinner fa-spin' : 'fa-rotate'}"></i> ${isReclassifying ? 'Re-classifying…' : 'Re-classify'}</button>
             `
               : ''}
             ${job.status !== 'rejected'

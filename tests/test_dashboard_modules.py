@@ -111,6 +111,27 @@ def test_drawer_controller_substitutes_greeting_name():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_drawer_controller_contact_sample_actions_after_empty_reclassify():
+    """Load More / Re-classify stay available when enrichment ran but contacts are empty."""
+    result = _run_node(
+        """
+        import { hasContactSampleActions } from './src/web/static/js/drawerController.js';
+
+        const enrichedNoContacts = {
+          status: 'accepted',
+          recruiterOutreachTemplate: 'Hello ______,',
+        };
+        if (!hasContactSampleActions(enrichedNoContacts, [])) process.exit(1);
+
+        const freshAccepted = { status: 'accepted' };
+        if (hasContactSampleActions(freshAccepted, [])) process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_task_log_client_routes_sse_message_types():
     """taskLogClient routes log/result/done SSE payloads through one handler."""
     result = _run_node(
@@ -206,3 +227,54 @@ def test_board_renderer_shows_enriching_badge_for_active_task():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_shows_load_more_badge_for_active_task():
+    """boardRenderer.cardLoadMoreBadge returns spinner for matching job, empty otherwise."""
+    result = _run_node(
+        """
+        import { cardLoadMoreBadge } from './src/web/static/js/boardRenderer.js';
+
+        const badge = cardLoadMoreBadge(42, 42);
+        if (!badge.includes('fa-spinner')) process.exit(1);
+        if (!badge.includes('Loading contacts')) process.exit(2);
+
+        const noBadge = cardLoadMoreBadge(1, 42);
+        if (noBadge !== '') process.exit(3);
+
+        const nullBadge = cardLoadMoreBadge(1, null);
+        if (nullBadge !== '') process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_shows_reclassify_badge_for_active_task():
+    """boardRenderer.cardReclassifyBadge returns spinner for matching job, empty otherwise."""
+    result = _run_node(
+        """
+        import { cardReclassifyBadge } from './src/web/static/js/boardRenderer.js';
+
+        const badge = cardReclassifyBadge(42, 42);
+        if (!badge.includes('fa-spinner')) process.exit(1);
+        if (!badge.includes('Re-classifying')) process.exit(2);
+
+        const noBadge = cardReclassifyBadge(1, 42);
+        if (noBadge !== '') process.exit(3);
+
+        const nullBadge = cardReclassifyBadge(1, null);
+        if (nullBadge !== '') process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_drawer_shows_reclassify_progress_banner():
+    from kanban_js import read_drawer_controller
+    content = read_drawer_controller()
+    assert "Re-classifying contacts" in content, \
+        "drawerController must show in-drawer spinner while re-classifying"

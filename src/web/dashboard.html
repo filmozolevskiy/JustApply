@@ -1284,13 +1284,20 @@
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
+    let activeLoadMoreJobId = null;
+    let activeReclassifyJobId = null;
 
     // ----------------------------------------------------
     // ----------------------------------------------------
     // RENDERING LOGIC
     // ----------------------------------------------------
     function renderActiveVariant() {
-      renderBoard(getJobs(), { ...getBoardFiltersFromDom(), enrichingJobId: activeEnrichJobId });
+      renderBoard(getJobs(), {
+        ...getBoardFiltersFromDom(),
+        enrichingJobId: activeEnrichJobId,
+        loadMoreJobId: activeLoadMoreJobId,
+        reclassifyJobId: activeReclassifyJobId,
+      });
     }
 
     const taskLog = createTaskLogClient();
@@ -1307,6 +1314,8 @@
     const drawer = createDrawerController({
       onJobMutated: renderActiveVariant,
       addLogLine,
+      getActiveReclassifyJobId: () => activeReclassifyJobId,
+      getActiveLoadMoreJobId: () => activeLoadMoreJobId,
     });
     const {
       closeDrawer,
@@ -1529,7 +1538,10 @@
 
     async function reclassifyJob(id) {
       const job = findJob(id);
-      if (!job) return;
+      if (!job || activeReclassifyJobId != null) return;
+      activeReclassifyJobId = id;
+      renderActiveVariant();
+      openJobDetailsDrawer(id);
       addLogLine(`Re-classifying contacts for [${job.title} @ ${job.company}]...`, 'info');
       try {
         const resp = await fetch(`/api/jobs/${id}/reclassify`, { method: 'POST' });
@@ -1540,10 +1552,13 @@
         }
         const updated = await resp.json();
         updateJob(updated.id, updated);
-        renderActiveVariant();
         addLogLine(`Re-classify complete for [${job.title}].`, 'success');
       } catch (err) {
         addLogLine(`Re-classify failed: ${err.message}`, 'error');
+      } finally {
+        activeReclassifyJobId = null;
+        renderActiveVariant();
+        openJobDetailsDrawer(id);
       }
     }
 
@@ -1554,7 +1569,10 @@
         `Load More Contacts will fetch the next page of employees from LinkedIn via Apify.\nEstimated cost: ~$0.22 per page.\n\nProceed?`
       );
       if (!ok) return;
+      activeLoadMoreJobId = id;
+      renderActiveVariant();
       addLogLine(`Loading more contacts for [${job.title} @ ${job.company}]...`, 'info');
+      expandLogsConsole();
       try {
         const resp = await fetch(`/api/jobs/${id}/load-more-contacts`, { method: 'POST' });
         if (!resp.ok) {
@@ -1564,10 +1582,13 @@
         }
         const updated = await resp.json();
         updateJob(updated.id, updated);
-        renderActiveVariant();
+        openJobDetailsDrawer(id);
         addLogLine(`Load More Contacts complete for [${job.title}].`, 'success');
       } catch (err) {
         addLogLine(`Load More Contacts failed: ${err.message}`, 'error');
+      } finally {
+        activeLoadMoreJobId = null;
+        renderActiveVariant();
       }
     }
 

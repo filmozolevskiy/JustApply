@@ -196,6 +196,8 @@ def enrich_job(
     enrichment_note="",
     recruiter_template="",
     russian_speaker_template="",
+    activity_kind="enrich",
+    new_profile_count=None,
     db_path=None,
 ):
     if db_path is None:
@@ -215,6 +217,20 @@ def enrich_job(
     )
     if enrichment_note:
         _append_activity_log(cursor, job_id, f"Enrichment failed · {enrichment_note}")
+    elif activity_kind == "reclassify":
+        count = len(contacts)
+        label = "contact" if count == 1 else "contacts"
+        _append_activity_log(cursor, job_id, f"Re-classified · {count} {label}")
+    elif activity_kind == "load_more":
+        count = len(contacts)
+        label = "contact" if count == 1 else "contacts"
+        new_count = new_profile_count if new_profile_count is not None else 0
+        new_label = "profile" if new_count == 1 else "profiles"
+        _append_activity_log(
+            cursor,
+            job_id,
+            f"Load more contacts · {count} {label} ({new_count} new {new_label})",
+        )
     else:
         count = len(contacts)
         label = "contact" if count == 1 else "contacts"
