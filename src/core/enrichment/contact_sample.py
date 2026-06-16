@@ -13,6 +13,10 @@ class ApifyTimeoutError(Exception):
     pass
 
 
+class ApifyInfrastructureError(Exception):
+    pass
+
+
 APIFY_API_BASE = "https://api.apify.com/v2"
 ACTOR_ID = "harvestapi~linkedin-company-employees"
 CONTACT_SAMPLE_SIZE = 25
@@ -69,8 +73,7 @@ async def _fetch_apify_employees_at_url(
     load_dotenv(override=True)
     api_token = os.getenv("APIFY_API_TOKEN")
     if not api_token:
-        await log("APIFY_API_TOKEN not set, skipping Apify sourcing.", "warning")
-        return []
+        raise ApifyInfrastructureError("APIFY_API_TOKEN not set")
 
     actor_input = {"companies": [company_url], "maxItems": CONTACT_SAMPLE_SIZE}
 
@@ -82,12 +85,11 @@ async def _fetch_apify_employees_at_url(
         resp = await client.post(run_url, params=params, headers=headers, json=actor_input)
         if resp.status_code not in (200, 201):
             await log(f"Apify trigger failed: HTTP {resp.status_code}", "error")
-            return []
+            raise ApifyInfrastructureError(f"Apify trigger failed: HTTP {resp.status_code}")
 
         run_id = resp.json().get("data", {}).get("id")
         if not run_id:
-            await log("Apify did not return a run ID.", "error")
-            return []
+            raise ApifyInfrastructureError("Apify did not return a run ID.")
 
         await log(f"Apify run started: {run_id}", "info")
 
@@ -116,13 +118,13 @@ async def _fetch_apify_employees_at_url(
                 break
             if status in ("FAILED", "ABORTED", "TIMED-OUT"):
                 await log(f"Apify run ended with status: {status}", "error")
-                return []
+                raise ApifyInfrastructureError(f"Apify run ended with status: {status}")
 
         dataset_url = f"{APIFY_API_BASE}/datasets/{dataset_id}/items"
         data_resp = await client.get(dataset_url, params={**params, "format": "json"})
         if data_resp.status_code != 200:
             await log(f"Apify dataset fetch error: HTTP {data_resp.status_code}", "error")
-            return []
+            raise ApifyInfrastructureError(f"Apify dataset fetch error: HTTP {data_resp.status_code}")
 
         items = data_resp.json()
         await log(f"Apify returned {len(items)} employees for {label}.", "info")
@@ -167,62 +169,25 @@ async def _run_apify_for_company_page(
 
 
 async def _run_apify_actor(
-    company: str,
+    company_url: str,
     log_func=None,
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
-    company_url: str | None = None,
 ) -> list:
-    """Fetch employees via Apify, preferring Bright Data company_url then slug variants."""
+    """Fetch employees via Apify using the LinkedIn company page URL only.
 
-    async def log(msg, level="info"):
-        if log_func:
-            if inspect.iscoroutinefunction(log_func):
-                await log_func(msg, level)
-            else:
-                log_func(msg, level)
-
-    if company_url:
-        try:
-            items = await _run_apify_for_company_page(
-                company_url,
-                log_func=log_func,
-                timeout_seconds=timeout_seconds,
-                poll_interval=poll_interval,
-            )
-        except ApifyTimeoutError:
-            raise
-        if items:
-            return items
-        await log("No employees at Bright Data company URL; trying name-based slug variants.", "info")
-
-    candidates = company_slug_candidates(company)
-    if not candidates:
-        await log("No company name for Apify sourcing.", "warning")
-        return []
-
-    last_error = None
-    for slug in candidates:
-        try:
-            items = await _run_apify_for_slug(
-                slug,
-                log_func=log_func,
-                timeout_seconds=timeout_seconds,
-                poll_interval=poll_interval,
-            )
-        except ApifyTimeoutError as exc:
-            last_error = exc
-            raise
-        if items:
-            if slug != candidates[0]:
-                await log(f"Resolved LinkedIn company slug '{slug}' for '{company}'.", "info")
-            return items
-        if len(candidates) > 1:
-            await log(f"No employees for slug '{slug}'; trying next variant.", "info")
-
-    if last_error:
-        raise last_error
-    return []
+    Raises ApifyInfrastructureError for credential or API failures.
+    Raises ApifyTimeoutError when local polling times out.
+    Returns a (possibly empty) list on a successful Apify run.
+    """
+    if not company_url:
+        raise ApifyInfrastructureError("No companyUrl provided for Apify fetch.")
+    return await _run_apify_for_company_page(
+        company_url,
+        log_func=log_func,
+        timeout_seconds=timeout_seconds,
+        poll_interval=poll_interval,
+    )
 
 
 def company_cache_slug(company: str, company_url: str = "") -> str:

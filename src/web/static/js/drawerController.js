@@ -251,11 +251,6 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
-              ${job.status === 'accepted'
-                ? `
-                <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="refreshContacts(${job.id}); closeDrawer(null);"><i class="fa-solid fa-arrows-rotate"></i> Refresh Contacts</button>
-              `
-                : ''}
             </div>
             <div style="display:flex; flex-direction:column; gap:8px;">
               ${buildContactGroupsHtml(job.id, contacts, activeContactIdx)}

@@ -1516,55 +1516,6 @@
         });
     }
 
-    function refreshContacts(id) {
-      const job = findJob(id);
-      if (!job) return;
-
-      addLogLine(`Refreshing contacts for [${job.title} @ ${job.company}]...`, 'warning');
-      expandLogsConsole();
-
-      fetch(`/api/jobs/${id}/refresh-contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        .then(r => {
-          if (!r.ok) throw new Error("HTTP error " + r.status);
-          return r.json();
-        })
-        .then(data => {
-          if (data.job) {
-            if (data.job) updateJob(data.job.id, data.job);
-          }
-          activeEnrichJobId = data.job_id;
-          renderActiveVariant();
-
-          const task_id = data.task_id;
-          addLogLine(`Refresh contacts task started: ${task_id}`, 'info');
-          localStorage.setItem(ACTIVE_ENRICH_TASK_KEY, task_id);
-          localStorage.setItem(ACTIVE_ENRICH_LOG_SKIP_KEY, '0');
-
-          taskLog.setEnrichEventSource(connectTaskLogStream(task_id, {
-            skipKey: ACTIVE_ENRICH_LOG_SKIP_KEY,
-            taskKey: ACTIVE_ENRICH_TASK_KEY,
-            existingSource: taskLog.getEnrichEventSource(),
-            onResult(logData) {
-              if (logData.job) {
-                if (logData.job) updateJob(logData.job.id, logData.job);
-              }
-              renderActiveVariant();
-            },
-            onDone() {
-              activeEnrichJobId = null;
-              renderActiveVariant();
-            },
-            onError() {
-              activeEnrichJobId = null;
-              addLogLine(`Refresh contacts SSE stream closed for job [${job.title}].`, 'warning');
-            },
-          }));
-        })
-        .catch(err => {
-          addLogLine(`Failed to trigger refresh contacts: ${err.message}.`, 'error');
-        });
-    }
-
     function deleteJob(id) {
       const job = findJob(id);
       if (job) {
@@ -2015,7 +1966,6 @@
       enrichJob,
       moveJobStage,
       openJobDetailsDrawer,
-      refreshContacts,
       resetKbFilters,
       saveOutreachSettings,
       selectActiveContact,

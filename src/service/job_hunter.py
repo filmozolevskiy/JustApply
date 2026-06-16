@@ -66,7 +66,6 @@ async def search_jobs(
 async def complete_enrichment(
     job_id: int,
     *,
-    bust_cache: bool = False,
     log_func=None,
 ) -> Job | None:
     """Finish enrichment for a job already in the enriching lane."""
@@ -76,7 +75,7 @@ async def complete_enrichment(
         return None
 
     try:
-        updated = await run_enrichment_pipeline(job, log_func=log_func, bust_cache=bust_cache)
+        updated = await run_enrichment_pipeline(job, log_func=log_func)
     except Exception:
         abort_enrichment(job_id)
         raise

@@ -128,7 +128,7 @@ async def run_search_pipeline(
     return saved
 
 
-async def run_enrichment_pipeline(job: Job, log_func=None, bust_cache: bool = False) -> Job | None:
+async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
     """Source contacts, generate outreach message, and persist enriched job."""
 
     async def log(msg: str, level: str = "info"):
@@ -162,18 +162,20 @@ async def run_enrichment_pipeline(job: Job, log_func=None, bust_cache: bool = Fa
             job,
             settings=settings,
             log_func=log_func,
-            bust_cache=bust_cache,
             meta=source_meta,
         )
     except Exception as exc:
         enrichment_note = f"Enrichment failed: {exc}"
         await log(enrichment_note, "error")
 
-    if not enrichment_note and not contacts:
-        if source_meta.get("empty_reason") == "no_employees":
-            enrichment_note = "No LinkedIn employees found for this company."
-        else:
-            enrichment_note = "No contacts matched active Outreach Settings."
+    if not enrichment_note:
+        if source_meta.get("empty_reason") == "no_company_url":
+            enrichment_note = "No LinkedIn company URL — cannot fetch employees."
+        elif not contacts:
+            if source_meta.get("empty_reason") == "no_employees":
+                enrichment_note = "No LinkedIn employees found for this company."
+            else:
+                enrichment_note = "No contacts matched active Outreach Settings."
         await log("No contacts found.", "warning")
     elif contacts:
         await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")

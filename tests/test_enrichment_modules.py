@@ -20,7 +20,7 @@ async def test_source_module_delegates_to_contact_sample_on_cache_miss(monkeypat
 
     from src.core.enrichment import source as source_module
 
-    job = {"title": "QA", "company": "Acme", "contacts": []}
+    job = {"title": "QA", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     mock_apify = AsyncMock(return_value=[])
     mock_classify = AsyncMock(return_value=[])
 

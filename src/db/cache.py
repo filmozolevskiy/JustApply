@@ -27,9 +27,7 @@ def get_contact_sample(company_slug: str, db_path=None) -> dict | None:
 
 
 def set_contact_sample(company_slug: str, profiles: list, display_name: str = "", db_path=None) -> None:
-    """Write raw Contact Sample profiles to cache. No-op when profiles is empty."""
-    if not profiles:
-        return
+    """Write raw Contact Sample profiles to cache, including empty lists from successful Apify runs."""
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)

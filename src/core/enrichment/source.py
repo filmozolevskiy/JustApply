@@ -11,23 +11,22 @@ from .contact_sample import (
     normalize_linkedin_url,
     poster_to_apify_item,
     ApifyTimeoutError,
+    ApifyInfrastructureError,
 )
 from .classifier import classify_contacts
 
 
-async def source_contacts(job: Job, settings=None, log_func=None, bust_cache: bool = False, meta: dict | None = None) -> list:
+async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | None = None) -> list:
     """
     Return outreach contacts for a job using LLM classification.
 
-    Checks the Contact Sample Cache first. On cache miss, fetches via Apify and
-    writes the result to cache when non-empty. On cache hit, skips the Apify call.
-    The Job Poster from existing contacts is included in the same classification
-    batch — deduped by normalized LinkedIn URL or injected as a synthetic extra
-    when absent. Falls back to classifying the poster alone if no profiles are
-    available. Preserves contacted:True from previous contacts matched by
-    normalized URL. bust_cache=True deletes the cache entry before lookup.
+    Checks the Contact Sample Cache first. On cache miss with a valid companyUrl,
+    fetches via Apify and writes the result to cache (including empty results from
+    successful runs). Infrastructure failures (no token, trigger error, timeout)
+    are not cached and propagate as exceptions. Missing companyUrl skips Apify;
+    the job poster is classified alone when present.
     """
-    from ...db.cache import get_contact_sample, set_contact_sample, delete_contact_sample
+    from ...db.cache import get_contact_sample, set_contact_sample
     from ...db.jobs import log_activity
 
     if settings is None:
@@ -57,9 +56,6 @@ async def source_contacts(job: Job, settings=None, log_func=None, bust_cache: bo
 
     slug = company_cache_slug(company, company_url)
 
-    if bust_cache:
-        delete_contact_sample(slug)
-
     cache_entry = get_contact_sample(slug)
     if cache_entry:
         display = cache_entry.get("display_name") or company
@@ -69,19 +65,15 @@ async def source_contacts(job: Job, settings=None, log_func=None, bust_cache: bo
         if job_id:
             log_activity(job_id, f"Contact Sample Cache hit · {display}")
         items = cache_entry["profiles"]
+    elif not company_url:
+        await log("No company URL (companyUrl) — skipping Apify.", "warning")
+        if meta is not None:
+            meta["empty_reason"] = "no_company_url"
+        items = []
     else:
         await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
-        try:
-            items = await _run_apify_actor(
-                company,
-                log_func=log_func,
-                company_url=company_url or None,
-            )
-        except ApifyTimeoutError as e:
-            await log(f"Apify polling timed out: {e}", "error")
-            items = []
-        if items:
-            set_contact_sample(slug, items, display_name=company)
+        items = await _run_apify_actor(company_url, log_func=log_func)
+        set_contact_sample(slug, items, display_name=company)
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
     fetched_profiles = bool(items)
@@ -105,7 +97,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, bust_cache: bo
     else:
         contacts = []
 
-    if meta is not None and not contacts:
+    if meta is not None and not contacts and meta.get("empty_reason") != "no_company_url":
         if not fetched_profiles and not job_poster:
             meta["empty_reason"] = "no_employees"
         else:

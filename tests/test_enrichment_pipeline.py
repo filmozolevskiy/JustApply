@@ -38,7 +38,7 @@ async def test_enrichment_no_employees_sets_specific_note(db):
     async def capture_log(msg, level="info"):
         log_records.append((msg, level))
 
-    async def mock_source_contacts(job, settings=None, log_func=None, bust_cache=False, meta=None):
+    async def mock_source_contacts(job, settings=None, log_func=None, meta=None):
         if meta is not None:
             meta["empty_reason"] = "no_employees"
         return []
@@ -50,6 +50,23 @@ async def test_enrichment_no_employees_sets_specific_note(db):
         result = await run_enrichment_pipeline(job, log_func=capture_log)
 
     assert result.enrichmentNote == "No LinkedIn employees found for this company."
+
+
+@pytest.mark.asyncio
+async def test_enrichment_no_company_url_sets_specific_note(db):
+    """Missing companyUrl sets a specific enrichmentNote even when contacts are present."""
+    async def mock_source_no_url(job, settings=None, log_func=None, meta=None):
+        if meta is not None:
+            meta["empty_reason"] = "no_company_url"
+        return []
+
+    with patch("src.pipelines.source_contacts", new=mock_source_no_url), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_EMPTY_TEMPLATES)):
+        from src.pipelines import run_enrichment_pipeline
+        job = _enriching_job(db)
+        result = await run_enrichment_pipeline(job)
+
+    assert result.enrichmentNote == "No LinkedIn company URL — cannot fetch employees."
 
 
 @pytest.mark.asyncio

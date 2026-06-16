@@ -67,10 +67,11 @@ def test_normalize_linkedin_url_returns_empty_for_non_linkedin():
 
 @pytest.mark.asyncio
 async def test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poster():
-    """On cache miss, Apify is called even when a Job Poster contact already exists."""
+    """On cache miss with companyUrl, Apify is called even when a Job Poster contact already exists."""
     job = {
         "title": "QA Engineer",
         "company": "Acme",
+        "companyUrl": "https://www.linkedin.com/company/acme/",
         "contacts": [{"name": "Sarah", "title": "Recruiter", "url": "https://linkedin.com/in/sarah", "contacted": False, "is_job_poster": True}]
     }
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
@@ -92,6 +93,7 @@ async def test_source_contacts_injects_poster_when_not_in_apify_sample():
     job = {
         "title": "QA Engineer",
         "company": "Acme",
+        "companyUrl": "https://www.linkedin.com/company/acme/",
         "contacts": [{"name": "Sarah Jenkins", "title": "Recruiter", "url": poster_url, "contacted": False, "is_job_poster": True}]
     }
     employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": "https://linkedin.com/in/ivan"}]
@@ -161,6 +163,7 @@ async def test_source_contacts_preserves_contacted_status_by_normalized_url():
     job = {
         "title": "QA Engineer",
         "company": "Acme",
+        "companyUrl": "https://www.linkedin.com/company/acme/",
         "contacts": [{"name": "Ivan Petrov", "title": "Dev", "url": contact_url, "contacted": True, "is_job_poster": False}]
     }
     employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": contact_url}]
@@ -199,7 +202,7 @@ async def test_source_contacts_delegates_to_classify_contacts_with_settings():
     settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
     classified = [{"name": "Ivan Petrov", "title": "Engineer", "url": "", "contacted": False,
                    "russian_speaker": True, "is_recruiter": False, "currentPosition": "", "location": ""}]
-    job = {"title": "QA", "company": "TechCorp", "contacts": []}
+    job = {"title": "QA", "company": "TechCorp", "companyUrl": "https://www.linkedin.com/company/techcorp/", "contacts": []}
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)) as mock_classify:
@@ -212,7 +215,7 @@ async def test_source_contacts_delegates_to_classify_contacts_with_settings():
 @pytest.mark.asyncio
 async def test_source_contacts_uses_default_settings_when_none_provided():
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Dev", "linkedinUrl": ""}]
-    job = {"title": "QA", "company": "Corp", "contacts": []}
+    job = {"title": "QA", "company": "Corp", "companyUrl": "https://www.linkedin.com/company/corp/", "contacts": []}
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
@@ -375,31 +378,24 @@ def test_company_slug_candidates_deduplicates_suffix_variants():
 
 
 @pytest.mark.asyncio
-async def test_run_apify_actor_uses_company_url_before_slug_variants():
+async def test_run_apify_actor_uses_company_url():
+    """_run_apify_actor delegates to _run_apify_for_company_page using the provided URL."""
     company_page = "https://www.linkedin.com/company/tranetechnologies?trk=x"
     employees = [{"firstName": "Jane", "lastName": "Doe", "linkedinUrl": ""}]
 
-    with patch.object(contact_sample_module, "_run_apify_for_company_page", new=AsyncMock(return_value=employees)) as mock_url, \
-         patch.object(contact_sample_module, "_run_apify_for_slug", new=AsyncMock(return_value=[])) as mock_slug:
-        result = await _run_apify_actor("Trane Technologies", company_url=company_page)
+    with patch.object(contact_sample_module, "_run_apify_for_company_page", new=AsyncMock(return_value=employees)) as mock_url:
+        result = await _run_apify_actor(company_page)
 
     assert result == employees
     mock_url.assert_called_once()
-    mock_slug.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_run_apify_actor_tries_slug_variants_until_profiles_found():
-    async def mock_for_slug(slug, **kwargs):
-        if slug == "trane":
-            return [{"firstName": "Jane", "lastName": "Doe", "linkedinUrl": "https://linkedin.com/in/jane"}]
-        return []
-
-    with patch.object(contact_sample_module, "_run_apify_for_slug", new=AsyncMock(side_effect=mock_for_slug)) as mock_run:
-        items = await _run_apify_actor("Trane Technologies")
-
-    assert len(items) == 1
-    assert mock_run.await_count == 2
+async def test_run_apify_actor_raises_infrastructure_error_without_url():
+    """_run_apify_actor raises ApifyInfrastructureError when no URL is provided."""
+    from src.core.enrichment.contact_sample import ApifyInfrastructureError
+    with pytest.raises(ApifyInfrastructureError):
+        await _run_apify_actor("")
 
 
 @pytest.mark.asyncio
@@ -419,12 +415,14 @@ async def test_source_contacts_passes_company_url_to_apify():
         await source_contacts(job)
 
     mock_apify.assert_called_once()
-    assert mock_apify.call_args.kwargs["company_url"] == job["companyUrl"]
+    assert mock_apify.call_args.args[0] == job["companyUrl"]
 
 
 @pytest.mark.asyncio
 async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
-    job = {"title": "QA Engineer", "company": "Trane Technologies", "contacts": []}
+    """When Apify returns zero profiles, meta gets empty_reason=no_employees."""
+    job = {"title": "QA Engineer", "company": "Trane Technologies",
+           "companyUrl": "https://www.linkedin.com/company/tranetechnologies/", "contacts": []}
     meta = {}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])):
         result = await source_contacts(job, meta=meta)
@@ -434,7 +432,7 @@ async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
 
 @pytest.mark.asyncio
 async def test_source_contacts_sets_meta_no_audience_match_when_classified_empty():
-    job = {"title": "QA Engineer", "company": "Acme", "contacts": []}
+    job = {"title": "QA Engineer", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Engineer", "linkedinUrl": ""}]
     meta = {}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
@@ -468,7 +466,7 @@ async def test_run_apify_actor_raises_apify_timeout_error():
          patch("asyncio.sleep", new=AsyncMock()), \
          patch("time.monotonic", side_effect=[0.0, 1.0, 301.0]):
         with pytest.raises(ApifyTimeoutError):
-            await _run_apify_actor("TestCorp", timeout_seconds=300.0)
+            await _run_apify_actor("https://www.linkedin.com/company/testcorp/", timeout_seconds=300.0)
 
 
 @pytest.mark.asyncio
@@ -649,7 +647,7 @@ async def test_apify_poll_logs_running_once_for_repeated_status():
     with patch("httpx.AsyncClient", return_value=mock_client), \
          patch.dict(os.environ, {"APIFY_API_TOKEN": "fake-token"}), \
          patch("asyncio.sleep", new=AsyncMock()):
-        await _run_apify_actor("TestCorp", log_func=capture_log)
+        await _run_apify_actor("https://www.linkedin.com/company/testcorp/", log_func=capture_log)
 
     status_logs = [m for m in logged if m.startswith("Apify run status:")]
     assert sum(1 for m in status_logs if "RUNNING" in m) == 1
@@ -684,12 +682,13 @@ async def test_apify_poll_logs_terminal_failure_status():
     def capture_log(msg, level="info"):
         logged.append(msg)
 
+    from src.core.enrichment.contact_sample import ApifyInfrastructureError
     with patch("httpx.AsyncClient", return_value=mock_client), \
          patch.dict(os.environ, {"APIFY_API_TOKEN": "fake-token"}), \
          patch("asyncio.sleep", new=AsyncMock()):
-        result = await _run_apify_actor("TestCorp", log_func=capture_log)
+        with pytest.raises(ApifyInfrastructureError):
+            await _run_apify_actor("https://www.linkedin.com/company/testcorp/", log_func=capture_log)
 
-    assert result == []
     status_logs = [m for m in logged if m.startswith("Apify run status:")]
     assert sum(1 for m in status_logs if "RUNNING" in m) == 1
     assert sum(1 for m in status_logs if "FAILED" in m) == 1

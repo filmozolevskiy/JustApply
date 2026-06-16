@@ -73,3 +73,33 @@ No new code was needed. All acceptance criteria were already satisfied by the wo
 4. CLI and service tests pass — all 410 tests pass
 
 Verified full test suite (410 tests, 0 failures), commented on and closed GitHub issue #60.
+
+## Iteration 4 — 2026-06-15
+
+**Issue #61: Safe Apify fetch and append-only Contact Sample Cache**
+
+### What was implemented
+
+1. **`ApifyInfrastructureError`** (`src/core/enrichment/contact_sample.py`): New exception class for credential and API failures (no token, HTTP trigger error, no run ID, run FAILED/ABORTED/TIMED-OUT, dataset fetch error). Infrastructure failures propagate as exceptions; only a successful Apify run that returns 0 profiles returns `[]`.
+
+2. **`_run_apify_actor` simplified** (`src/core/enrichment/contact_sample.py`): Removed the `company_slug_candidates` loop entirely. Now takes `company_url: str` as the only required argument and delegates directly to `_run_apify_for_company_page`. Raises `ApifyInfrastructureError` if no URL provided.
+
+3. **Empty-result caching** (`src/db/cache.py`): Removed `if not profiles: return` guard from `set_contact_sample`. Empty Apify responses (zero employees from a successful run) are now cached to prevent repeat Apify calls.
+
+4. **`source_contacts` updated** (`src/core/enrichment/source.py`):
+   - Removed `bust_cache` parameter.
+   - Added `elif not company_url:` branch: skips Apify, logs a warning, sets `meta["empty_reason"] = "no_company_url"`, and falls through to job poster classification.
+   - Always calls `set_contact_sample` after a successful Apify run (including zero-profile results).
+   - `ApifyTimeoutError` and `ApifyInfrastructureError` propagate up to the pipeline instead of being silently swallowed.
+
+5. **Pipeline** (`src/pipelines.py`): Removed `bust_cache` parameter. Added `no_company_url` branch in the enrichment note logic that sets `"No LinkedIn company URL — cannot fetch employees."` when `source_meta` contains `empty_reason = "no_company_url"`.
+
+6. **Service** (`src/service/job_hunter.py`): Removed `bust_cache` parameter from `complete_enrichment`.
+
+7. **API server** (`src/web/server.py`): Removed `run_refresh_contacts_task_with_logs`, the `bust_cache` wrapper logic, and the `POST /api/jobs/{job_id}/refresh-contacts` endpoint. `run_enrichment_task_with_logs` simplified (no bust_cache).
+
+8. **Dashboard** (`src/web/dashboard.html`): Removed `refreshContacts` JS function and its export from the window object.
+
+9. **Drawer** (`src/web/static/js/drawerController.js`): Removed the Refresh Contacts button from the Accepted job drawer template.
+
+10. **Tests**: Updated 14 tests across `test_contact_sample_cache.py`, `test_enrichment_modules.py`, `test_outreach.py`, `test_enrichment_pipeline.py` to reflect new behavior. Replaced `test_refresh_contacts.py` with removal-verification tests. Added 16 new tests covering: empty-list caching, missing companyUrl skips Apify, infrastructure errors not cached, `no_company_url` enrichment note, and removal of the refresh-contacts endpoint and JS. All 407 tests pass.
