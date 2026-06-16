@@ -17,6 +17,9 @@ if [[ -f .env ]]; then
 fi
 
 : "${GITHUB_TOKEN:?Set GITHUB_TOKEN in .env (repo root)}"
-export GITHUB_PERSONAL_ACCESS_TOKEN="$GITHUB_TOKEN"
 
-exec docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+# Cursor mangles spaces in --header args; use Authorization:Bearer<token> (no space after colon).
+export GITHUB_AUTH_HEADER="Bearer ${GITHUB_TOKEN}"
+
+exec npx -y mcp-remote@latest "https://api.githubcopilot.com/mcp/" \
+  --header "Authorization:${GITHUB_AUTH_HEADER}"
