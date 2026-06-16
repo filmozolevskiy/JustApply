@@ -284,6 +284,11 @@ export function createDrawerController({ onJobMutated, addLogLine }) {
             `}
           </div>
           <div style="display:flex; justify-content:flex-end; gap:12px; border-top:1px solid var(--border-color); padding-top:16px; margin-top:8px;">
+            ${job.status === 'accepted' && contacts.length > 0
+              ? `
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);" onclick="reclassifyJob(${job.id}); closeDrawer(null);"><i class="fa-solid fa-rotate"></i> Re-classify</button>
+            `
+              : ''}
             ${job.status !== 'rejected'
               ? `
               <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.2);" onclick="changeJobStage(${job.id}, 'rejected'); closeDrawer(null);"><i class="fa-solid fa-ban"></i> Reject Job</button>

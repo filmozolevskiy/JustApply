@@ -103,3 +103,19 @@ Verified full test suite (410 tests, 0 failures), commented on and closed GitHub
 9. **Drawer** (`src/web/static/js/drawerController.js`): Removed the Refresh Contacts button from the Accepted job drawer template.
 
 10. **Tests**: Updated 14 tests across `test_contact_sample_cache.py`, `test_enrichment_modules.py`, `test_outreach.py`, `test_enrichment_pipeline.py` to reflect new behavior. Replaced `test_refresh_contacts.py` with removal-verification tests. Added 16 new tests covering: empty-list caching, missing companyUrl skips Apify, infrastructure errors not cached, `no_company_url` enrichment note, and removal of the refresh-contacts endpoint and JS. All 407 tests pass.
+
+## Iteration 5 — 2026-06-15
+
+**Issue #62: Re-classify on cached Contact Sample**
+
+### What was implemented
+
+1. **`run_reclassify_pipeline`** (`src/pipelines.py`): New async function that re-runs LLM classification and template generation using only the cached Contact Sample — no Apify call. Raises `ValueError` for: job not found, job not in Accepted lane, no cached sample for the company. Uses `classify_contacts` and `generate_outreach_templates` from the existing enrichment modules, persists via `enrich_job`.
+
+2. **`POST /api/jobs/{id}/reclassify`** (`src/web/server.py`): New endpoint. Returns 404 if job not found, 422 if job is not Accepted or no cache exists, 200 with updated Job on success. No Apify call is ever made.
+
+3. **Re-classify drawer button** (`src/web/static/js/drawerController.js`): A "Re-classify" button appears in the bottom action bar of the job drawer, but only when `job.status === 'accepted'` and `contacts.length > 0`. Not shown on Found jobs. No cost confirmation dialog.
+
+4. **`reclassifyJob(id)` function** (`src/web/dashboard.html`): Async function that POSTs to the reclassify endpoint, updates the job in the store on success, re-renders the board, and logs the result. Exported via `window`.
+
+5. **Tests** (`tests/test_reclassify.py`): 7 new tests using TDD red-green approach covering: 404 for unknown job, 422 for no cache, 422 for non-accepted job, 200 with cache re-classification (Apify not called), drawer shows Re-classify on accepted+contacts, drawer gates button on status=accepted, dashboard exports reclassifyJob. All 414 tests pass.

@@ -1516,6 +1516,26 @@
         });
     }
 
+    async function reclassifyJob(id) {
+      const job = findJob(id);
+      if (!job) return;
+      addLogLine(`Re-classifying contacts for [${job.title} @ ${job.company}]...`, 'info');
+      try {
+        const resp = await fetch(`/api/jobs/${id}/reclassify`, { method: 'POST' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          addLogLine(`Re-classify failed: ${err.message || resp.status}`, 'error');
+          return;
+        }
+        const updated = await resp.json();
+        updateJob(updated.id, updated);
+        renderActiveVariant();
+        addLogLine(`Re-classify complete for [${job.title}].`, 'success');
+      } catch (err) {
+        addLogLine(`Re-classify failed: ${err.message}`, 'error');
+      }
+    }
+
     function deleteJob(id) {
       const job = findJob(id);
       if (job) {
@@ -1965,6 +1985,7 @@
       copyDrawerOutreach,
       enrichJob,
       moveJobStage,
+      reclassifyJob,
       openJobDetailsDrawer,
       resetKbFilters,
       saveOutreachSettings,

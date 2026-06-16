@@ -21,6 +21,7 @@ from ..service import (
     parse_remote_types,
     search_jobs,
 )
+from ..pipelines import run_reclassify_pipeline
 
 # Initialize SQLite database
 init_db()
@@ -175,6 +176,17 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     active_tasks[task_id] = state
     background_tasks.add_task(run_enrichment_task_with_logs, task_id, job_id)
     return {"task_id": task_id, "job_id": job_id, "job": updated}
+
+
+@app.post("/api/jobs/{job_id}/reclassify", response_model=Job)
+async def reclassify_job(job_id: int):
+    if not get_job(job_id):
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    try:
+        updated = await run_reclassify_pipeline(job_id)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+    return updated
 
 
 @app.get("/")
