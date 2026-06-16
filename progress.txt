@@ -119,3 +119,29 @@ Verified full test suite (410 tests, 0 failures), commented on and closed GitHub
 4. **`reclassifyJob(id)` function** (`src/web/dashboard.html`): Async function that POSTs to the reclassify endpoint, updates the job in the store on success, re-renders the board, and logs the result. Exported via `window`.
 
 5. **Tests** (`tests/test_reclassify.py`): 7 new tests using TDD red-green approach covering: 404 for unknown job, 422 for no cache, 422 for non-accepted job, 200 with cache re-classification (Apify not called), drawer shows Re-classify on accepted+contacts, drawer gates button on status=accepted, dashboard exports reclassifyJob. All 414 tests pass.
+
+## Iteration 6 — 2026-06-15
+
+**Issue #63: Load More Contacts append next page**
+
+### What was implemented
+
+1. **Cache schema** (`src/db/connection.py`): Added `pages_fetched INTEGER DEFAULT 1` column to `contact_sample_cache` table, with ALTER TABLE migration for existing databases.
+
+2. **`get_contact_sample`** (`src/db/cache.py`): Now returns `pages_fetched` in the dict (defaults to 1 when null).
+
+3. **`set_contact_sample`** (`src/db/cache.py`): Accepts `pages_fetched` parameter (default 1). Writes to DB including the new column.
+
+4. **`append_contact_sample`** (`src/db/cache.py`): New function. Reads existing cache, dedupes new profiles by normalized LinkedIn URL (`/in/{slug}`), appends unique profiles, increments `pages_fetched` by 1, and writes back.
+
+5. **`start_page` parameter** (`src/core/enrichment/contact_sample.py`): Added `start_page: int = 1` to `_fetch_apify_employees_at_url`, `_run_apify_for_slug`, `_run_apify_for_company_page`, and `_run_apify_actor`. Passed as `startPage` in the Apify actor input.
+
+6. **`run_load_more_contacts_pipeline`** (`src/pipelines.py`): New async pipeline function. Validates job is Accepted and cache exists. Calls Apify with `start_page = pages_fetched + 1`. Appends new profiles to cache via `append_contact_sample`. Re-classifies combined sample. Persists via `enrich_job`. Raises `ValueError` for unknown job, non-accepted job, or missing cache.
+
+7. **`POST /api/jobs/{id}/load-more-contacts`** (`src/web/server.py`): New synchronous endpoint. Returns 404 for unknown job, 422 for non-accepted job or missing cache, 200 with updated Job on success.
+
+8. **"Load More Contacts" button** (`src/web/static/js/drawerController.js`): Added to bottom action bar of the job drawer. Shown only when `job.status === 'accepted' && contacts.length > 0`. Not shown on Found jobs.
+
+9. **`loadMoreContacts(id)`** (`src/web/dashboard.html`): Async function that POSTs to the load-more endpoint, updates the job in the store, re-renders the board, and logs the result. Exported via `window`.
+
+10. **Tests** (`tests/test_load_more_contacts.py`): 19 new tests covering: cache pages_fetched schema, append deduplication, append pages_fetched increment, pipeline 404/422/200, Apify called with correct startPage, second call uses page 3, drawer button gating, dashboard export. All 433 tests pass.

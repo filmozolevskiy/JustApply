@@ -6,6 +6,7 @@ from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
 from .core.enrichment import source_contacts, generate_outreach_templates, classify_contacts, company_cache_slug
 from .core.enrichment.coordinator import clear_enrichment_prior
+from .core.enrichment.contact_sample import _run_apify_actor
 from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
 from .schemas import Job, OutreachSettings
 from .db.job_model import coerce_job
@@ -160,6 +161,54 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
     )
     if not updated:
         raise ValueError("Failed to persist re-classified job")
+    return updated
+
+
+async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
+    """Fetch next Apify page, append to Contact Sample Cache, and re-classify."""
+    from .db.cache import get_contact_sample, append_contact_sample
+
+    job = database.get_job(job_id)
+    if not job:
+        raise ValueError("Job not found")
+    job = coerce_job(job)
+    if job.status != "accepted":
+        raise ValueError("Job must be in Accepted lane to load more contacts")
+
+    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    cache_entry = get_contact_sample(slug)
+    if not cache_entry:
+        raise ValueError("No cached contact sample for this company")
+
+    pages_fetched = cache_entry.get("pages_fetched", 1)
+    company_url = job.companyUrl or ""
+
+    new_profiles = await _run_apify_actor(
+        company_url,
+        log_func=log_func,
+        start_page=pages_fetched + 1,
+    )
+
+    append_contact_sample(slug, new_profiles)
+
+    updated_cache = get_contact_sample(slug)
+    all_profiles = updated_cache["profiles"] if updated_cache else []
+
+    settings = OutreachSettings(**database.get_outreach_settings())
+    contacts = await classify_contacts(all_profiles, settings)
+
+    templates = await generate_outreach_templates(job, contacts, log_func=log_func)
+    outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
+
+    updated = database.enrich_job(
+        job_id,
+        contacts,
+        outreach_message,
+        recruiter_template=templates.get("recruiter", ""),
+        russian_speaker_template=templates.get("russian_speaker", ""),
+    )
+    if not updated:
+        raise ValueError("Failed to persist updated job")
     return updated
 
 

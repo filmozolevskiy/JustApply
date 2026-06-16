@@ -120,7 +120,8 @@ def init_db(db_path=None):
             company_slug TEXT PRIMARY KEY,
             profiles TEXT NOT NULL,
             fetched_at TEXT NOT NULL,
-            display_name TEXT DEFAULT ''
+            display_name TEXT DEFAULT '',
+            pages_fetched INTEGER DEFAULT 1
         )
     """)
     conn.commit()
@@ -130,6 +131,12 @@ def init_db(db_path=None):
     if count == 0:
         _seed_db(cursor)
         conn.commit()
+
+    try:
+        cursor.execute("ALTER TABLE contact_sample_cache ADD COLUMN pages_fetched INTEGER DEFAULT 1")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     # Backfill rejectedAt for Rejected jobs that predate this column
     cursor.execute(

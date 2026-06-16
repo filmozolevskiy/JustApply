@@ -1536,6 +1536,26 @@
       }
     }
 
+    async function loadMoreContacts(id) {
+      const job = findJob(id);
+      if (!job) return;
+      addLogLine(`Loading more contacts for [${job.title} @ ${job.company}]...`, 'info');
+      try {
+        const resp = await fetch(`/api/jobs/${id}/load-more-contacts`, { method: 'POST' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          addLogLine(`Load More Contacts failed: ${err.message || resp.status}`, 'error');
+          return;
+        }
+        const updated = await resp.json();
+        updateJob(updated.id, updated);
+        renderActiveVariant();
+        addLogLine(`Load More Contacts complete for [${job.title}].`, 'success');
+      } catch (err) {
+        addLogLine(`Load More Contacts failed: ${err.message}`, 'error');
+      }
+    }
+
     function deleteJob(id) {
       const job = findJob(id);
       if (job) {
@@ -1984,6 +2004,7 @@
       closeModal,
       copyDrawerOutreach,
       enrichJob,
+      loadMoreContacts,
       moveJobStage,
       reclassifyJob,
       openJobDetailsDrawer,

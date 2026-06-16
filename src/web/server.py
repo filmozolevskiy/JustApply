@@ -21,7 +21,7 @@ from ..service import (
     parse_remote_types,
     search_jobs,
 )
-from ..pipelines import run_reclassify_pipeline
+from ..pipelines import run_reclassify_pipeline, run_load_more_contacts_pipeline
 
 # Initialize SQLite database
 init_db()
@@ -184,6 +184,25 @@ async def reclassify_job(job_id: int):
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     try:
         updated = await run_reclassify_pipeline(job_id)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+    return updated
+
+
+@app.post("/api/jobs/{job_id}/load-more-contacts", response_model=Job)
+async def load_more_contacts(job_id: int):
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if job.status != "accepted":
+        return JSONResponse(status_code=422, content={"message": "Job must be in Accepted lane to load more contacts"})
+    from ..db.cache import get_contact_sample
+    from ..core.enrichment.contact_sample import company_cache_slug
+    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    if not get_contact_sample(slug):
+        return JSONResponse(status_code=422, content={"message": "No cached contact sample for this company"})
+    try:
+        updated = await run_load_more_contacts_pipeline(job_id)
     except ValueError as e:
         return JSONResponse(status_code=422, content={"message": str(e)})
     return updated

@@ -60,6 +60,7 @@ async def _fetch_apify_employees_at_url(
     log_func=None,
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
+    start_page: int = 1,
 ) -> list:
     """Run Apify against one LinkedIn company page URL."""
 
@@ -75,7 +76,7 @@ async def _fetch_apify_employees_at_url(
     if not api_token:
         raise ApifyInfrastructureError("APIFY_API_TOKEN not set")
 
-    actor_input = {"companies": [company_url], "maxItems": CONTACT_SAMPLE_SIZE}
+    actor_input = {"companies": [company_url], "maxItems": CONTACT_SAMPLE_SIZE, "startPage": start_page}
 
     run_url = f"{APIFY_API_BASE}/acts/{ACTOR_ID}/runs"
     params = {"token": api_token}
@@ -136,6 +137,7 @@ async def _run_apify_for_slug(
     log_func=None,
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
+    start_page: int = 1,
 ) -> list:
     """Fetch up to CONTACT_SAMPLE_SIZE employees for one LinkedIn company slug via Apify."""
     company_url = f"https://www.linkedin.com/company/{slug}/"
@@ -145,6 +147,7 @@ async def _run_apify_for_slug(
         log_func=log_func,
         timeout_seconds=timeout_seconds,
         poll_interval=poll_interval,
+        start_page=start_page,
     )
 
 
@@ -153,6 +156,7 @@ async def _run_apify_for_company_page(
     log_func=None,
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
+    start_page: int = 1,
 ) -> list:
     """Fetch employees using a Bright Data company page URL."""
     normalized = normalize_linkedin_company_url(company_url)
@@ -165,6 +169,7 @@ async def _run_apify_for_company_page(
         log_func=log_func,
         timeout_seconds=timeout_seconds,
         poll_interval=poll_interval,
+        start_page=start_page,
     )
 
 
@@ -173,6 +178,7 @@ async def _run_apify_actor(
     log_func=None,
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
+    start_page: int = 1,
 ) -> list:
     """Fetch employees via Apify using the LinkedIn company page URL only.
 
@@ -187,6 +193,7 @@ async def _run_apify_actor(
         log_func=log_func,
         timeout_seconds=timeout_seconds,
         poll_interval=poll_interval,
+        start_page=start_page,
     )
 
 
