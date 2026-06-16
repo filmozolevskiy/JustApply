@@ -161,3 +161,28 @@ Verified full test suite (410 tests, 0 failures), commented on and closed GitHub
 4. **`reclassifyJob`** (`src/web/dashboard.html`): No changes — no Apify spend, no confirmation needed.
 
 5. **Tests** (`tests/test_cost_confirmations.py`): 9 new tests using TDD red-green approach: 3 server tests (404/cache-miss/cache-hit responses), and 6 static JS content checks (enrichJob calls cache-status before enrich, enrichJob branches on has_cache, enrichJob shows $0.22 estimate, loadMoreContacts always confirms, loadMoreContacts shows $0.22 estimate, reclassifyJob never shows confirm). All 442 tests pass.
+
+## Iteration 8 — 2026-06-15
+
+**Issue #65: QA validation pass for Apify spend controls**
+
+### What was implemented
+
+No new code. Manual QA validation pass executed against the local Kanban Dashboard with all slices #58–#64 merged.
+
+**QA Results (9/10 PASS):**
+
+1. ✅ Lane names: Found, Accepted, Contacted, Interviewing, Rejected — no Enriching/Enriched/Sourced
+2. ✅ Drag Found→Accepted: only calls PUT /status, no confirm(), no enrichment triggered
+3. ✅ Enrich Job on cache miss: prefetches /cache-status, shows $0.22 confirm when has_cache=false
+4. ✅ Enrich Job on cache hit: skips confirm (has_cache=true branch in enrichJob())
+5. ❌ Enrich Job on missing companyUrl: false-positive confirm dialog appears (cache-status returns has_cache=false for no-URL jobs; pipeline skips Apify but UI doesn't know that yet) — defect filed as #66
+6. ✅ Drawer shows Load More Contacts, Refresh Contacts fully absent from src/web/
+7. ✅ Load More Contacts always shows unconditional $0.22 confirm before POST
+8. ✅ Re-classify has no confirm() call whatsoever
+9. ✅ Drag never triggers enrichment confirmation (only 2 confirm() calls in dashboard.html, both in explicit action functions)
+10. ✅ Reject via hover or drag works cleanly, no enrichment triggered
+
+**Defect filed:** Issue #66 — "Enrich Job shows false-positive cost confirm for jobs missing companyUrl" — includes root cause (cache-status doesn't account for will_call_apify), fix spec (add will_call_apify field to response), and full acceptance criteria.
+
+All 442 tests pass throughout.
