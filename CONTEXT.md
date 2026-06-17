@@ -105,11 +105,15 @@ The short Outreach Message Format: a LinkedIn message sent with a connection req
 _Avoid_: connection message, invite note, short message, InMail
 
 **Complete Outreach Message**:
-The long Outreach Message Format: a fuller LinkedIn draft (~100–150 words) stored as separate Recruiter and Russian Speaker Outreach Message Templates. Uses the Name Placeholder in the greeting, includes the job posting link, highlights 1–2 resume-matched strengths as bullet points, and ends with the audience-appropriate call to action. Intended for LinkedIn accounts without the 200-character Connection Note limit.
+The long Outreach Message Format: a fuller LinkedIn draft (~100–150 words) stored as separate Recruiter and Russian Speaker Outreach Message Templates. Uses the Name Placeholder in the greeting, includes the job posting link, highlights 1–2 resume-matched strengths as bullet points, and ends with the audience-appropriate call to action. Intended for LinkedIn accounts without the 200-character Connection Note limit. On LLM failure or missing API key, falls back to a **Complete Outreach Fallback** — a hardcoded long-form draft with Name Placeholder, job title, company, and resume profile label.
 _Avoid_: long message, full message, InMail draft
 
+**Complete Outreach Fallback**:
+The hardcoded Complete Outreach Message used when LLM generation fails or no API key is set. Greeting with Name Placeholder, mentions job title and company, references the job's Resume Profile label, and ends with a generic connect / discuss CTA. Does not include posting link or bullet points.
+_Avoid_: complete fallback template, long default message
+
 **Outreach Message Format**:
-The global Outreach Settings choice controlling which draft shape the Outreach Generator produces: **Connection Note** (short, ≤200 characters) or **Complete Outreach Message** (long, ~100–150 words). Default is Connection Note. Changing the format does not rewrite templates on jobs already enriched; **Re-classify** applies the new format from the cached Contact Sample without Apify.
+The global Outreach Settings choice controlling which draft shape the Outreach Generator produces: **Connection Note** (short, ≤200 characters) or **Complete Outreach Message** (long, ~100–150 words). Default is Connection Note, selected via the **Short connection note** toggle in Contact Search Settings (checked = Connection Note, unchecked = Complete Outreach Message). Changing the format does not rewrite templates on jobs already enriched; **Re-classify** applies the new format from the cached Contact Sample without Apify.
 _Avoid_: message length setting, short/long toggle, outreach mode
 
 **Outreach Generator**:
@@ -129,7 +133,7 @@ An enrichment run that ends with zero Outreach Audience contacts or encounters a
 _Avoid_: failed enrich, sourcing error, empty contacts
 
 **Outreach Settings**:
-A global configuration panel in the Kanban Dashboard (labeled **Contact Search Settings** in the UI) for toggling which Outreach Audience types to target during enrichment (Russian Speakers, Recruiters, or both) and which **Outreach Message Format** to generate (Connection Note or Complete Outreach Message). Applies to all enrichments — not per-job. Changing audience or format settings does not rewrite stored templates on existing jobs; use **Re-classify**, **Enrich Job**, or **Load More Contacts** per job to apply new settings.
+A global configuration panel in the Kanban Dashboard (labeled **Contact Search Settings** in the UI) for toggling which Outreach Audience types to target during enrichment (Russian Speakers, Recruiters, or both) and which **Outreach Message Format** to generate (Connection Note or Complete Outreach Message). Applies to all enrichments — not per-job. Changing audience or format settings does not rewrite stored templates on existing jobs; use **Re-classify**, **Enrich Job**, or **Load More Contacts** per job to apply new settings. Each toggle shows a ~1 second delayed hover tooltip explaining why the option exists.
 _Avoid_: Outreach filters, enrichment config, audience popup
 
 **Auto-Archive Exemption**:

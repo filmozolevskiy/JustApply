@@ -479,6 +479,7 @@
       margin-bottom: 16px;
       opacity: 1;
       border: 1px solid var(--border-color);
+      overflow: visible;
     }
 
     .panel-header {
@@ -545,6 +546,35 @@
     .toggle-switch input:checked + .toggle-slider::before {
       transform: translateX(18px);
       background: var(--accent-cyan);
+    }
+
+    .settings-tooltip-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .settings-tooltip-floating {
+      position: fixed;
+      z-index: 10000;
+      min-width: 220px;
+      max-width: 280px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(10, 14, 26, 0.96);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      line-height: 1.4;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.15s ease;
+    }
+
+    .settings-tooltip-floating.is-visible {
+      opacity: 1;
+      visibility: visible;
     }
 
     .kanban-column {
@@ -1090,20 +1120,33 @@
                 <span>Contact Search Settings</span>
               </div>
               <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
-                    <span class="toggle-slider"></span>
+                <span class="settings-tooltip-wrap" data-tooltip="Free LinkedIn accounts limit connection notes to 200 characters. Turn off for the complete draft. Re-classify jobs to apply.">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="toggle-short-connection-note" onchange="saveOutreachSettings('short_connection_note', this.checked)">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 0.82rem; color: var(--text-secondary);">Short connection note</span>
                   </label>
-                  <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
-                    <span class="toggle-slider"></span>
+                </span>
+                <span class="settings-tooltip-wrap" data-tooltip="Target employees with Russian/CIS background for referral outreach.">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
                   </label>
-                  <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
-                </label>
+                </span>
+                <span class="settings-tooltip-wrap" data-tooltip="Target HR and recruiting roles.">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
+                  </label>
+                </span>
               </div>
             </div>
           </div>
@@ -2035,6 +2078,7 @@
         const resp = await fetch('/api/settings/outreach');
         if (!resp.ok) return;
         const s = await resp.json();
+        document.getElementById('toggle-short-connection-note').checked = s.short_connection_note !== false;
         document.getElementById('toggle-russian-speakers').checked = !!s.target_russian_speakers;
         document.getElementById('toggle-recruiters').checked = !!s.target_recruiters;
       } catch (e) { console.error('Failed to load outreach settings', e); }
@@ -2043,6 +2087,7 @@
     async function saveOutreachSettings(key, value) {
       try {
         const current = {
+          short_connection_note: document.getElementById('toggle-short-connection-note').checked,
           target_russian_speakers: document.getElementById('toggle-russian-speakers').checked,
           target_recruiters: document.getElementById('toggle-recruiters').checked,
         };
@@ -2053,6 +2098,69 @@
           body: JSON.stringify(current),
         });
       } catch (e) { console.error('Failed to save outreach setting', e); }
+    }
+
+    function initOutreachSettingsTooltips() {
+      const delayMs = 1000;
+      const margin = 8;
+      let floatingTooltip = document.getElementById('outreach-settings-floating-tooltip');
+      if (!floatingTooltip) {
+        floatingTooltip = document.createElement('div');
+        floatingTooltip.id = 'outreach-settings-floating-tooltip';
+        floatingTooltip.className = 'settings-tooltip-floating';
+        floatingTooltip.setAttribute('role', 'tooltip');
+        document.body.appendChild(floatingTooltip);
+      }
+
+      let showTimer = null;
+
+      const hideTooltip = () => {
+        if (showTimer) {
+          clearTimeout(showTimer);
+          showTimer = null;
+        }
+        floatingTooltip.classList.remove('is-visible');
+        floatingTooltip.style.left = '';
+        floatingTooltip.style.top = '';
+      };
+
+      const positionTooltip = (wrap) => {
+        floatingTooltip.textContent = wrap.dataset.tooltip || '';
+        floatingTooltip.classList.add('is-visible');
+
+        const rect = wrap.getBoundingClientRect();
+        floatingTooltip.style.left = '0px';
+        floatingTooltip.style.top = '0px';
+        const tooltipRect = floatingTooltip.getBoundingClientRect();
+
+        let left = rect.left;
+        if (left + tooltipRect.width > window.innerWidth - margin) {
+          left = window.innerWidth - tooltipRect.width - margin;
+        }
+        left = Math.max(margin, left);
+
+        let top = rect.top - tooltipRect.height - margin;
+        if (top < margin) {
+          top = rect.bottom + margin;
+        }
+
+        floatingTooltip.style.left = `${left}px`;
+        floatingTooltip.style.top = `${top}px`;
+      };
+
+      document.querySelectorAll('.settings-tooltip-wrap[data-tooltip]').forEach((wrap) => {
+        wrap.addEventListener('mouseenter', () => {
+          hideTooltip();
+          showTimer = setTimeout(() => {
+            positionTooltip(wrap);
+            showTimer = null;
+          }, delayMs);
+        });
+        wrap.addEventListener('mouseleave', hideTooltip);
+      });
+
+      window.addEventListener('scroll', hideTooltip, true);
+      window.addEventListener('resize', hideTooltip);
     }
 
     window.addEventListener('beforeunload', markPageUnloading);
@@ -2097,6 +2205,7 @@
     initLaneCollapse();
     initLogsConsoleState();
     initJobSearchSettingsState();
+    initOutreachSettingsTooltips();
     restoreSessionLogs();
     loadResumes();
     loadOutreachSettings();

@@ -68,7 +68,11 @@ async def get_settings_outreach():
 
 @app.put("/api/settings/outreach", response_model=OutreachSettings)
 async def put_settings_outreach(settings: OutreachSettings):
-    return save_outreach_settings(settings.target_russian_speakers, settings.target_recruiters)
+    return save_outreach_settings(
+        settings.target_russian_speakers,
+        settings.target_recruiters,
+        settings.short_connection_note,
+    )
 
 
 @app.get("/api/jobs", response_model=list[Job])

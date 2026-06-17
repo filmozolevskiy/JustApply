@@ -139,6 +139,37 @@ async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
     assert updated.contacts[0].contacted is True
 
 
+@pytest.mark.asyncio
+async def test_reclassify_uses_complete_message_format_when_setting_disabled(db):
+    from src.pipelines import run_reclassify_pipeline
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+
+    job_id = _make_accepted_job_with_contacts(db)
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(
+        slug,
+        [{"firstName": "Alice", "linkedinUrl": "https://linkedin.com/in/alice", "headline": "Recruiter"}],
+        db_path=db,
+    )
+
+    database.save_outreach_settings(True, True, short_connection_note=False, db_path=db)
+
+    classified = [{
+        "name": "Alice", "title": "Recruiter", "url": "https://linkedin.com/in/alice",
+        "contacted": False, "russian_speaker": False, "is_recruiter": True,
+    }]
+    complete_template = "Hello ______,\n\nComplete outreach draft."
+
+    with patch("src.core.enrichment.classifier.classify_contacts", new=AsyncMock(return_value=classified)), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value={"recruiter": complete_template, "russian_speaker": ""})) as mock_gen:
+        updated = await run_reclassify_pipeline(job_id)
+
+    mock_gen.assert_awaited_once()
+    assert mock_gen.await_args.kwargs["short_connection_note"] is False
+    assert updated.recruiterOutreachTemplate == complete_template
+
+
 # --- 422 when job is not in Accepted lane ---
 
 def test_reclassify_returns_422_for_non_accepted_job(db):

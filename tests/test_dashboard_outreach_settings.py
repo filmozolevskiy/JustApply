@@ -37,6 +37,24 @@ def test_get_outreach_settings_returns_defaults_on_first_read():
     data = response.json()
     assert data["target_russian_speakers"] is True
     assert data["target_recruiters"] is True
+    assert data["short_connection_note"] is True
+
+
+def test_put_outreach_settings_persists_short_connection_note():
+    put_response = client.put(
+        "/api/settings/outreach",
+        json={
+            "target_russian_speakers": True,
+            "target_recruiters": True,
+            "short_connection_note": False,
+        },
+    )
+    assert put_response.status_code == 200
+    data = put_response.json()
+    assert data["short_connection_note"] is False
+
+    get_response = client.get("/api/settings/outreach")
+    assert get_response.json()["short_connection_note"] is False
 
 
 def test_put_outreach_settings_persists_values():
@@ -68,9 +86,21 @@ def test_dashboard_html_contains_outreach_settings_panel():
         content = f.read()
     assert 'id="toggle-russian-speakers"' in content, "Missing Russian speakers toggle"
     assert 'id="toggle-recruiters"' in content, "Missing recruiters toggle"
+    assert 'id="toggle-short-connection-note"' in content, "Missing short connection note toggle"
+    assert "Short connection note" in content, "Missing short connection note label"
     assert "Contact Search Settings" in content, "Missing Contact Search Settings section heading"
     assert "saveOutreachSettings" in content, "Missing saveOutreachSettings JS function"
     assert "loadOutreachSettings" in content, "Missing loadOutreachSettings JS function"
+
+
+def test_dashboard_html_outreach_settings_have_delayed_tooltips():
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    assert "initOutreachSettingsTooltips" in content, "Missing delayed tooltip initializer"
+    assert 'data-tooltip="' in content, "Outreach toggles must include data-tooltip attributes"
+    assert "settings-tooltip-floating" in content, "Tooltips must use a floating layer to escape panel overflow"
+    assert "200 characters" in content, "Short connection note tooltip must mention 200-char limit"
 
 
 def test_dashboard_html_enrichment_uses_sse():

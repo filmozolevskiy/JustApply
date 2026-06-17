@@ -110,7 +110,8 @@ def init_db(db_path=None):
         CREATE TABLE IF NOT EXISTS outreach_settings (
             id INTEGER PRIMARY KEY,
             target_russian_speakers INTEGER NOT NULL DEFAULT 1,
-            target_recruiters INTEGER NOT NULL DEFAULT 1
+            target_recruiters INTEGER NOT NULL DEFAULT 1,
+            short_connection_note INTEGER NOT NULL DEFAULT 1
         )
     """)
     conn.commit()
@@ -125,6 +126,12 @@ def init_db(db_path=None):
         )
     """)
     conn.commit()
+
+    try:
+        cursor.execute("ALTER TABLE outreach_settings ADD COLUMN short_connection_note INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     cursor.execute("SELECT COUNT(*) FROM jobs")
     count = cursor.fetchone()[0]

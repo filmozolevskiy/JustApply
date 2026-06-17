@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 class OutreachSettings(BaseModel):
     target_russian_speakers: bool = True
     target_recruiters: bool = True
+    short_connection_note: bool = True
 
 JobStatus = Literal[
     "found", "accepted",

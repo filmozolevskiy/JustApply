@@ -162,7 +162,12 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
         else:
             enrichment_note = "No contacts matched active Outreach Settings."
 
-    templates = await generate_outreach_templates(job, contacts, log_func=log_func)
+    templates = await generate_outreach_templates(
+        job,
+        contacts,
+        log_func=log_func,
+        short_connection_note=settings.short_connection_note,
+    )
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
 
     updated = database.enrich_job(
@@ -224,7 +229,12 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
         else:
             enrichment_note = "No contacts matched active Outreach Settings."
 
-    templates = await generate_outreach_templates(job, contacts, log_func=log_func)
+    templates = await generate_outreach_templates(
+        job,
+        contacts,
+        log_func=log_func,
+        short_connection_note=settings.short_connection_note,
+    )
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
 
     updated = database.enrich_job(
@@ -296,7 +306,12 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
     else:
         await log("No contacts found.", "warning")
 
-    templates = await generate_outreach_templates(job, contacts, log_func=log_func)
+    templates = await generate_outreach_templates(
+        job,
+        contacts,
+        log_func=log_func,
+        short_connection_note=settings.short_connection_note,
+    )
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
 
     enriched = database.enrich_job(
