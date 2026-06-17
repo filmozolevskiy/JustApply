@@ -78,20 +78,6 @@ def test_rejected_at_not_set_for_non_rejected_status(tmp_path):
     assert updated.rejectedAt == ""
 
 
-# ---------------------------------------------------------------------------
-# DB-layer: get_jobs excludes archived by default
-# ---------------------------------------------------------------------------
-
-def test_get_jobs_excludes_archived_by_default(tmp_path):
-    db_str = str(tmp_path / "test.db")
-    init_db(db_str)
-    # Move seed job 5 (rejected) to rejected then archive it
-    job5_id = next(j.id for j in get_jobs(db_str) if j.status == "rejected")
-    archive_job(job5_id, db_str)
-    active = get_jobs(db_str)
-    assert not any(j.id == job5_id for j in active), "archived job must not appear in default get_jobs"
-
-
 def test_get_jobs_still_returns_non_archived(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)

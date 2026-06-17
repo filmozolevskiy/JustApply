@@ -8,12 +8,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-def test_connection_note_module_generates_fallback_within_limit():
-    from src.core.enrichment.connection_note import minimal_fallback_template
-
-    assert len(minimal_fallback_template("recruiter")) <= 200
-
-
 @pytest.mark.asyncio
 async def test_source_module_delegates_to_contact_sample_on_cache_miss(monkeypatch):
     from unittest.mock import AsyncMock

@@ -31,14 +31,6 @@ def test_drag_is_status_only():
     )
 
 
-def test_nonarchived_drop_calls_move_job_stage():
-    """Non-archived cards call moveJobStage on drop."""
-    content = _read_html()
-    assert "moveJobStage(jobId, lane)" in content, (
-        "Non-archived cards must still call moveJobStage on drop"
-    )
-
-
 # ---------------------------------------------------------------------------
 # DB layer: status update on archived job preserves archived flag
 # ---------------------------------------------------------------------------

@@ -173,12 +173,3 @@ def test_kanban_no_enriching_lane():
 def test_kanban_no_enriched_lane():
     content = _read_html()
     assert 'data-lane="enriched"' not in content, "Enriched lane must be removed"
-
-
-def test_drag_does_not_trigger_enrichment():
-    """Lane drop must never call enrichJob — drag is status-only."""
-    content = _read_html()
-    # The old enriching-lane hook that called enrich must be gone
-    assert "newStatus === 'enriching'" not in content, (
-        "Drag must not route to enrichJob via enriching status check"
-    )

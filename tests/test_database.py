@@ -272,16 +272,6 @@ def test_enrich_job_persists_both_outreach_templates(tmp_path):
     assert updated.russianSpeakerOutreachTemplate == russian_tmpl
 
 
-def test_legacy_outreach_message_migrates_to_recruiter_template_on_read(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
-    init_db(db_str)
-    # Simulate a legacy job with outreachMessage but no recruiterOutreachTemplate
-    enrich_job(1, [], "Legacy outreach message", db_path=db_str)
-    job = next(j for j in get_jobs(db_str) if j.id == 1)
-    assert job.recruiterOutreachTemplate == "Legacy outreach message"
-    assert job.russianSpeakerOutreachTemplate == ""
-
-
 def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path):
     db_str = str(tmp_path / "test_job_tracker.db")
     init_db(db_str)

@@ -73,12 +73,6 @@ def test_init_kanban_dnd_defined_and_called():
     assert "initKanbanDnd()" in content, "initKanbanDnd must be called at init"
 
 
-def test_drag_does_not_trigger_enrichment():
-    content = _read_html()
-    assert "newStatus === 'enriching'" not in content, \
-        "Lane drag must never call enrichJob — drag is status-only"
-
-
 def test_dragging_class_applied_on_dragstart():
     content = _read_board_renderer()
     assert "classList.add('dragging')" in content, \

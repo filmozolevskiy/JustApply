@@ -35,12 +35,6 @@ def test_run_scraper_with_filters_remains():
         "Run Scraper with Filters must remain as the sole scrape trigger"
 
 
-def test_connection_mode_indicator_absent():
-    content = _read_html()
-    assert 'id="connection-mode"' not in content, \
-        "connection-mode indicator should be removed from navbar"
-
-
 def test_connection_mode_update_logic_absent():
     content = _read_html()
     assert "connection-mode" not in content, \

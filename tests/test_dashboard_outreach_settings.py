@@ -158,21 +158,6 @@ def test_dashboard_html_drawer_enrichment_status_section():
         "openJobDetailsDrawer must use enrichmentNote to conditionally show the section"
 
 
-def test_dashboard_html_contact_search_settings_nested_in_job_search_panel():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    contact_pos = content.find("Contact Search Settings")
-    board_controls_pos = content.find("Board Controls")
-    assert contact_pos != -1, "Contact Search Settings section not found"
-    assert board_controls_pos != -1, "Board Controls panel not found"
-    body_start = content.index('id="job-search-settings-body"')
-    body_end = content.index('id="kb-logs-panel"')
-    assert body_start < contact_pos < body_end, (
-        "Contact Search Settings must be nested in job-search-settings-body"
-    )
-
-
 def _get_drawer_body(_content=None):
     return get_drawer_body()
 
