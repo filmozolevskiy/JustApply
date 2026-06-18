@@ -194,10 +194,12 @@ def enrich_job(
     contacts,
     outreach_message,
     enrichment_note="",
+    enrichment_note_kind="",
     recruiter_template="",
     russian_speaker_template="",
     activity_kind="enrich",
     new_profile_count=None,
+    keep_contacts=False,
     db_path=None,
 ):
     if db_path is None:
@@ -208,14 +210,28 @@ def enrich_job(
     if not cursor.fetchone():
         conn.close()
         return None
-    cursor.execute(
-        "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'accepted', "
-        "enrichmentNote = ?, recruiterOutreachTemplate = ?, russianSpeakerOutreachTemplate = ? "
-        "WHERE id = ?",
-        (json.dumps(contacts), outreach_message, enrichment_note,
-         recruiter_template, russian_speaker_template, job_id),
-    )
-    if enrichment_note:
+    # Auto-infer kind: warning when note is set (unless explicitly provided), clear otherwise.
+    if not enrichment_note_kind:
+        enrichment_note_kind = "warning" if enrichment_note else ""
+    if keep_contacts:
+        cursor.execute(
+            "UPDATE jobs SET outreachMessage = ?, status = 'accepted', "
+            "enrichmentNote = ?, enrichmentNoteKind = ?, recruiterOutreachTemplate = ?, russianSpeakerOutreachTemplate = ? "
+            "WHERE id = ?",
+            (outreach_message, enrichment_note, enrichment_note_kind,
+             recruiter_template, russian_speaker_template, job_id),
+        )
+    else:
+        cursor.execute(
+            "UPDATE jobs SET contacts = ?, outreachMessage = ?, status = 'accepted', "
+            "enrichmentNote = ?, enrichmentNoteKind = ?, recruiterOutreachTemplate = ?, russianSpeakerOutreachTemplate = ? "
+            "WHERE id = ?",
+            (json.dumps(contacts), outreach_message, enrichment_note, enrichment_note_kind,
+             recruiter_template, russian_speaker_template, job_id),
+        )
+    if activity_kind == "reclassify_no_cache":
+        _append_activity_log(cursor, job_id, "Re-classified · templates refreshed")
+    elif enrichment_note:
         _append_activity_log(cursor, job_id, f"Enrichment failed · {enrichment_note}")
     elif activity_kind == "reclassify":
         count = len(contacts)

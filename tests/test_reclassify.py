@@ -50,14 +50,83 @@ def test_reclassify_returns_404_for_unknown_job(db):
     assert resp.status_code == 404
 
 
-# --- 422 when no cached sample exists for the company ---
+# --- 200 template-only path when no cached sample exists ---
 
-def test_reclassify_returns_422_when_no_cache(db):
+def test_reclassify_no_cache_returns_200(db):
     job_id = _make_accepted_job_with_contacts(db)
-    with patch("src.db.cache.get_contact_sample", return_value=None):
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
         resp = client.post(f"/api/jobs/{job_id}/reclassify")
-    assert resp.status_code == 422
-    assert "cache" in resp.json()["message"].lower()
+    assert resp.status_code == 200
+
+
+def test_reclassify_no_cache_enrichment_note_kind_is_info(db):
+    job_id = _make_accepted_job_with_contacts(db)
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
+        resp = client.post(f"/api/jobs/{job_id}/reclassify")
+    data = resp.json()
+    assert data["enrichmentNoteKind"] == "info"
+    assert "templates refreshed" in data["enrichmentNote"]
+
+
+def test_reclassify_no_cache_preserves_existing_contacts(db):
+    job_id = _make_accepted_job_with_contacts(db)
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
+        resp = client.post(f"/api/jobs/{job_id}/reclassify")
+    data = resp.json()
+    assert len(data["contacts"]) == 1
+    assert data["contacts"][0]["name"] == "Alice"
+
+
+def test_reclassify_no_cache_activity_log_templates_refreshed(db):
+    job_id = _make_accepted_job_with_contacts(db)
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
+        resp = client.post(f"/api/jobs/{job_id}/reclassify")
+    data = resp.json()
+    messages = [e["message"] for e in data["activityLog"]]
+    assert any("Re-classified · templates refreshed" in m for m in messages)
+    assert not any("Enrichment failed" in m for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_reclassify_no_cache_does_not_call_source_contacts(db):
+    from src.pipelines import run_reclassify_pipeline
+    job_id = _make_accepted_job_with_contacts(db)
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.source_contacts", new=AsyncMock()) as mock_source, \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
+        await run_reclassify_pipeline(job_id)
+    mock_source.assert_not_called()
+
+
+def test_enrich_job_failure_sets_warning_note_kind(db):
+    from src.db.jobs import add_job, enrich_job
+    from src.core.enrichment.coordinator import begin_enrichment
+    job_id = add_job({"title": "Dev", "company": "Co", "status": "found"}, db_path=db)
+    begin_enrichment(job_id, db)
+    result = enrich_job(
+        job_id,
+        contacts=[],
+        outreach_message="",
+        enrichment_note="No contacts matched active Outreach Settings.",
+        db_path=db,
+    )
+    assert result.enrichmentNoteKind == "warning"
+
+
+def test_job_schema_has_enrichment_note_kind():
+    from src.schemas import Job
+    job = Job(title="Test", company="Co")
+    assert hasattr(job, "enrichmentNoteKind")
+    assert job.enrichmentNoteKind == ""
 
 
 # --- 200 on success: re-classifies from cache, no Apify call ---
@@ -130,7 +199,7 @@ async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
     }]
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
 
-    with patch("src.core.enrichment.classifier.classify_contacts", new=AsyncMock(return_value=classified)), \
+    with patch("src.core.enrichment.source.classify_contacts", new=AsyncMock(return_value=classified)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)), \
          patch("src.core.enrichment.contact_sample._run_apify_actor") as mock_apify:
         updated = await run_reclassify_pipeline(job_id)
@@ -161,7 +230,7 @@ async def test_reclassify_uses_complete_message_format_when_setting_disabled(db)
     }]
     complete_template = "Hello ______,\n\nComplete outreach draft."
 
-    with patch("src.core.enrichment.classifier.classify_contacts", new=AsyncMock(return_value=classified)), \
+    with patch("src.core.enrichment.source.classify_contacts", new=AsyncMock(return_value=classified)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value={"recruiter": complete_template, "russian_speaker": ""})) as mock_gen:
         updated = await run_reclassify_pipeline(job_id)
 

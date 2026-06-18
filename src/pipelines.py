@@ -130,7 +130,11 @@ async def run_search_pipeline(
 
 
 async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
-    """Re-run classification and template generation on cached Contact Sample — no Apify call."""
+    """Re-run classification and template generation.
+
+    Cache-hit path: re-classifies cached Contact Sample — no Apify call.
+    No-cache path: regenerates Outreach Message Templates only; contacts unchanged.
+    """
     from .db.cache import get_contact_sample
 
     job = database.get_job(job_id)
@@ -141,8 +145,33 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
         raise ValueError("Job must be in Accepted lane to re-classify")
 
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
+
     if not get_contact_sample(slug):
-        raise ValueError("No cached contact sample for this company")
+        # Template-only path: regenerate templates without touching contacts.
+        settings = OutreachSettings(**database.get_outreach_settings())
+        existing_contacts = [c.model_dump() for c in job.contacts]
+        templates = await generate_outreach_templates(
+            job,
+            existing_contacts,
+            log_func=log_func,
+            short_connection_note=settings.short_connection_note,
+        )
+        outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
+        note = "Outreach templates refreshed; contacts unchanged (no cached employee sample)."
+        updated = database.enrich_job(
+            job_id,
+            [],
+            outreach_message,
+            enrichment_note=note,
+            enrichment_note_kind="info",
+            recruiter_template=templates.get("recruiter", ""),
+            russian_speaker_template=templates.get("russian_speaker", ""),
+            activity_kind="reclassify_no_cache",
+            keep_contacts=True,
+        )
+        if not updated:
+            raise ValueError("Failed to persist re-classified job")
+        return updated
 
     settings = OutreachSettings(**database.get_outreach_settings())
     source_meta = {}

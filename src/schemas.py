@@ -59,6 +59,7 @@ class Job(BaseModel):
     comment: str = ""
     isRecruiter: bool = False
     enrichmentNote: str = ""
+    enrichmentNoteKind: str = ""
     activityLog: list[ActivityLogEntry] = []
     archived: bool = False
     rejectedAt: str = ""
