@@ -1,12 +1,5 @@
 {
   "mcpServers": {
-    "git": {
-      "command": "./.venv/bin/mcp-server-git",
-      "args": [
-        "--repository",
-        "."
-      ]
-    },
     "github": {
       "command": "bash",
       "args": [

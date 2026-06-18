@@ -34,6 +34,15 @@ def test_dashboard_html_restore_active_scrape_task_after_load():
     assert "restoreActiveScrapeTask();" in content
 
 
+def test_dashboard_html_restore_active_reclassify_task_after_load():
+    content = read_dashboard_html()
+    assert "function restoreActiveReclassifyTasks()" in content
+    assert "Reconnecting to" in content
+    assert "active re-classify task" in content
+    assert "restoreActiveReclassifyTasks();" in content
+    assert "ACTIVE_RECLASSIFY_TASKS_KEY" in content
+
+
 def test_dashboard_html_scrape_warning_only_for_unexpected_disconnect():
     content = read_dashboard_html()
     assert "Scraper SSE stream closed unexpectedly." in content

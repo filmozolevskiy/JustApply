@@ -65,11 +65,8 @@ async def classify_contacts(items: list, settings) -> list:
     )
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = await model.generate_content_async(prompt)
-        text = response.text.strip()
+        from ..gemini_client import generate_text as gemini_generate_text
+        text = await gemini_generate_text(prompt)
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         classified = json.loads(text)

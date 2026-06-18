@@ -6,6 +6,33 @@ export const ACTIVE_SCRAPE_TASK_KEY = 'activeScrapeTaskId';
 export const ACTIVE_SCRAPE_LOG_SKIP_KEY = 'activeScrapeTaskLogSkip';
 export const ACTIVE_ENRICH_TASK_KEY = 'activeEnrichTaskId';
 export const ACTIVE_ENRICH_LOG_SKIP_KEY = 'activeEnrichTaskLogSkip';
+export const ACTIVE_RECLASSIFY_TASKS_KEY = 'activeReclassifyTasks';
+
+export function reclassifyTaskLogSkipKey(taskId) {
+  return `activeReclassifyTaskLogSkip:${taskId}`;
+}
+
+export function loadReclassifyTaskMap() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_RECLASSIFY_TASKS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveReclassifyTaskEntry(taskId, jobId) {
+  const map = loadReclassifyTaskMap();
+  map[taskId] = { jobId };
+  localStorage.setItem(ACTIVE_RECLASSIFY_TASKS_KEY, JSON.stringify(map));
+}
+
+export function removeReclassifyTaskEntry(taskId) {
+  const map = loadReclassifyTaskMap();
+  delete map[taskId];
+  localStorage.setItem(ACTIVE_RECLASSIFY_TASKS_KEY, JSON.stringify(map));
+  localStorage.removeItem(reclassifyTaskLogSkipKey(taskId));
+}
 
 export function handleTaskLogMessage(logData, { addLogLine, onResult, onDone }) {
   if (logData.type === 'log') {
@@ -26,6 +53,7 @@ export function handleTaskLogMessage(logData, { addLogLine, onResult, onDone }) 
 export function createTaskLogClient() {
   let logEventSource = null;
   let enrichEventSource = null;
+  const reclassifyEventSources = new Map();
   let pageUnloading = false;
   let sessionLogs = [];
 
@@ -203,6 +231,8 @@ export function createTaskLogClient() {
     expandLogsConsole,
     getEnrichEventSource: () => enrichEventSource,
     getLogEventSource: () => logEventSource,
+    getReclassifyEventSource: (taskId) => reclassifyEventSources.get(taskId) ?? null,
+    getReclassifyEventSources: () => reclassifyEventSources,
     markPageUnloading,
     restoreSessionLogs,
     setEnrichEventSource: (source) => {
@@ -210,6 +240,13 @@ export function createTaskLogClient() {
     },
     setLogEventSource: (source) => {
       logEventSource = source;
+    },
+    setReclassifyEventSource: (taskId, source) => {
+      if (source == null) {
+        reclassifyEventSources.delete(taskId);
+      } else {
+        reclassifyEventSources.set(taskId, source);
+      }
     },
   };
 }

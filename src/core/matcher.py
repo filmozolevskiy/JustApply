@@ -3,8 +3,9 @@ import json
 import asyncio
 import inspect
 import re
-import google.generativeai as genai
 from dotenv import load_dotenv
+
+from .gemini_client import generate_text as gemini_generate_text
 
 load_dotenv()
 
@@ -97,9 +98,6 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:
         await log("GEMINI_API_KEY not set, skipping evaluation.", "warning")
         return {}
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(MODEL_NAME)
-
     prompt = _build_prompt(
         resume_content,
         job.get("title", ""),
@@ -110,8 +108,7 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:
     max_retries = 4
     for attempt in range(max_retries):
         try:
-            response = await model.generate_content_async(prompt)
-            text = response.text.strip()
+            text = await gemini_generate_text(prompt)
             if text.startswith("```"):
                 lines = text.splitlines()
                 if lines and lines[0].startswith("```"):

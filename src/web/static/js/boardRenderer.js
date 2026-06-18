@@ -117,16 +117,9 @@ export function cardLoadMoreBadge(jobId, loadMoreJobId) {
   return '';
 }
 
-export function cardReclassifyBadge(jobId, reclassifyJobId) {
-  if (reclassifyJobId != null && jobId === reclassifyJobId) {
+export function cardReclassifyBadge(jobId, reclassifyJobIds) {
+  if (Array.isArray(reclassifyJobIds) && reclassifyJobIds.includes(jobId)) {
     return `<span style="font-size:0.6rem; background:rgba(6,182,212,0.15); color:#22d3ee; border:1px solid rgba(6,182,212,0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;"><i class="fa-solid fa-spinner fa-spin"></i> Re-classifying…</span>`;
-  }
-  return '';
-}
-
-export function cardReclassifyQueuedBadge(jobId, reclassifyQueuedJobIds) {
-  if (Array.isArray(reclassifyQueuedJobIds) && reclassifyQueuedJobIds.includes(jobId)) {
-    return `<span style="font-size:0.6rem; background:rgba(6,182,212,0.1); color:#67e8f9; border:1px solid rgba(6,182,212,0.25); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Queued</span>`;
   }
   return '';
 }
@@ -145,8 +138,7 @@ export function renderBoard(jobs, filters = {}) {
   const filteredJobs = sortJobs(filterJobs(jobs, filters), filters.sortBy || 'match_desc');
   const enrichingJobId = filters.enrichingJobId ?? null;
   const loadMoreJobId = filters.loadMoreJobId ?? null;
-  const reclassifyJobId = filters.reclassifyJobId ?? null;
-  const reclassifyQueuedJobIds = filters.reclassifyQueuedJobIds ?? [];
+  const reclassifyJobIds = filters.reclassifyJobIds ?? [];
 
   LANES.forEach((lane) => {
     const laneEl = document.getElementById(`lane-${lane}`);
@@ -193,8 +185,7 @@ export function renderBoard(jobs, filters = {}) {
                 ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
                 ${cardEnrichingBadge(job.id, enrichingJobId)}
                 ${cardLoadMoreBadge(job.id, loadMoreJobId)}
-                ${cardReclassifyBadge(job.id, reclassifyJobId)}
-                ${cardReclassifyQueuedBadge(job.id, reclassifyQueuedJobIds)}
+                ${cardReclassifyBadge(job.id, reclassifyJobIds)}
               </div>
             </div>
             <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
@@ -207,11 +198,6 @@ export function renderBoard(jobs, filters = {}) {
             ${job.comment ? `
               <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 <i class="fa-regular fa-comment-dots"></i> ${job.comment}
-              </div>
-            ` : ''}
-            ${job.enrichmentNote ? `
-              <div style="font-size: 0.72rem; color: ${job.enrichmentNoteKind === 'info' ? '#22d3ee' : '#f59e0b'}; background: ${job.enrichmentNoteKind === 'info' ? 'rgba(6, 182, 212, 0.08)' : 'rgba(245, 158, 11, 0.08)'}; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid ${job.enrichmentNoteKind === 'info' ? '#22d3ee' : '#f59e0b'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.enrichmentNote}">
-                <i class="fa-solid ${job.enrichmentNoteKind === 'info' ? 'fa-circle-info' : 'fa-triangle-exclamation'}"></i> ${job.enrichmentNote}
               </div>
             ` : ''}
             <div class="kanban-card-footer">

@@ -1317,6 +1317,11 @@
       ACTIVE_SCRAPE_LOG_SKIP_KEY,
       ACTIVE_ENRICH_TASK_KEY,
       ACTIVE_ENRICH_LOG_SKIP_KEY,
+      ACTIVE_RECLASSIFY_TASKS_KEY,
+      reclassifyTaskLogSkipKey,
+      saveReclassifyTaskEntry,
+      removeReclassifyTaskEntry,
+      loadReclassifyTaskMap,
     } from '/static/js/taskLogClient.js';
     import { createDrawerController } from '/static/js/drawerController.js';
 
@@ -1328,9 +1333,7 @@
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
     let activeLoadMoreJobId = null;
-    let activeReclassifyJobId = null;
-    let reclassifyQueue = [];
-    let reclassifyDrainRunning = false;
+    let activeReclassifyJobIds = [];
 
     // ----------------------------------------------------
     // ----------------------------------------------------
@@ -1341,8 +1344,7 @@
         ...getBoardFiltersFromDom(),
         enrichingJobId: activeEnrichJobId,
         loadMoreJobId: activeLoadMoreJobId,
-        reclassifyJobId: activeReclassifyJobId,
-        reclassifyQueuedJobIds: reclassifyQueue,
+        reclassifyJobIds: activeReclassifyJobIds,
       });
     }
 
@@ -1360,8 +1362,7 @@
     const drawer = createDrawerController({
       onJobMutated: renderActiveVariant,
       addLogLine,
-      getActiveReclassifyJobId: () => activeReclassifyJobId,
-      getReclassifyQueuedJobIds: () => reclassifyQueue,
+      getActiveReclassifyJobIds: () => activeReclassifyJobIds,
       getActiveLoadMoreJobId: () => activeLoadMoreJobId,
     });
     const {
@@ -1584,58 +1585,84 @@
         });
     }
 
-    async function drainReclassifyQueue() {
-      if (reclassifyDrainRunning) return;
-      reclassifyDrainRunning = true;
-      try {
-        while (reclassifyQueue.length > 0) {
-          const id = reclassifyQueue.shift();
-          const job = findJob(id);
-          if (!job) continue;
-
-          activeReclassifyJobId = id;
-          renderActiveVariant();
-          refreshDrawerIfOpen(id);
-          addLogLine(`Re-classifying contacts for [${job.title} @ ${job.company}]...`, 'info');
-
-          try {
-            const resp = await fetch(`/api/jobs/${id}/reclassify`, { method: 'POST' });
-            if (!resp.ok) {
-              const err = await resp.json().catch(() => ({}));
-              addLogLine(`Re-classify failed: ${err.message || resp.status}`, 'error');
-              continue;
-            }
-            const updated = await resp.json();
-            updateJob(updated.id, updated);
-            addLogLine(`Re-classify complete for [${job.title}].`, 'success');
-          } catch (err) {
-            addLogLine(`Re-classify failed: ${err.message}`, 'error');
-          } finally {
-            activeReclassifyJobId = null;
-            renderActiveVariant();
-            refreshDrawerIfOpen(id);
-          }
+    function markReclassifyActive(jobId, active) {
+      if (active) {
+        if (!activeReclassifyJobIds.includes(jobId)) {
+          activeReclassifyJobIds.push(jobId);
         }
-      } finally {
-        reclassifyDrainRunning = false;
+      } else {
+        activeReclassifyJobIds = activeReclassifyJobIds.filter((id) => id !== jobId);
+      }
+    }
+
+    function attachReclassifyStream(taskId, jobId) {
+      const skipKey = reclassifyTaskLogSkipKey(taskId);
+      const job = findJob(jobId);
+      markReclassifyActive(jobId, true);
+      renderActiveVariant();
+      refreshDrawerIfOpen(jobId);
+
+      taskLog.setReclassifyEventSource(taskId, connectTaskLogStream(taskId, {
+        skipKey,
+        taskKey: skipKey,
+        existingSource: taskLog.getReclassifyEventSource(taskId),
+        onResult(logData) {
+          if (logData.job) {
+            updateJob(logData.job.id, logData.job);
+          }
+          renderActiveVariant();
+          refreshDrawerIfOpen(jobId);
+        },
+        onDone() {
+          removeReclassifyTaskEntry(taskId);
+          taskLog.setReclassifyEventSource(taskId, null);
+          markReclassifyActive(jobId, false);
+          if (job) {
+            addLogLine(`Re-classify complete for [${job.title}].`, 'success');
+          }
+          renderActiveVariant();
+          refreshDrawerIfOpen(jobId);
+        },
+        onError() {
+          removeReclassifyTaskEntry(taskId);
+          taskLog.setReclassifyEventSource(taskId, null);
+          markReclassifyActive(jobId, false);
+          addLogLine(
+            'Background re-classify task is no longer available on the server.',
+            'info'
+          );
+          renderActiveVariant();
+          refreshDrawerIfOpen(jobId);
+        },
+      }));
+    }
+
+    async function startReclassifyTask(id) {
+      const job = findJob(id);
+      if (!job) return;
+      if (activeReclassifyJobIds.includes(id)) return;
+
+      addLogLine(`Re-classifying contacts for [${job.title} @ ${job.company}]...`, 'info');
+      expandLogsConsole();
+
+      try {
+        const resp = await fetch(`/api/jobs/${id}/reclassify`, { method: 'POST' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          addLogLine(`Re-classify failed: ${err.message || resp.status}`, 'error');
+          return;
+        }
+
+        const data = await resp.json();
+        saveReclassifyTaskEntry(data.task_id, id);
+        attachReclassifyStream(data.task_id, id);
+      } catch (err) {
+        addLogLine(`Re-classify failed: ${err.message}`, 'error');
       }
     }
 
     function reclassifyJob(id) {
-      const job = findJob(id);
-      if (!job) return;
-      if (activeReclassifyJobId === id || reclassifyQueue.includes(id)) return;
-
-      const alreadyProcessing = reclassifyDrainRunning || activeReclassifyJobId != null;
-      reclassifyQueue.push(id);
-      renderActiveVariant();
-      refreshDrawerIfOpen(id);
-
-      if (alreadyProcessing) {
-        addLogLine(`Queued re-classify for [${job.title} @ ${job.company}].`, 'info');
-      }
-
-      drainReclassifyQueue();
+      startReclassifyTask(id);
     }
 
     async function loadMoreContacts(id) {
@@ -2073,6 +2100,21 @@
       }));
     }
 
+    function restoreActiveReclassifyTasks() {
+      const tasks = loadReclassifyTaskMap();
+      const entries = Object.entries(tasks);
+      if (entries.length === 0) return;
+
+      const kbLogsPanel = document.getElementById('kb-logs-panel');
+      if (kbLogsPanel) kbLogsPanel.style.display = 'block';
+      expandLogsConsole();
+      addLogLine(`Reconnecting to ${entries.length} active re-classify task(s)...`, 'info');
+
+      entries.forEach(([taskId, meta]) => {
+        attachReclassifyStream(taskId, meta.jobId);
+      });
+    }
+
     async function loadOutreachSettings() {
       try {
         const resp = await fetch('/api/settings/outreach');
@@ -2170,6 +2212,12 @@
       taskLog.setLogEventSource(null);
       closeTaskLogStreamQuietly(taskLog.getEnrichEventSource());
       taskLog.setEnrichEventSource(null);
+      for (const source of taskLog.getReclassifyEventSources().values()) {
+        closeTaskLogStreamQuietly(source);
+      }
+      for (const taskId of [...taskLog.getReclassifyEventSources().keys()]) {
+        taskLog.setReclassifyEventSource(taskId, null);
+      }
     });
 
     Object.assign(window, {
@@ -2212,6 +2260,7 @@
     loadJobs().then(() => {
       restoreActiveScrapeTask();
       restoreActiveEnrichTask();
+      restoreActiveReclassifyTasks();
     });
   </script>
 </body>

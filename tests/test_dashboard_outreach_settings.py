@@ -139,23 +139,23 @@ def test_dashboard_html_polling_loop_not_called_from_enrich():
         "enrichJob must not call startPollingEnrichingJobs; SSE handles card updates"
 
 
-def test_dashboard_html_card_warning_strip_for_enrichment_note():
-    """Kanban card rendering references enrichmentNote for the warning strip."""
+def test_dashboard_html_card_activity_log_not_enrichment_strip():
+    """Kanban cards no longer render a separate enrichmentNote strip."""
     board_renderer_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
     with open(board_renderer_path) as f:
         content = f.read()
-    assert "enrichmentNote" in content, \
-        "boardRenderer must render a warning strip for jobs with enrichmentNote"
+    assert "job.enrichmentNote ?" not in content, \
+        "boardRenderer must not render a separate enrichment note strip on cards"
 
 
-def test_dashboard_html_drawer_enrichment_status_section():
-    """Job drawer shows an Enrichment Status section when enrichmentNote is set."""
+def test_dashboard_html_drawer_uses_activity_log_for_enrichment_status():
+    """Enrichment/reclassify status lives in Job Activity Log, not a separate drawer section."""
     content = read_drawer_controller()
     assert "function openJobDetailsDrawer(" in content, "openJobDetailsDrawer function not found"
-    assert "Enrichment Status" in content, \
-        "openJobDetailsDrawer must include an Enrichment Status section"
-    assert "enrichmentNote" in content, \
-        "openJobDetailsDrawer must use enrichmentNote to conditionally show the section"
+    assert "Enrichment Status" not in content, \
+        "openJobDetailsDrawer must not include a separate Enrichment Status section"
+    assert "Job Activity Log" in content
+    assert "activityLogEntryMeta" in content
 
 
 def _get_drawer_body(_content=None):
@@ -470,59 +470,21 @@ def test_greeting_functions_support_hello_prefix():
             f"{fn_name} must match Hello greetings from outreach templates"
 
 
-# --- Issue #71: Info vs warning Enrichment Note styling ---
+# --- Issue #71: Info vs warning status in Job Activity Log ---
 
-def test_board_renderer_card_info_note_uses_cyan_styling():
-    """boardRenderer uses enrichmentNoteKind to apply cyan info styling on cards."""
-    board_renderer_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
-    with open(board_renderer_path) as f:
-        content = f.read()
-    # Must branch on enrichmentNoteKind
-    assert "enrichmentNoteKind" in content, \
-        "boardRenderer must reference enrichmentNoteKind for styling branches"
-    # Info path must use a cyan color (#22d3ee is the cyan token)
-    assert "#22d3ee" in content, \
-        "boardRenderer card strip must use cyan #22d3ee for enrichmentNoteKind === 'info'"
-    # Info path must use an info icon, not always exclamation
-    assert "fa-circle-info" in content, \
-        "boardRenderer card strip must use fa-circle-info icon for info notes"
-
-
-def test_board_renderer_card_warning_note_keeps_amber_styling():
-    """boardRenderer card strip keeps amber #f59e0b for warning/unset enrichmentNoteKind."""
-    board_renderer_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
-    with open(board_renderer_path) as f:
-        content = f.read()
-    assert "#f59e0b" in content, \
-        "boardRenderer card strip must keep amber #f59e0b for warning enrichment notes"
-    assert "fa-triangle-exclamation" in content, \
-        "boardRenderer card strip must keep fa-triangle-exclamation icon for warning notes"
-
-
-def test_drawer_enrichment_status_info_uses_cyan_styling():
-    """Drawer Enrichment Status section uses cyan styling when enrichmentNoteKind === 'info'."""
+def test_drawer_activity_log_info_entry_uses_cyan_styling():
+    """Drawer activity log uses cyan styling for Re-classified entries."""
     content = read_drawer_controller()
-    fn_start = content.find("function openJobDetailsDrawer(")
-    assert fn_start != -1
-    # Find the Enrichment Status section within openJobDetailsDrawer
-    enrichment_status_pos = content.find("Enrichment Status", fn_start)
-    assert enrichment_status_pos != -1, "openJobDetailsDrawer must contain 'Enrichment Status'"
-    nearby = content[max(fn_start, enrichment_status_pos - 200):enrichment_status_pos + 600]
-    assert "enrichmentNoteKind" in nearby, \
-        "Enrichment Status section must branch on enrichmentNoteKind for styling"
-    assert "accent-cyan" in nearby or "#22d3ee" in nearby, \
-        "Enrichment Status section must use cyan styling for info notes"
-    assert "fa-circle-info" in nearby, \
-        "Enrichment Status section must use fa-circle-info icon for info notes"
+    assert "activityLogEntryMeta" in content
+    assert "Re-classified ·" in content
+    assert "#22d3ee" in content
+    assert "fa-circle-info" in content
 
 
-def test_drawer_enrichment_status_warning_keeps_amber_styling():
-    """Drawer Enrichment Status section keeps amber styling for warning notes."""
+def test_drawer_activity_log_warning_entry_uses_amber_styling():
+    """Drawer activity log uses amber styling for Enrichment failed entries."""
     content = read_drawer_controller()
-    enrichment_status_pos = content.find("Enrichment Status")
-    assert enrichment_status_pos != -1
-    nearby = content[max(0, enrichment_status_pos - 200):enrichment_status_pos + 600]
-    assert "accent-amber" in nearby or "#f59e0b" in nearby or "fbbf24" in nearby, \
-        "Enrichment Status section must keep amber styling for warning notes"
-    assert "fa-triangle-exclamation" in nearby, \
-        "Enrichment Status section must keep fa-triangle-exclamation for warning notes"
+    assert "activityLogEntryMeta" in content
+    assert "Enrichment failed ·" in content
+    assert "#fbbf24" in content
+    assert "fa-triangle-exclamation" in content

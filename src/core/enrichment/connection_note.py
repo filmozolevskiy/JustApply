@@ -1,23 +1,45 @@
 """Outreach Generator: Connection Note templates for Enrichment."""
 
+import asyncio
 import os
 from dotenv import load_dotenv
 
 from ...db.job_model import coerce_job
 from ...schemas import Job
+from ..gemini_client import generate_text as gemini_generate_text
 
 RECRUITER_CTA = "I would be grateful to connect and share my CV."
 RUSSIAN_SPEAKER_CTA = "I'd be grateful if you could refer me for the role."
 FIT_LINE = "My experience align well with the requirements."
+GEMINI_TIMEOUT_SECONDS = 30.0
 
 
-def minimal_fallback_template(audience: str) -> str:
+def minimal_fallback_template(audience: str, job: Job | None = None) -> str:
+    """Hardcoded Connection Note when LLM generation fails. Keeps name placeholder only."""
+    job = coerce_job(job) if job else None
     cta = RECRUITER_CTA if audience == "recruiter" else RUSSIAN_SPEAKER_CTA
-    return (
-        f"Hello ______,\n\n"
-        f"______ is looking for a ______. {FIT_LINE}\n\n"
-        f"{cta}"
-    )
+    company = (job.company if job else "") or "______"
+    title = (job.title if job else "") or "______"
+
+    def _build(c: str, t: str) -> str:
+        return (
+            f"Hello ______,\n\n"
+            f"{c} is looking for a {t}. {FIT_LINE}\n\n"
+            f"{cta}"
+        )
+
+    text = _build(company, title)
+    if len(text) <= 200:
+        return text
+
+    for max_len in (30, 24, 18, 12, 8, 5):
+        short_company = company[:max_len].rstrip() or company[:max_len]
+        short_title = title[:max_len].rstrip() or title[:max_len]
+        text = _build(short_company, short_title)
+        if len(text) <= 200:
+            return text
+
+    return _build("Co", "role")
 
 
 def _resume_profile_label(resume_name: str) -> str:
@@ -134,11 +156,7 @@ async def generate_complete_outreach_template(job: Job, audience: str, log_func=
         prompt = _build_complete_russian_speaker_prompt(resume_content, title, company, job_link, description)
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = await model.generate_content_async(prompt)
-        return response.text.strip()
+        return await gemini_generate_text(prompt, timeout=GEMINI_TIMEOUT_SECONDS)
     except Exception:
         return complete_outreach_fallback_template(job, audience)
 
@@ -154,7 +172,7 @@ async def generate_connection_note_template(job: Job, audience: str, log_func=No
     load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        return minimal_fallback_template(audience)
+        return minimal_fallback_template(audience, job)
 
     title = job.title or ""
     company = job.company or ""
@@ -183,23 +201,20 @@ async def generate_connection_note_template(job: Job, audience: str, log_func=No
         )
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-
-        response = await model.generate_content_async(_build_prompt())
-        text = response.text.strip()
+        text = await gemini_generate_text(_build_prompt(), timeout=GEMINI_TIMEOUT_SECONDS)
         if len(text) <= 200:
             return text
 
-        response2 = await model.generate_content_async(_build_prompt(strict=True))
-        text2 = response2.text.strip()
+        text2 = await gemini_generate_text(
+            _build_prompt(strict=True),
+            timeout=GEMINI_TIMEOUT_SECONDS,
+        )
         if len(text2) <= 200:
             return text2
 
-        return minimal_fallback_template(audience)
+        return minimal_fallback_template(audience, job)
     except Exception:
-        return minimal_fallback_template(audience)
+        return minimal_fallback_template(audience, job)
 
 
 async def generate_outreach_templates(
@@ -229,9 +244,19 @@ async def generate_outreach_templates(
     recruiter_template = ""
     russian_speaker_template = ""
 
+    async def _generate(audience: str) -> tuple[str, str]:
+        return audience, await generate_template(job, audience, log_func)
+
+    pending = []
     if has_recruiter or is_enrichment_failure:
-        recruiter_template = await generate_template(job, "recruiter", log_func)
+        pending.append(_generate("recruiter"))
     if has_russian or is_enrichment_failure:
-        russian_speaker_template = await generate_template(job, "russian_speaker", log_func)
+        pending.append(_generate("russian_speaker"))
+
+    for audience, template in await asyncio.gather(*pending):
+        if audience == "recruiter":
+            recruiter_template = template
+        else:
+            russian_speaker_template = template
 
     return {"recruiter": recruiter_template, "russian_speaker": russian_speaker_template}

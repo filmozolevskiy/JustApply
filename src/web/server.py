@@ -169,6 +169,30 @@ async def run_enrichment_task_with_logs(task_id: str, job_id: int):
         await state.queue.put(None)
 
 
+async def run_reclassify_task_with_logs(task_id: str, job_id: int):
+    state = active_tasks.get(task_id)
+    if not state:
+        return
+
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        updated = await run_reclassify_pipeline(job_id, log_func=log_callback)
+        state.result = {"type": "result", "job": updated.model_dump()}
+        state.status = "completed"
+    except ValueError as e:
+        state.status = "failed"
+        await log_callback(f"Re-classify failed: {str(e)}", "error")
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Re-classify task failed: {str(e)}", "error")
+    finally:
+        await state.queue.put(None)
+
+
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     updated = begin_enrichment(job_id)
@@ -197,15 +221,22 @@ async def cache_status(job_id: int):
     return {"has_cache": True, "pages_fetched": cached.get("pages_fetched", 1), "will_call_apify": False}
 
 
-@app.post("/api/jobs/{job_id}/reclassify", response_model=Job)
-async def reclassify_job(job_id: int):
-    if not get_job(job_id):
+@app.post("/api/jobs/{job_id}/reclassify")
+async def reclassify_job(job_id: int, background_tasks: BackgroundTasks):
+    job = get_job(job_id)
+    if not job:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
-    try:
-        updated = await run_reclassify_pipeline(job_id)
-    except ValueError as e:
-        return JSONResponse(status_code=422, content={"message": str(e)})
-    return updated
+    if job.status != "accepted":
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Job must be in Accepted lane to re-classify"},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    background_tasks.add_task(run_reclassify_task_with_logs, task_id, job_id)
+    return {"task_id": task_id, "job_id": job_id}
 
 
 @app.post("/api/jobs/{job_id}/load-more-contacts", response_model=Job)

@@ -502,13 +502,7 @@ async def test_classify_contacts_assigns_russian_speaker_flag(monkeypatch):
     items = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = '[{"index": 0, "russian_speaker": true, "is_recruiter": false}]'
-    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+    with patch("src.core.gemini_client.generate_text", new=AsyncMock(return_value='[{"index": 0, "russian_speaker": true, "is_recruiter": false}]')):
         result = await classify_contacts(items, settings)
 
     assert len(result) == 1
@@ -525,13 +519,7 @@ async def test_classify_contacts_assigns_recruiter_flag(monkeypatch):
     items = [{"firstName": "Jane", "lastName": "HR", "headline": "HR Manager", "linkedinUrl": ""}]
     settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = '[{"index": 0, "russian_speaker": false, "is_recruiter": true}]'
-    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+    with patch("src.core.gemini_client.generate_text", new=AsyncMock(return_value='[{"index": 0, "russian_speaker": false, "is_recruiter": true}]')):
         result = await classify_contacts(items, settings)
 
     assert len(result) == 1
@@ -548,13 +536,7 @@ async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
     items = [{"firstName": "Olga", "lastName": "Rec", "headline": "Talent Acquisition", "linkedinUrl": ""}]
     settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = '[{"index": 0, "russian_speaker": true, "is_recruiter": true}]'
-    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+    with patch("src.core.gemini_client.generate_text", new=AsyncMock(return_value='[{"index": 0, "russian_speaker": true, "is_recruiter": true}]')):
         result = await classify_contacts(items, settings)
 
     assert len(result) == 1
@@ -573,13 +555,7 @@ async def test_classify_contacts_caps_at_five_per_group(monkeypatch):
 
     llm_response = json.dumps([{"index": i, "russian_speaker": True, "is_recruiter": False} for i in range(7)])
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = llm_response
-    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+    with patch("src.core.gemini_client.generate_text", new=AsyncMock(return_value=llm_response)):
         result = await classify_contacts(items, settings)
 
     assert sum(1 for c in result if c["russian_speaker"]) == 5
@@ -594,13 +570,7 @@ async def test_classify_contacts_returns_empty_when_llm_returns_no_matches(monke
     items = [{"firstName": "Bob", "lastName": "Smith", "headline": "Engineer", "linkedinUrl": ""}]
     settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = "[]"
-    mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel", return_value=mock_model):
+    with patch("src.core.gemini_client.generate_text", new=AsyncMock(return_value="[]")):
         result = await classify_contacts(items, settings)
 
     assert result == []

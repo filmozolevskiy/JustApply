@@ -39,6 +39,16 @@ export function hasContactSampleActions(job, contacts = job.contacts || []) {
   );
 }
 
+function activityLogEntryMeta(message) {
+  if (message.startsWith('Enrichment failed ·')) {
+    return { color: '#fbbf24', icon: 'fa-triangle-exclamation' };
+  }
+  if (message.startsWith('Re-classified ·')) {
+    return { color: '#22d3ee', icon: 'fa-circle-info' };
+  }
+  return { color: 'var(--text-secondary)', icon: null };
+}
+
 export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
   if (contacts.length === 0) {
     return '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>';
@@ -91,8 +101,7 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
 export function createDrawerController({
   onJobMutated,
   addLogLine,
-  getActiveReclassifyJobId = () => null,
-  getReclassifyQueuedJobIds = () => [],
+  getActiveReclassifyJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
 }) {
   let activeContactIdx = -1;
@@ -164,11 +173,10 @@ export function createDrawerController({
       ? applyGreetingName(rawActiveTemplate, defaultFirstName)
       : rawActiveTemplate;
 
-    const isReclassifying = getActiveReclassifyJobId() === job.id;
-    const isReclassifyQueued = getReclassifyQueuedJobIds().includes(job.id);
+    const isReclassifying = getActiveReclassifyJobIds().includes(job.id);
     const isLoadingMore = getActiveLoadMoreJobId() === job.id;
     const contactActionInProgress = isReclassifying || isLoadingMore;
-    const reclassifyBusy = isReclassifying || isReclassifyQueued;
+    const reclassifyBusy = isReclassifying;
 
     body.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
@@ -206,17 +214,19 @@ export function createDrawerController({
             ? (() => {
                 const log = job.activityLog;
                 const latest = log[log.length - 1];
+                const latestMeta = activityLogEntryMeta(latest.message);
                 const logId = 'activity-log-' + job.id;
                 return `
           <div>
             <button onclick="toggleActivityLog('${logId}')" style="background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:6px; padding:0; width:100%; text-align:left; margin-bottom:0;">
               <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Job Activity Log</h4>
               <i id="${logId}-chevron" class="fa-solid fa-chevron-right" style="font-size:0.65rem; color:var(--text-muted); transition:transform 0.2s;"></i>
-              <span style="font-size:0.78rem; color:var(--text-secondary); font-weight:400; text-transform:none; letter-spacing:0; margin-left:4px;">${latest.message}</span>
+              <span style="font-size:0.78rem; color:${latestMeta.color}; font-weight:400; text-transform:none; letter-spacing:0; margin-left:4px;">${latestMeta.icon ? `<i class="fa-solid ${latestMeta.icon}"></i> ` : ''}${latest.message}</span>
             </button>
             <div id="${logId}" style="display:none; margin-top:8px; border-left:2px solid rgba(6,182,212,0.2); padding-left:10px; flex-direction:column; gap:4px;">
               ${log
                 .map((e) => {
+                  const meta = activityLogEntryMeta(e.message);
                   const d = new Date(e.ts);
                   const now = new Date();
                   const isToday = d.toDateString() === now.toDateString();
@@ -227,7 +237,7 @@ export function createDrawerController({
                       d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   return `<div style="display:flex; gap:8px; font-size:0.78rem;">
                   <span style="color:var(--text-muted); white-space:nowrap; flex-shrink:0;">${timeStr}</span>
-                  <span style="color:var(--text-secondary);">${e.message}</span>
+                  <span style="color:${meta.color};">${meta.icon ? `<i class="fa-solid ${meta.icon}"></i> ` : ''}${e.message}</span>
                 </div>`;
                 })
                 .join('')}
@@ -261,28 +271,10 @@ export function createDrawerController({
             <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="updateJobComment(${job.id}, this.value)">${job.comment || ''}</textarea>
           </div>
 
-          ${job.enrichmentNote
-            ? `
-          <div>
-            <h4 style="font-size:0.8rem; color:${job.enrichmentNoteKind === 'info' ? 'var(--accent-cyan)' : 'var(--accent-amber)'}; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;"><i class="fa-solid ${job.enrichmentNoteKind === 'info' ? 'fa-circle-info' : 'fa-triangle-exclamation'}"></i> Enrichment Status</h4>
-            <div style="background: ${job.enrichmentNoteKind === 'info' ? 'rgba(6, 182, 212, 0.08)' : 'rgba(245, 158, 11, 0.08)'}; border: 1px solid ${job.enrichmentNoteKind === 'info' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; color: ${job.enrichmentNoteKind === 'info' ? '#22d3ee' : '#fbbf24'};">
-              ${job.enrichmentNote}
-            </div>
-          </div>
-          `
-            : ''}
-
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <h4 style="font-size:0.8rem; color:var(--accent-indigo); text-transform:uppercase; letter-spacing:0.05em; margin:0;">Outreach Contacts & Referral Status</h4>
             </div>
-            ${isReclassifyQueued && !isReclassifying
-              ? `
-            <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:#67e8f9; padding:8px 12px; background:rgba(6,182,212,0.06); border:1px solid rgba(6,182,212,0.18); border-radius:6px;">
-              <i class="fa-solid fa-clock"></i> Queued for re-classification…
-            </div>
-            `
-              : ''}
             ${isReclassifying
               ? `
             <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--accent-cyan); padding:8px 12px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.2); border-radius:6px;">
@@ -336,7 +328,7 @@ export function createDrawerController({
               : ''}
             ${job.status === 'accepted'
               ? `
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);${reclassifyBusy || isLoadingMore ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="reclassifyJob(${job.id})"${reclassifyBusy || isLoadingMore ? ' disabled' : ''}><i class="fa-solid ${isReclassifying ? 'fa-spinner fa-spin' : isReclassifyQueued ? 'fa-clock' : 'fa-rotate'}"></i> ${isReclassifying ? 'Re-classifying…' : isReclassifyQueued ? 'Queued…' : 'Re-classify'}</button>
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-cyan); border-color: rgba(6,182,212,0.2);${reclassifyBusy || isLoadingMore ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="reclassifyJob(${job.id})"${reclassifyBusy || isLoadingMore ? ' disabled' : ''}><i class="fa-solid ${isReclassifying ? 'fa-spinner fa-spin' : 'fa-rotate'}"></i> ${isReclassifying ? 'Re-classifying…' : 'Re-classify'}</button>
               `
               : ''}
             ${job.status !== 'rejected'

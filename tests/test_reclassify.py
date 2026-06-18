@@ -14,6 +14,17 @@ from fastapi.testclient import TestClient
 client = TestClient(app)
 
 
+def _job_after_reclassify_post(job_id, db):
+    """POST reclassify starts a background task; TestClient runs it before returning."""
+    from src.db.jobs import get_job
+    resp = client.post(f"/api/jobs/{job_id}/reclassify")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "task_id" in data
+    assert data["job_id"] == job_id
+    return get_job(job_id, db_path=db)
+
+
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     test_db = str(tmp_path / "test.db")
@@ -57,8 +68,8 @@ def test_reclassify_no_cache_returns_200(db):
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
     with patch("src.db.cache.get_contact_sample", return_value=None), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
-        resp = client.post(f"/api/jobs/{job_id}/reclassify")
-    assert resp.status_code == 200
+        job = _job_after_reclassify_post(job_id, db)
+    assert job is not None
 
 
 def test_reclassify_no_cache_enrichment_note_kind_is_info(db):
@@ -66,10 +77,9 @@ def test_reclassify_no_cache_enrichment_note_kind_is_info(db):
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
     with patch("src.db.cache.get_contact_sample", return_value=None), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
-        resp = client.post(f"/api/jobs/{job_id}/reclassify")
-    data = resp.json()
-    assert data["enrichmentNoteKind"] == "info"
-    assert "templates refreshed" in data["enrichmentNote"]
+        job = _job_after_reclassify_post(job_id, db)
+    assert job.enrichmentNoteKind == "info"
+    assert "templates refreshed" in job.enrichmentNote
 
 
 def test_reclassify_no_cache_preserves_existing_contacts(db):
@@ -77,10 +87,9 @@ def test_reclassify_no_cache_preserves_existing_contacts(db):
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
     with patch("src.db.cache.get_contact_sample", return_value=None), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
-        resp = client.post(f"/api/jobs/{job_id}/reclassify")
-    data = resp.json()
-    assert len(data["contacts"]) == 1
-    assert data["contacts"][0]["name"] == "Alice"
+        job = _job_after_reclassify_post(job_id, db)
+    assert len(job.contacts) == 1
+    assert job.contacts[0].name == "Alice"
 
 
 def test_reclassify_no_cache_activity_log_templates_refreshed(db):
@@ -88,10 +97,9 @@ def test_reclassify_no_cache_activity_log_templates_refreshed(db):
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
     with patch("src.db.cache.get_contact_sample", return_value=None), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
-        resp = client.post(f"/api/jobs/{job_id}/reclassify")
-    data = resp.json()
-    messages = [e["message"] for e in data["activityLog"]]
-    assert any("Re-classified · templates refreshed" in m for m in messages)
+        job = _job_after_reclassify_post(job_id, db)
+    messages = [e.message for e in job.activityLog]
+    assert any("Re-classified · Outreach templates refreshed" in m for m in messages)
     assert not any("Enrichment failed" in m for m in messages)
 
 
@@ -149,15 +157,13 @@ async def test_reclassify_uses_cache_not_apify(db):
          patch("src.pipelines.source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=new_templates)), \
          patch("src.core.enrichment.contact_sample._run_apify_actor") as mock_apify:
-        resp = client.post(f"/api/jobs/{job_id}/reclassify")
+        job = _job_after_reclassify_post(job_id, db)
 
-    assert resp.status_code == 200
     mock_apify.assert_not_called()
-    data = resp.json()
-    assert data["id"] == job_id
-    assert len(data["contacts"]) == 1
-    assert data["contacts"][0]["name"] == "Bob Smith"
-    assert any("Re-classified" in e["message"] for e in data["activityLog"])
+    assert job.id == job_id
+    assert len(job.contacts) == 1
+    assert job.contacts[0].name == "Bob Smith"
+    assert any("Re-classified" in e.message for e in job.activityLog)
 
 
 @pytest.mark.asyncio
@@ -237,6 +243,41 @@ async def test_reclassify_uses_complete_message_format_when_setting_disabled(db)
     mock_gen.assert_awaited_once()
     assert mock_gen.await_args.kwargs["short_connection_note"] is False
     assert updated.recruiterOutreachTemplate == complete_template
+
+
+def test_reclassify_post_returns_task_id(db):
+    job_id = _make_accepted_job_with_contacts(db)
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
+        resp = client.post(f"/api/jobs/{job_id}/reclassify")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["job_id"] == job_id
+    assert isinstance(data["task_id"], str)
+    assert data["task_id"]
+
+
+@pytest.mark.asyncio
+async def test_run_reclassify_task_with_logs_writes_results(db):
+    from src.web.server import run_reclassify_task_with_logs, TaskState, active_tasks
+    import uuid
+
+    job_id = _make_accepted_job_with_contacts(db)
+    templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
+        await run_reclassify_task_with_logs(task_id, job_id)
+
+    from src.db.jobs import get_job
+    job = get_job(job_id, db_path=db)
+    assert job.enrichmentNoteKind == "info"
+    assert state.status == "completed"
+    assert state.result["job"]["id"] == job_id
 
 
 # --- 422 when job is not in Accepted lane ---

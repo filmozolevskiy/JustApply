@@ -58,12 +58,7 @@ def test_load_resume_raises_when_file_missing(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_evaluate_job_returns_structured_result(mock_gemini_response, sample_job):
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel") as mock_model_cls:
-        mock_model = MagicMock()
-        mock_model.generate_content_async = AsyncMock(return_value=mock_gemini_response)
-        mock_model_cls.return_value = mock_model
-
+    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(return_value=mock_gemini_response.text)):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
             result = await evaluate_job(sample_job, "# QA Resume\nPython expert")
 
@@ -78,21 +73,17 @@ async def test_evaluate_job_returns_structured_result(mock_gemini_response, samp
 
 @pytest.mark.asyncio
 async def test_evaluate_job_retries_on_rate_limit(mock_gemini_response, sample_job):
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel") as mock_model_cls, \
+    mock_generate = AsyncMock(side_effect=[
+        Exception("429 Too Many Requests"),
+        mock_gemini_response.text,
+    ])
+    with patch("src.core.matcher.gemini_generate_text", mock_generate), \
          patch("asyncio.sleep", new_callable=AsyncMock):
-        mock_model = MagicMock()
-        mock_model.generate_content_async = AsyncMock(side_effect=[
-            Exception("429 Too Many Requests"),
-            mock_gemini_response
-        ])
-        mock_model_cls.return_value = mock_model
-
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
             result = await evaluate_job(sample_job, "resume content")
 
     assert result["matchScore"] == 89
-    assert mock_model.generate_content_async.call_count == 2
+    assert mock_generate.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -106,12 +97,7 @@ async def test_evaluate_job_returns_empty_when_no_api_key(sample_job):
 
 @pytest.mark.asyncio
 async def test_evaluate_job_returns_empty_on_non_rate_limit_error(sample_job):
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel") as mock_model_cls:
-        mock_model = MagicMock()
-        mock_model.generate_content_async = AsyncMock(side_effect=Exception("Unexpected API error"))
-        mock_model_cls.return_value = mock_model
-
+    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(side_effect=Exception("Unexpected API error"))):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
             result = await evaluate_job(sample_job, "resume content")
 
@@ -120,15 +106,8 @@ async def test_evaluate_job_returns_empty_on_non_rate_limit_error(sample_job):
 
 @pytest.mark.asyncio
 async def test_evaluate_job_returns_empty_on_max_retries_exceeded(sample_job):
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel") as mock_model_cls, \
+    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(side_effect=Exception("429 Rate limit exceeded"))), \
          patch("asyncio.sleep", new_callable=AsyncMock):
-        mock_model = MagicMock()
-        mock_model.generate_content_async = AsyncMock(
-            side_effect=Exception("429 Rate limit exceeded")
-        )
-        mock_model_cls.return_value = mock_model
-
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
             result = await evaluate_job(sample_job, "resume content")
 
@@ -186,14 +165,7 @@ async def test_evaluate_job_applies_recruiter_override():
         "salary": ""
     }
 
-    with patch("google.generativeai.configure"), \
-         patch("google.generativeai.GenerativeModel") as mock_model_cls:
-        mock_model = MagicMock()
-        mock_response = MagicMock()
-        mock_response.text = '{"matchScore": 90, "matchType": "match", "strengths": ["Python"], "gaps": [], "shouldProceed": true, "remoteType": "remote", "summary": "QA Analyst job", "isRecruiter": false, "salary": "$110k"}'
-        mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-        mock_model_cls.return_value = mock_model
-
+    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(return_value='{"matchScore": 90, "matchType": "match", "strengths": ["Python"], "gaps": [], "shouldProceed": true, "remoteType": "remote", "summary": "QA Analyst job", "isRecruiter": false, "salary": "$110k"}')):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
             result = await evaluate_job(recruiter_job, "resume content")
             

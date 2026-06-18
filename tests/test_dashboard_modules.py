@@ -257,33 +257,15 @@ def test_board_renderer_shows_reclassify_badge_for_active_task():
         """
         import { cardReclassifyBadge } from './src/web/static/js/boardRenderer.js';
 
-        const badge = cardReclassifyBadge(42, 42);
+        const badge = cardReclassifyBadge(42, [42, 7]);
         if (!badge.includes('fa-spinner')) process.exit(1);
         if (!badge.includes('Re-classifying')) process.exit(2);
 
-        const noBadge = cardReclassifyBadge(1, 42);
+        const noBadge = cardReclassifyBadge(1, [42, 7]);
         if (noBadge !== '') process.exit(3);
 
-        const nullBadge = cardReclassifyBadge(1, null);
-        if (nullBadge !== '') process.exit(4);
-
-        console.log('ok');
-        """
-    )
-    assert result.returncode == 0, result.stderr or result.stdout
-
-
-def test_board_renderer_shows_reclassify_queued_badge():
-    """boardRenderer.cardReclassifyQueuedBadge marks jobs waiting in the reclassify queue."""
-    result = _run_node(
-        """
-        import { cardReclassifyQueuedBadge } from './src/web/static/js/boardRenderer.js';
-
-        const badge = cardReclassifyQueuedBadge(7, [3, 7, 9]);
-        if (!badge.includes('Queued')) process.exit(1);
-
-        const noBadge = cardReclassifyQueuedBadge(7, [3, 9]);
-        if (noBadge !== '') process.exit(2);
+        const emptyBadge = cardReclassifyBadge(1, []);
+        if (emptyBadge !== '') process.exit(4);
 
         console.log('ok');
         """
@@ -298,5 +280,3 @@ def test_drawer_shows_reclassify_progress_banner():
         "drawerController must show in-drawer spinner while re-classifying"
     assert "refreshDrawerIfOpen" in content, \
         "drawerController must export refreshDrawerIfOpen to avoid reopening closed drawer"
-    assert "Queued for re-classification" in content, \
-        "drawerController must show queued state while waiting in reclassify queue"

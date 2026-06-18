@@ -230,7 +230,8 @@ def enrich_job(
              recruiter_template, russian_speaker_template, job_id),
         )
     if activity_kind == "reclassify_no_cache":
-        _append_activity_log(cursor, job_id, "Re-classified · templates refreshed")
+        note_text = enrichment_note or "templates refreshed"
+        _append_activity_log(cursor, job_id, f"Re-classified · {note_text}")
     elif enrichment_note:
         _append_activity_log(cursor, job_id, f"Enrichment failed · {enrichment_note}")
     elif activity_kind == "reclassify":
