@@ -206,19 +206,37 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     return {"task_id": task_id, "job_id": job_id, "job": updated}
 
 
+COST_PER_APIFY_RUN = 0.05
+
+
 @app.get("/api/jobs/{job_id}/cache-status")
 async def cache_status(job_id: int):
     job = get_job(job_id)
     if not job:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     from ..db.cache import get_contact_sample
-    from ..core.enrichment.contact_sample import company_cache_slug
+    from ..core.enrichment.contact_sample import company_cache_slug, RECRUITER_SAMPLE_SIZE, RUSSIAN_SAMPLE_SIZE
+
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
-    cached = get_contact_sample(slug)
-    will_call_apify = bool(job.companyUrl)
-    if not cached:
-        return {"has_cache": False, "will_call_apify": will_call_apify}
-    return {"has_cache": True, "pages_fetched": cached.get("pages_fetched", 1), "will_call_apify": False}
+    settings = get_outreach_settings()
+    has_company_url = bool(job.companyUrl)
+
+    billable_streams = []
+    if has_company_url:
+        if settings.get("target_recruiters", True) and not get_contact_sample(slug, stream="recruiters"):
+            billable_streams.append({"stream": "Recruiters", "profile_count": RECRUITER_SAMPLE_SIZE, "page": 1})
+        if settings.get("target_russian_speakers", True) and not get_contact_sample(slug, stream="russian"):
+            billable_streams.append({"stream": "Russian Speakers", "profile_count": RUSSIAN_SAMPLE_SIZE, "page": 1})
+
+    estimated_runs = len(billable_streams)
+    will_call_apify = estimated_runs > 0
+    return {
+        "billable_streams": billable_streams,
+        "estimated_runs": estimated_runs,
+        "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
+        "will_call_apify": will_call_apify,
+        "has_cache": not will_call_apify,
+    }
 
 
 @app.post("/api/jobs/{job_id}/reclassify")

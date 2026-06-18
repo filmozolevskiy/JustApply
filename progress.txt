@@ -1,5 +1,14 @@
 # Ralph Loop Progress Log
 
+## Iteration 6 — Issue #78: Enrich Job stream-aware cost confirmation
+
+**Implemented:**
+- Updated `GET /api/jobs/{job_id}/cache-status` in `server.py` to return per-stream preflight: `billable_streams` (list of `{stream, profile_count, page}`), `estimated_runs`, and `estimated_cost` (at `$0.05` per Apify run). Still returns legacy `will_call_apify` and `has_cache` fields for backward compatibility.
+- The endpoint reads `OutreachSettings` from DB to check only active toggles (`target_recruiters`, `target_russian_speakers`). For each active stream it checks the per-stream cache (`stream="recruiters"` / `stream="russian"`); uncached streams with a `companyUrl` are listed as billable.
+- Updated `enrichJob()` in `dashboard.html` to branch on `estimated_runs > 0` (replacing the old `will_call_apify` boolean). The confirm dialog now shows per-stream lines ("- Recruiters — 3 profiles", "- Russian Speakers — 5 profiles"), total run count, and estimated cost in the format from the issue spec. Full cache hit → no confirm, enrichment proceeds immediately.
+- Rewrote `tests/test_cost_confirmations.py`: updated two legacy tests that used `stream=''` cache entries (now set per-stream caches), replaced `will_call_apify` dashboard assertion with `estimated_runs`, and added 6 new tests covering: billable_streams list on full miss, partial cache hit (one stream listed), estimated cost for 1 and 2 runs, profile_count/page included in billable stream entries, and dashboard branching/confirm content assertions.
+- All 528 tests pass.
+
 ## Iteration 5 — Issue #76: Re-classify from merged per-stream Contact Sample Cache
 
 **Implemented:**

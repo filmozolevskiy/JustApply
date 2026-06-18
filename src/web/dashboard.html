@@ -1532,9 +1532,14 @@
       const cacheResp = await fetch(`/api/jobs/${id}/cache-status`);
       if (cacheResp.ok) {
         const cacheData = await cacheResp.json();
-        if (cacheData.will_call_apify) {
+        if (cacheData.estimated_runs > 0) {
+          const streamLines = (cacheData.billable_streams || [])
+            .map(s => `- ${s.stream} — ${s.profile_count} profiles`)
+            .join('\n');
+          const costStr = `~$${(cacheData.estimated_cost || 0).toFixed(2)}`;
+          const runs = cacheData.estimated_runs;
           const ok = confirm(
-            `Enrich Job will fetch company employees from LinkedIn via Apify.\nEstimated cost: ~$0.22 per page.\n\nProceed?`
+            `Enrich Job will fetch from LinkedIn via Apify:\n\n${streamLines}\n\n${runs} Apify run${runs > 1 ? 's' : ''} · estimated ${costStr}\n\nProceed?`
           );
           if (!ok) return;
         }

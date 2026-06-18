@@ -1,4 +1,4 @@
-"""Tests for cost confirmation dialogs — Issue #64.
+"""Tests for cost confirmation dialogs — Issue #64, #78.
 
 Server: GET /api/jobs/{id}/cache-status
 Client (static): enrichJob confirms on cache miss, loadMoreContacts always confirms,
@@ -49,18 +49,79 @@ def test_cache_status_returns_has_cache_false_when_no_cache(db):
     assert data["has_cache"] is False
 
 
-def test_cache_status_returns_has_cache_true_with_pages_when_cached(db):
+def test_cache_status_returns_has_cache_true_when_all_active_streams_cached(db):
     from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
-    set_contact_sample(slug, [{"name": "Alice"}], pages_fetched=2, db_path=db)
+    set_contact_sample(slug, [{"name": "Alice"}], pages_fetched=2, stream="recruiters", db_path=db)
+    set_contact_sample(slug, [{"name": "Bob"}], pages_fetched=1, stream="russian", db_path=db)
 
     resp = client.get(f"/api/jobs/{job_id}/cache-status")
     assert resp.status_code == 200
     data = resp.json()
     assert data["has_cache"] is True
-    assert data["pages_fetched"] == 2
+    assert data["estimated_runs"] == 0
+    assert data["will_call_apify"] is False
+
+
+# ── Server: per-stream billable fetch plan ────────────────────────────────────
+
+def test_cache_status_billable_streams_both_on_full_cache_miss(db):
+    job_id = _make_accepted_job(db)
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    streams = {s["stream"] for s in data["billable_streams"]}
+    assert "Recruiters" in streams
+    assert "Russian Speakers" in streams
+    assert data["estimated_runs"] == 2
+
+
+def test_cache_status_partial_cache_hit_only_uncached_stream_billable(db):
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+    job_id = _make_accepted_job(db)
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(slug, [{"name": "Alice"}], stream="recruiters", db_path=db)
+
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    data = resp.json()
+    stream_names = [s["stream"] for s in data["billable_streams"]]
+    assert stream_names == ["Russian Speakers"]
+    assert data["estimated_runs"] == 1
+
+
+def test_cache_status_estimated_cost_two_runs(db):
+    job_id = _make_accepted_job(db)
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    data = resp.json()
+    assert data["estimated_runs"] == 2
+    assert abs(data["estimated_cost"] - 0.10) < 0.001
+
+
+def test_cache_status_estimated_cost_one_run(db):
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+    job_id = _make_accepted_job(db)
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(slug, [{"name": "Alice"}], stream="recruiters", db_path=db)
+
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    data = resp.json()
+    assert data["estimated_runs"] == 1
+    assert abs(data["estimated_cost"] - 0.05) < 0.001
+
+
+def test_cache_status_billable_streams_include_profile_count(db):
+    job_id = _make_accepted_job(db)
+    resp = client.get(f"/api/jobs/{job_id}/cache-status")
+    data = resp.json()
+    for s in data["billable_streams"]:
+        assert "profile_count" in s
+        assert s["profile_count"] > 0
+        assert "page" in s
+        assert s["page"] == 1
 
 
 # ── Client static: enrichJob ─────────────────────────────────────────────────
@@ -92,7 +153,27 @@ def test_enrich_job_shows_confirm_on_cache_miss():
     script = _dashboard_script()
     body = _get_function_body(script, "enrichJob")
     assert "confirm(" in body, "enrichJob must call confirm() for cache-miss case"
-    assert "will_call_apify" in body, "enrichJob must branch on will_call_apify"
+    assert "estimated_runs" in body, "enrichJob must branch on estimated_runs"
+
+
+def test_enrich_confirm_lists_stream_names():
+    script = _dashboard_script()
+    body = _get_function_body(script, "enrichJob")
+    assert "billable_streams" in body, "enrichJob confirm must use billable_streams list"
+    assert "s.stream" in body or "stream" in body, "enrichJob confirm must render stream names"
+
+
+def test_enrich_confirm_shows_run_count_and_cost():
+    script = _dashboard_script()
+    body = _get_function_body(script, "enrichJob")
+    assert "estimated_runs" in body, "enrichJob confirm must show run count"
+    assert "estimated_cost" in body, "enrichJob confirm must show estimated cost"
+
+
+def test_enrich_no_confirm_when_estimated_runs_zero():
+    script = _dashboard_script()
+    body = _get_function_body(script, "enrichJob")
+    assert "estimated_runs > 0" in body, "enrichJob must skip confirm when estimated_runs is 0"
 
 
 # ── Server: will_call_apify field ────────────────────────────────────────────
@@ -119,23 +200,18 @@ def test_cache_status_will_call_apify_true_when_company_url_set_and_no_cache(db)
     assert data["will_call_apify"] is True
 
 
-def test_cache_status_will_call_apify_false_when_cache_present(db):
+def test_cache_status_will_call_apify_false_when_all_active_streams_cached(db):
     from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
-    set_contact_sample(slug, [{"name": "Bob"}], pages_fetched=1, db_path=db)
+    set_contact_sample(slug, [{"name": "Bob"}], stream="recruiters", db_path=db)
+    set_contact_sample(slug, [{"name": "Alice"}], stream="russian", db_path=db)
     resp = client.get(f"/api/jobs/{job_id}/cache-status")
     assert resp.status_code == 200
     data = resp.json()
     assert data["has_cache"] is True
     assert data["will_call_apify"] is False
-
-
-def test_enrich_job_cost_estimate_visible():
-    script = _dashboard_script()
-    body = _get_function_body(script, "enrichJob")
-    assert "0.22" in body, "enrichJob confirm must show $0.22 cost estimate"
 
 
 # ── Client static: loadMoreContacts ──────────────────────────────────────────
