@@ -1,5 +1,13 @@
 # Ralph Loop Progress Log
 
+## Iteration 4 — Issue #74: Contact Search Settings section heading tooltip
+
+**Implemented:**
+- Wrapped `<span>Contact Search Settings</span>` in `dashboard.html` (line 1120) with `class="settings-tooltip-wrap"` and `data-tooltip="Control which audiences to enrich and how outreach messages are written."`.
+- The existing `initOutreachSettingsTooltips()` already queries all `.settings-tooltip-wrap[data-tooltip]` elements, so no JavaScript changes were needed — the heading tooltip is picked up automatically with the same ~1s delay and floating-layer pattern as toggle tooltips.
+- Added `test_contact_search_settings_heading_has_floating_tooltip` to `tests/test_dashboard_outreach_settings.py`, asserting that the tooltip copy is present in the dashboard markup and the heading element is decorated with `settings-tooltip-wrap`.
+- All 516 tests pass.
+
 ## Iteration 3 — Issue #77: Dual-audience enrichment (both toggles, dual-classified rules)
 
 **Implemented:**

@@ -103,6 +103,20 @@ def test_dashboard_html_outreach_settings_have_delayed_tooltips():
     assert "200 characters" in content, "Short connection note tooltip must mention 200-char limit"
 
 
+def test_contact_search_settings_heading_has_floating_tooltip():
+    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
+    with open(html_path) as f:
+        content = f.read()
+    tooltip_copy = "Control which audiences to enrich and how outreach messages are written."
+    assert tooltip_copy in content, "Contact Search Settings section tooltip copy missing from dashboard"
+    wrapped = (
+        'class="settings-tooltip-wrap"'
+        in content[max(0, content.find(tooltip_copy) - 50):content.find(tooltip_copy) + 10]
+    )
+    assert wrapped, \
+        "Contact Search Settings heading must be wrapped in settings-tooltip-wrap for delayed floating tooltip"
+
+
 def test_dashboard_html_enrichment_uses_sse():
     """enrichJob opens an EventSource using a task_id returned by the enrich endpoint."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
