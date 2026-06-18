@@ -6,7 +6,13 @@ from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
 from .core.enrichment import source_contacts, generate_outreach_templates, company_cache_slug
 from .core.enrichment.coordinator import clear_enrichment_prior
-from .core.enrichment.contact_sample import _run_apify_actor
+from .core.enrichment.contact_sample import (
+    _run_apify_actor,
+    _run_apify_for_recruiters,
+    _run_apify_for_russian_speakers,
+    RECRUITER_SAMPLE_SIZE,
+    RUSSIAN_SAMPLE_SIZE,
+)
 from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
 from .schemas import Job, OutreachSettings
 from .db.job_model import coerce_job
@@ -224,7 +230,7 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
 
 
 async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
-    """Fetch next Apify page, append to Contact Sample Cache, and re-classify."""
+    """Fetch next Apify page for short streams, append to per-stream cache, and re-classify."""
     from .db.cache import get_contact_sample, append_contact_sample
 
     job = database.get_job(job_id)
@@ -234,23 +240,42 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
     if job.status != "accepted":
         raise ValueError("Job must be in Accepted lane to load more contacts")
 
+    settings = OutreachSettings(**database.get_outreach_settings())
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
-    cache_entry = get_contact_sample(slug)
-    if not cache_entry:
-        raise ValueError("No cached contact sample for this company")
-
-    pages_fetched = cache_entry.get("pages_fetched", 1)
     company_url = job.companyUrl or ""
 
-    new_profiles = await _run_apify_actor(
-        company_url,
-        log_func=log_func,
-        start_page=pages_fetched + 1,
-    )
+    contacts_list = [c if isinstance(c, dict) else c.model_dump() for c in (job.contacts or [])]
+    recruiter_count = sum(1 for c in contacts_list if c.get("is_recruiter"))
+    russian_count = sum(1 for c in contacts_list if c.get("russian_speaker") and not c.get("is_recruiter"))
 
-    append_contact_sample(slug, new_profiles)
+    streams_to_fetch = []
+    if settings.target_recruiters and recruiter_count < RECRUITER_SAMPLE_SIZE:
+        cache = get_contact_sample(slug, stream="recruiters")
+        if cache:
+            streams_to_fetch.append(("recruiters", cache.get("pages_fetched", 1)))
+    if settings.target_russian_speakers and russian_count < RUSSIAN_SAMPLE_SIZE:
+        cache = get_contact_sample(slug, stream="russian")
+        if cache:
+            streams_to_fetch.append(("russian", cache.get("pages_fetched", 1)))
 
-    settings = OutreachSettings(**database.get_outreach_settings())
+    if not streams_to_fetch:
+        raise ValueError(
+            "No short streams to fetch — all active streams are either at cap or missing a contact sample cache."
+        )
+
+    total_new_profiles = 0
+    for stream, pages_fetched in streams_to_fetch:
+        if stream == "recruiters":
+            new_profiles = await _run_apify_for_recruiters(
+                company_url, log_func=log_func, start_page=pages_fetched + 1
+            )
+        else:
+            new_profiles = await _run_apify_for_russian_speakers(
+                company_url, log_func=log_func, start_page=pages_fetched + 1
+            )
+        append_contact_sample(slug, new_profiles, stream=stream)
+        total_new_profiles += len(new_profiles)
+
     source_meta = {}
     contacts = await source_contacts(
         job,
@@ -284,7 +309,7 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
         recruiter_template=templates.get("recruiter", ""),
         russian_speaker_template=templates.get("russian_speaker", ""),
         activity_kind="load_more",
-        new_profile_count=len(new_profiles),
+        new_profile_count=total_new_profiles,
     )
     if not updated:
         raise ValueError("Failed to persist updated job")

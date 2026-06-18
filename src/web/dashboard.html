@@ -1673,10 +1673,25 @@
     async function loadMoreContacts(id) {
       const job = findJob(id);
       if (!job) return;
-      const ok = confirm(
-        `Load More Contacts will fetch the next page of employees from LinkedIn via Apify.\nEstimated cost: ~$0.22 per page.\n\nProceed?`
-      );
-      if (!ok) return;
+
+      const preflightResp = await fetch(`/api/jobs/${id}/load-more-preflight`);
+      if (preflightResp.ok) {
+        const preflightData = await preflightResp.json();
+        if (preflightData.estimated_runs === 0) {
+          alert('All active streams are at cap — nothing more to fetch.');
+          return;
+        }
+        const streamLines = (preflightData.billable_streams || [])
+          .map(s => `- ${s.stream} — next ${s.profile_count} profiles (page ${s.page})`)
+          .join('\n');
+        const costStr = `~$${(preflightData.estimated_cost || 0).toFixed(2)}`;
+        const runs = preflightData.estimated_runs;
+        const ok = confirm(
+          `Load More Contacts will fetch from LinkedIn via Apify:\n\n${streamLines}\n\n${runs} Apify run${runs > 1 ? 's' : ''} · estimated ${costStr}\n\nProceed?`
+        );
+        if (!ok) return;
+      }
+
       activeLoadMoreJobId = id;
       renderActiveVariant();
       addLogLine(`Loading more contacts for [${job.title} @ ${job.company}]...`, 'info');

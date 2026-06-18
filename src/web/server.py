@@ -257,6 +257,50 @@ async def reclassify_job(job_id: int, background_tasks: BackgroundTasks):
     return {"task_id": task_id, "job_id": job_id}
 
 
+@app.get("/api/jobs/{job_id}/load-more-preflight")
+async def load_more_preflight(job_id: int):
+    """Return which active streams are below cap and can be fetched with Load More."""
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    from ..db.cache import get_contact_sample
+    from ..core.enrichment.contact_sample import (
+        company_cache_slug, RECRUITER_SAMPLE_SIZE, RUSSIAN_SAMPLE_SIZE,
+    )
+
+    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    settings = get_outreach_settings()
+
+    contacts_list = job.contacts or []
+    recruiter_count = sum(1 for c in contacts_list if c.is_recruiter)
+    russian_count = sum(1 for c in contacts_list if c.russian_speaker and not c.is_recruiter)
+
+    billable_streams = []
+    if settings.get("target_recruiters", True) and recruiter_count < RECRUITER_SAMPLE_SIZE:
+        cache = get_contact_sample(slug, stream="recruiters")
+        if cache:
+            billable_streams.append({
+                "stream": "Recruiters",
+                "profile_count": RECRUITER_SAMPLE_SIZE,
+                "page": cache.get("pages_fetched", 1) + 1,
+            })
+    if settings.get("target_russian_speakers", True) and russian_count < RUSSIAN_SAMPLE_SIZE:
+        cache = get_contact_sample(slug, stream="russian")
+        if cache:
+            billable_streams.append({
+                "stream": "Russian Speakers",
+                "profile_count": RUSSIAN_SAMPLE_SIZE,
+                "page": cache.get("pages_fetched", 1) + 1,
+            })
+
+    estimated_runs = len(billable_streams)
+    return {
+        "billable_streams": billable_streams,
+        "estimated_runs": estimated_runs,
+        "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
+    }
+
+
 @app.post("/api/jobs/{job_id}/load-more-contacts", response_model=Job)
 async def load_more_contacts(job_id: int):
     job = get_job(job_id)
@@ -264,11 +308,6 @@ async def load_more_contacts(job_id: int):
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     if job.status != "accepted":
         return JSONResponse(status_code=422, content={"message": "Job must be in Accepted lane to load more contacts"})
-    from ..db.cache import get_contact_sample
-    from ..core.enrichment.contact_sample import company_cache_slug
-    slug = company_cache_slug(job.company or "", job.companyUrl or "")
-    if not get_contact_sample(slug):
-        return JSONResponse(status_code=422, content={"message": "No cached contact sample for this company"})
     try:
         updated = await run_load_more_contacts_pipeline(job_id)
     except ValueError as e:

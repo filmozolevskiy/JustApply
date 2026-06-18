@@ -80,7 +80,7 @@ def test_append_second_call_increments_again(db):
 # --- Pipeline: run_load_more_contacts_pipeline ---
 
 def _make_accepted_job_with_cache(db):
-    """Insert an accepted job with contacts and a seeded Contact Sample Cache."""
+    """Insert an accepted job with a recruiter contact and a seeded per-stream recruiters cache."""
     from src.db.jobs import add_job, enrich_job
     from src.core.enrichment.coordinator import begin_enrichment
     job_id = add_job({
@@ -101,6 +101,7 @@ def _make_accepted_job_with_cache(db):
         "acme",
         [{"firstName": "Alice", "linkedinUrl": ""}],
         display_name="Acme",
+        stream="recruiters",
         db_path=db,
     )
     return job_id
@@ -133,17 +134,17 @@ async def test_pipeline_raises_when_no_cache(db):
 
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_with_next_page(db):
-    """Pipeline calls Apify with start_page = pages_fetched + 1."""
+    """Pipeline calls stream-specific Apify with start_page = pages_fetched + 1."""
     from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
-    job_id = _make_accepted_job_with_cache(db)  # cache pages_fetched=1
+    job_id = _make_accepted_job_with_cache(db)  # recruiters cache pages_fetched=1
 
     new_profiles = [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob/"}]
     new_contacts = [{"name": "Bob Smith", "title": "Engineer", "url": "https://linkedin.com/in/bob/",
                      "contacted": False, "russian_speaker": False, "is_recruiter": False}]
     new_templates = {"recruiter": "Hello ______,", "russian_speaker": ""}
 
-    with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
+    with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         await run_load_more_contacts_pipeline(job_id)
@@ -156,7 +157,7 @@ async def test_pipeline_calls_apify_with_next_page(db):
 
 @pytest.mark.asyncio
 async def test_pipeline_appends_profiles_to_cache(db):
-    """Pipeline appends new profiles to cache and increments pages_fetched."""
+    """Pipeline appends new profiles to per-stream cache and increments pages_fetched."""
     from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
     from src.core.enrichment.contact_sample import company_cache_slug
@@ -167,13 +168,13 @@ async def test_pipeline_appends_profiles_to_cache(db):
                      "contacted": False, "russian_speaker": False, "is_recruiter": False}]
     new_templates = {"recruiter": "Hello ______,", "russian_speaker": ""}
 
-    with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)), \
+    with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=new_profiles)), \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         await run_load_more_contacts_pipeline(job_id)
 
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
-    cached = get_contact_sample(slug, db_path=db)
+    cached = get_contact_sample(slug, stream="recruiters", db_path=db)
     assert cached["pages_fetched"] == 2
     assert len(cached["profiles"]) == 2  # original Alice + new Bob
 
@@ -190,7 +191,7 @@ async def test_pipeline_job_stays_accepted(db):
                      "contacted": False, "russian_speaker": False, "is_recruiter": False}]
     new_templates = {"recruiter": "", "russian_speaker": ""}
 
-    with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)), \
+    with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=new_profiles)), \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         updated = await run_load_more_contacts_pipeline(job_id)
@@ -207,13 +208,14 @@ async def test_second_load_more_requests_page_3(db):
     job_id = _make_accepted_job_with_cache(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
     # Simulate one prior load-more already done
-    set_contact_sample(slug, [{"firstName": "Alice", "linkedinUrl": ""}], pages_fetched=2, db_path=db)
+    set_contact_sample(slug, [{"firstName": "Alice", "linkedinUrl": ""}], pages_fetched=2,
+                       stream="recruiters", db_path=db)
 
     new_profiles = [{"firstName": "Carol", "linkedinUrl": "https://linkedin.com/in/carol/"}]
     new_contacts = []
     new_templates = {"recruiter": "", "russian_speaker": ""}
 
-    with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
+    with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=new_profiles)) as mock_apify, \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         await run_load_more_contacts_pipeline(job_id)
@@ -257,7 +259,7 @@ async def test_load_more_endpoint_logs_activity(db):
                      "contacted": False, "russian_speaker": False, "is_recruiter": False}]
     new_templates = {"recruiter": "Hello ______,", "russian_speaker": ""}
 
-    with patch.object(pipelines_module, "_run_apify_actor", new=AsyncMock(return_value=new_profiles)), \
+    with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=new_profiles)), \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=new_contacts)), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value=new_templates)):
         resp = client.post(f"/api/jobs/{job_id}/load-more-contacts")

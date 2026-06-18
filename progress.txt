@@ -1,5 +1,17 @@
 # Ralph Loop Progress Log
 
+## Iteration 8 — Issue #80: Load More Contacts for short streams only
+
+**Implemented:**
+- Added `GET /api/jobs/{job_id}/load-more-preflight` endpoint to `server.py`. Returns `billable_streams` (active streams below cap with per-stream cache), `estimated_runs`, and `estimated_cost`. Recruiter cap=3, Russian Speaker cap=5. Counts are derived from the job's current classified contacts (`is_recruiter` for recruiters, `russian_speaker AND NOT is_recruiter` for Russian speakers).
+- Rewrote `run_load_more_contacts_pipeline` in `pipelines.py` to be stream-aware: determines short streams by comparing current classified contact counts against caps, skips inactive toggles, skips streams with no per-stream cache, calls `_run_apify_for_recruiters` or `_run_apify_for_russian_speakers` with `start_page = pages_fetched + 1` for each short stream, and appends new profiles to the correct per-stream cache entry. Raises `ValueError` if no short streams exist.
+- Removed the legacy `_run_apify_actor` pre-check from the `load-more-contacts` server endpoint — the pipeline now owns that validation and raises an appropriate ValueError.
+- Updated `loadMoreContacts()` in `dashboard.html` to call the preflight endpoint first, show an early-exit alert when all streams are at cap, and display a stream-aware confirm dialog (stream name, next page number, run count, estimated cost) matching the Enrich Job style.
+- Added `tests/test_load_more_stream_aware.py` with 18 tests covering: preflight below-cap inclusion, at-cap exclusion, inactive toggle exclusion, no cache exclusion, both-streams case, page numbering, cost calculation, 404 for unknown job, pipeline stream dispatch (recruiters vs russian), skip-at-cap behavior, per-stream cache append, no-short-streams raise, correct start_page, dashboard preflight fetch, dashboard confirm content.
+- Updated `tests/test_load_more_contacts.py`: fixture now sets `stream='recruiters'` cache (not legacy `stream=''`); all `_run_apify_actor` mocks replaced with `_run_apify_for_recruiters`.
+- Updated `tests/test_cost_confirmations.py`: replaced hardcoded `$0.22` cost assertion with dynamic `estimated_cost` preflight assertion.
+- All 551 tests pass.
+
 ## Iteration 7 — Issue #79: Partial enrichment success and Enrichment Notes
 
 **Implemented:**

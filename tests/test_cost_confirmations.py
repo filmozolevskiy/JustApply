@@ -225,7 +225,7 @@ def test_load_more_contacts_always_shows_confirm():
 def test_load_more_contacts_cost_estimate_visible():
     script = _dashboard_script()
     body = _get_function_body(script, "loadMoreContacts")
-    assert "0.22" in body, "loadMoreContacts confirm must show $0.22 cost estimate"
+    assert "estimated_cost" in body, "loadMoreContacts confirm must show dynamic estimated_cost from preflight"
 
 
 def test_load_more_contacts_shows_card_spinner_while_loading():
