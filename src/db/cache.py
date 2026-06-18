@@ -1,4 +1,4 @@
-"""Contact Sample Cache — per-company store of raw Apify profiles."""
+"""Contact Sample Cache — per-company, per-stream store of raw Apify profiles."""
 import json
 import re
 from datetime import datetime, timezone
@@ -6,15 +6,16 @@ from datetime import datetime, timezone
 from . import connection
 
 
-def get_contact_sample(company_slug: str, db_path=None) -> dict | None:
+def get_contact_sample(company_slug: str, stream: str = "", db_path=None) -> dict | None:
     """Return cached Contact Sample dict with profiles, fetched_at, display_name, pages_fetched, or None on miss."""
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT profiles, fetched_at, display_name, pages_fetched FROM contact_sample_cache WHERE company_slug = ?",
-        (company_slug,),
+        "SELECT profiles, fetched_at, display_name, pages_fetched "
+        "FROM contact_sample_cache WHERE company_slug = ? AND stream = ?",
+        (company_slug, stream),
     )
     row = cursor.fetchone()
     conn.close()
@@ -38,6 +39,7 @@ def set_contact_sample(
     profiles: list,
     display_name: str = "",
     pages_fetched: int = 1,
+    stream: str = "",
     db_path=None,
 ) -> None:
     """Write raw Contact Sample profiles to cache, including empty lists from successful Apify runs."""
@@ -47,8 +49,8 @@ def set_contact_sample(
     cursor = conn.cursor()
     cursor.execute(
         "INSERT OR REPLACE INTO contact_sample_cache "
-        "(company_slug, profiles, fetched_at, display_name, pages_fetched) VALUES (?, ?, ?, ?, ?)",
-        (company_slug, json.dumps(profiles), datetime.now(timezone.utc).isoformat(), display_name, pages_fetched),
+        "(company_slug, stream, profiles, fetched_at, display_name, pages_fetched) VALUES (?, ?, ?, ?, ?, ?)",
+        (company_slug, stream, json.dumps(profiles), datetime.now(timezone.utc).isoformat(), display_name, pages_fetched),
     )
     conn.commit()
     conn.close()
@@ -69,11 +71,11 @@ def _normalize_profile_url(profile: dict) -> str:
     return f"/in/{match.group(1)}" if match else ""
 
 
-def append_contact_sample(company_slug: str, new_profiles: list, db_path=None) -> None:
+def append_contact_sample(company_slug: str, new_profiles: list, stream: str = "", db_path=None) -> None:
     """Append new profiles to cache (deduped by LinkedIn URL) and increment pages_fetched."""
-    existing = get_contact_sample(company_slug, db_path=db_path)
+    existing = get_contact_sample(company_slug, stream=stream, db_path=db_path)
     if not existing:
-        set_contact_sample(company_slug, new_profiles, pages_fetched=1, db_path=db_path)
+        set_contact_sample(company_slug, new_profiles, pages_fetched=1, stream=stream, db_path=db_path)
         return
 
     existing_profiles = existing["profiles"]
@@ -99,16 +101,20 @@ def append_contact_sample(company_slug: str, new_profiles: list, db_path=None) -
         combined,
         display_name=display_name,
         pages_fetched=pages_fetched + 1,
+        stream=stream,
         db_path=db_path,
     )
 
 
-def delete_contact_sample(company_slug: str, db_path=None) -> None:
-    """Delete the Contact Sample Cache entry for a company."""
+def delete_contact_sample(company_slug: str, stream: str = "", db_path=None) -> None:
+    """Delete the Contact Sample Cache entry for a company and stream."""
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM contact_sample_cache WHERE company_slug = ?", (company_slug,))
+    cursor.execute(
+        "DELETE FROM contact_sample_cache WHERE company_slug = ? AND stream = ?",
+        (company_slug, stream),
+    )
     conn.commit()
     conn.close()

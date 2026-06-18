@@ -73,6 +73,9 @@ async def classify_contacts(items: list, settings) -> list:
     except Exception:
         return []
 
+    RUSSIAN_SPEAKER_CAP = 5
+    RECRUITER_CAP = 3
+
     russian_count = 0
     recruiter_count = 0
     result = []
@@ -85,8 +88,8 @@ async def classify_contacts(items: list, settings) -> list:
         wants_russian = bool(entry.get("russian_speaker")) and settings.target_russian_speakers
         wants_recruiter = bool(entry.get("is_recruiter")) and settings.target_recruiters
 
-        add_russian = wants_russian and russian_count < 5
-        add_recruiter = wants_recruiter and recruiter_count < 5
+        add_russian = wants_russian and russian_count < RUSSIAN_SPEAKER_CAP
+        add_recruiter = wants_recruiter and recruiter_count < RECRUITER_CAP
 
         if not add_russian and not add_recruiter:
             continue

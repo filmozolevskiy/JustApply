@@ -1,41 +1,15 @@
 # Ralph Loop Progress Log
 
-## Iteration 1 — Issue #69: Template-only Re-classify backend path
+## Iteration 1 — Issue #73: Recruiter-only filtered enrichment (per-stream cache + Apify HR filter)
 
-Implemented the no-cache path for `POST /api/jobs/{id}/reclassify` (Parent PRD #67).
+**Implemented:**
+- Migrated `contact_sample_cache` DB table from single `company_slug PRIMARY KEY` to compound `(company_slug, stream)` PRIMARY KEY, with migration for existing installs.
+- Updated all cache layer functions (`get_contact_sample`, `set_contact_sample`, `append_contact_sample`, `delete_contact_sample`) to accept a `stream` parameter (default `''`).
+- Added `RECRUITER_FUNCTION_IDS = ["12"]` and `RECRUITER_SAMPLE_SIZE = 3` constants to `contact_sample.py`.
+- Added `function_ids` and `max_items` parameters to `_fetch_apify_employees_at_url` so audience-specific Apify filters can be passed.
+- Added `_run_apify_for_recruiters()` which calls Apify with HR function filter and maxItems=3.
+- Updated `source_contacts()` to detect recruiter-only mode (`target_recruiters=True, target_russian_speakers=False`) and route to a per-stream cache path (`stream='recruiters'`) using the new filtered Apify function. Legacy path (both or neither active) is unchanged.
+- Fixed classifier recruiter cap from 5 → 3 (`RECRUITER_CAP = 3`); Russian speaker cap remains 5.
+- Added 19 new tests in `tests/test_recruiter_stream.py` covering cache schema, recruiter-only orchestration (mocked Apify), stream isolation, cap enforcement.
+- All 487 tests pass.
 
-**Changes:**
-- `src/schemas.py`: Added `enrichmentNoteKind: str = ""` to `Job` model
-- `src/db/connection.py`: Added `ALTER TABLE` migration for `enrichmentNoteKind TEXT DEFAULT ''`
-- `src/db/job_model.py`: Added `enrichmentNoteKind` normalization in `parse_job_row`
-- `src/db/jobs.py`: Extended `enrich_job()` with `enrichment_note_kind` (auto-inferred: "warning" when note set, "" otherwise) and `keep_contacts` (skips contacts column update) params; added `reclassify_no_cache` activity_kind that logs "Re-classified · templates refreshed"
-- `src/pipelines.py`: `run_reclassify_pipeline` now branches on cache presence — no-cache path regenerates templates only (no `source_contacts` call), sets `enrichmentNoteKind="info"` with fixed note text, preserves existing contacts, no 422; cache-hit path unchanged
-- `tests/test_reclassify.py`: Replaced old 422-for-no-cache test with 7 new tests covering the no-cache 200 path, info kind, note text, contact preservation, activity log, and source_contacts isolation; fixed pre-existing patch bug (wrong module path for `classify_contacts` in two async tests)
-
-**Result:** 15/15 reclassify tests pass; 446/446 full suite passes; issue #69 closed.
-
-## Iteration 2 — Issue #70: Drawer action gating — Re-classify on all Accepted
-
-Implemented separate visibility gating for **Re-classify** and **Load More Contacts** in the Kanban drawer (Parent PRD #67).
-
-**Changes:**
-- `src/web/static/js/drawerController.js`: Split the unified `hasContactSampleActions` gate into two independent conditionals:
-  - **Re-classify** now shown whenever `job.status === 'accepted'` — visible even for never-enriched jobs
-  - **Load More Contacts** now gated on `hasContactSampleActions(job, contacts) && job.companyUrl` — hidden for never-enriched jobs and jobs without a companyUrl
-  - Spinner/queued/disabled behaviour for both buttons is unchanged
-- `tests/test_reclassify.py`: Replaced `test_drawer_reclassify_button_only_on_accepted_not_found` (old `hasContactSampleActions` gate assertion) with:
-  - `test_drawer_reclassify_button_gated_on_accepted_status` — verifies `status === 'accepted'` is within 400 chars of `reclassifyJob(` and `hasContactSampleActions` is not
-  - `test_load_more_contacts_gated_on_company_url` — verifies `loadMoreContacts(` is gated on both `hasContactSampleActions` and `companyUrl`
-
-**Result:** 16/16 reclassify tests pass; 462/462 full suite passes; issue #70 closed.
-
-## Iteration 3 — Issue #71: Info vs warning Enrichment Note styling
-
-Implemented `enrichmentNoteKind`-driven styling for Enrichment Note presentation on both the Kanban card and in the job drawer (Parent PRD #67).
-
-**Changes:**
-- `src/web/static/js/boardRenderer.js`: Card enrichment note strip now branches on `job.enrichmentNoteKind === 'info'` — info uses cyan `#22d3ee` color/border and `fa-circle-info` icon; warning/unset keeps amber `#f59e0b` and `fa-triangle-exclamation`
-- `src/web/static/js/drawerController.js`: Enrichment Status section header and body now branch on `job.enrichmentNoteKind === 'info'` — info uses `var(--accent-cyan)` heading, cyan body/border and `fa-circle-info`; warning keeps `var(--accent-amber)` heading, amber body/border and `fa-triangle-exclamation`
-- `tests/test_dashboard_outreach_settings.py`: Added 4 tests covering info cyan styling in card and drawer, and verifying amber styling is preserved for warning notes
-
-**Result:** 4/4 new tests pass; 466/466 full suite passes; issue #71 closed.

@@ -6,7 +6,9 @@ from ...db.job_model import coerce_job
 from ...schemas import Job, OutreachSettings
 from .contact_sample import (
     CONTACT_SAMPLE_SIZE,
+    RECRUITER_SAMPLE_SIZE,
     _run_apify_actor,
+    _run_apify_for_recruiters,
     company_cache_slug,
     normalize_linkedin_url,
     poster_to_apify_item,
@@ -20,11 +22,15 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
     """
     Return outreach contacts for a job using LLM classification.
 
-    Checks the Contact Sample Cache first. On cache miss with a valid companyUrl,
-    fetches via Apify and writes the result to cache (including empty results from
-    successful runs). Infrastructure failures (no token, trigger error, timeout)
-    are not cached and propagate as exceptions. Missing companyUrl skips Apify;
-    the job poster is classified alone when present.
+    Checks the Contact Sample Cache first (per-stream for recruiter-only mode).
+    On cache miss with a valid companyUrl, fetches via Apify and writes the result
+    to cache (including empty results from successful runs). Infrastructure failures
+    (no token, trigger error, timeout) are not cached and propagate as exceptions.
+    Missing companyUrl skips Apify; the job poster is classified alone when present.
+
+    When only Recruiters is active, uses the 'recruiters' stream cache key and fetches
+    via Apify with HR function filter (maxItems=3). Legacy unfiltered cache entries
+    (stream='') are not used for stream-based queries.
     """
     from ...db.cache import get_contact_sample, set_contact_sample
     from ...db.jobs import log_activity
@@ -56,24 +62,42 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     slug = company_cache_slug(company, company_url)
 
-    cache_entry = get_contact_sample(slug)
-    if cache_entry:
-        display = cache_entry.get("display_name") or company
-        fetched_at = cache_entry.get("fetched_at") or ""
-        await log(f"Contact Sample Cache hit for '{display}' (fetched {fetched_at}).", "info")
-        job_id = job.id
-        if job_id:
-            log_activity(job_id, f"Contact Sample Cache hit · {display}")
-        items = cache_entry["profiles"]
-    elif not company_url:
-        await log("No company URL (companyUrl) — skipping Apify.", "warning")
-        if meta is not None:
-            meta["empty_reason"] = "no_company_url"
-        items = []
+    # Recruiter-only path: use per-stream cache + HR-filtered Apify fetch
+    recruiter_only = settings.target_recruiters and not settings.target_russian_speakers
+    if recruiter_only:
+        items = await _source_stream(
+            stream="recruiters",
+            slug=slug,
+            company=company,
+            company_url=company_url,
+            sample_size=RECRUITER_SAMPLE_SIZE,
+            log=log,
+            meta=meta,
+            job_id=job.id,
+            get_contact_sample=get_contact_sample,
+            set_contact_sample=set_contact_sample,
+            log_activity=log_activity,
+        )
     else:
-        await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
-        items = await _run_apify_actor(company_url, log_func=log_func)
-        set_contact_sample(slug, items, display_name=company)
+        # Legacy unfiltered path (both on, neither on, or russian-only — future issues handle those)
+        cache_entry = get_contact_sample(slug, stream="")
+        if cache_entry:
+            display = cache_entry.get("display_name") or company
+            fetched_at = cache_entry.get("fetched_at") or ""
+            await log(f"Contact Sample Cache hit for '{display}' (fetched {fetched_at}).", "info")
+            job_id = job.id
+            if job_id:
+                log_activity(job_id, f"Contact Sample Cache hit · {display}")
+            items = cache_entry["profiles"]
+        elif not company_url:
+            await log("No company URL (companyUrl) — skipping Apify.", "warning")
+            if meta is not None:
+                meta["empty_reason"] = "no_company_url"
+            items = []
+        else:
+            await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
+            items = await _run_apify_actor(company_url, log_func=log_func)
+            set_contact_sample(slug, items, display_name=company, stream="")
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
     fetched_profiles = bool(items)
@@ -113,3 +137,44 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     await log(f"Found {len(contacts)} classified contact(s).", "info")
     return contacts
+
+
+async def _source_stream(
+    *,
+    stream: str,
+    slug: str,
+    company: str,
+    company_url: str,
+    sample_size: int,
+    log,
+    meta: dict | None,
+    job_id,
+    get_contact_sample,
+    set_contact_sample,
+    log_activity,
+) -> list:
+    """Fetch and cache profiles for one audience stream."""
+    cache_entry = get_contact_sample(slug, stream=stream)
+    if cache_entry:
+        display = cache_entry.get("display_name") or company
+        fetched_at = cache_entry.get("fetched_at") or ""
+        await log(
+            f"Contact Sample Cache hit for '{display}' ({stream} stream, fetched {fetched_at}).", "info"
+        )
+        if job_id:
+            log_activity(job_id, f"Contact Sample Cache hit · {display} ({stream} stream)")
+        return cache_entry["profiles"]
+
+    if not company_url:
+        await log("No company URL (companyUrl) — skipping Apify.", "warning")
+        if meta is not None:
+            meta["empty_reason"] = "no_company_url"
+        return []
+
+    await log(f"Fetching up to {sample_size} profiles for '{company}' ({stream} stream, page 1)...", "info")
+    if stream == "recruiters":
+        items = await _run_apify_for_recruiters(company_url, log_func=log)
+    else:
+        items = await _run_apify_actor(company_url, log_func=log)
+    set_contact_sample(slug, items, display_name=company, stream=stream)
+    return items

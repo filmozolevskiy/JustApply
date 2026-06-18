@@ -14,9 +14,12 @@ from .classifier import classify_contacts, normalize_apify_employee, _normalize_
 from .contact_sample import (
     ApifyTimeoutError,
     CONTACT_SAMPLE_SIZE,
+    RECRUITER_FUNCTION_IDS,
+    RECRUITER_SAMPLE_SIZE,
     _fetch_apify_employees_at_url,
     _run_apify_actor,
     _run_apify_for_company_page,
+    _run_apify_for_recruiters,
     _run_apify_for_slug,
     company_cache_slug,
     company_slug_candidates,
@@ -35,6 +38,8 @@ __all__ = [
     "RUSSIAN_SPEAKER_CTA",
     "ApifyTimeoutError",
     "CONTACT_SAMPLE_SIZE",
+    "RECRUITER_FUNCTION_IDS",
+    "RECRUITER_SAMPLE_SIZE",
     "abort_enrichment",
     "begin_enrichment",
     "classify_contacts",
@@ -57,5 +62,6 @@ __all__ = [
     "_normalize_apify_employee",
     "_run_apify_actor",
     "_run_apify_for_company_page",
+    "_run_apify_for_recruiters",
     "_run_apify_for_slug",
 ]

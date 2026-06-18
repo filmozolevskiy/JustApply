@@ -124,14 +124,39 @@ def init_db(db_path=None):
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS contact_sample_cache (
-            company_slug TEXT PRIMARY KEY,
+            company_slug TEXT NOT NULL,
+            stream TEXT NOT NULL DEFAULT '',
             profiles TEXT NOT NULL,
             fetched_at TEXT NOT NULL,
             display_name TEXT DEFAULT '',
-            pages_fetched INTEGER DEFAULT 1
+            pages_fetched INTEGER DEFAULT 1,
+            PRIMARY KEY (company_slug, stream)
         )
     """)
     conn.commit()
+
+    # Migrate legacy single-PK cache table to compound (company_slug, stream) key
+    cursor.execute("PRAGMA table_info(contact_sample_cache)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if "stream" not in cols:
+        cursor.executescript("""
+            CREATE TABLE IF NOT EXISTS contact_sample_cache_new (
+                company_slug TEXT NOT NULL,
+                stream TEXT NOT NULL DEFAULT '',
+                profiles TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                display_name TEXT DEFAULT '',
+                pages_fetched INTEGER DEFAULT 1,
+                PRIMARY KEY (company_slug, stream)
+            );
+            INSERT OR IGNORE INTO contact_sample_cache_new
+                (company_slug, stream, profiles, fetched_at, display_name, pages_fetched)
+            SELECT company_slug, '', profiles, fetched_at, display_name, pages_fetched
+            FROM contact_sample_cache;
+            DROP TABLE contact_sample_cache;
+            ALTER TABLE contact_sample_cache_new RENAME TO contact_sample_cache;
+        """)
+        conn.commit()
 
     try:
         cursor.execute("ALTER TABLE outreach_settings ADD COLUMN short_connection_note INTEGER NOT NULL DEFAULT 1")
@@ -144,12 +169,6 @@ def init_db(db_path=None):
     if count == 0:
         _seed_db(cursor)
         conn.commit()
-
-    try:
-        cursor.execute("ALTER TABLE contact_sample_cache ADD COLUMN pages_fetched INTEGER DEFAULT 1")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
 
     # Backfill rejectedAt for Rejected jobs that predate this column
     cursor.execute(

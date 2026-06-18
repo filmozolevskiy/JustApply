@@ -20,6 +20,8 @@ class ApifyInfrastructureError(Exception):
 APIFY_API_BASE = "https://api.apify.com/v2"
 ACTOR_ID = "harvestapi~linkedin-company-employees"
 CONTACT_SAMPLE_SIZE = 25
+RECRUITER_SAMPLE_SIZE = 3
+RECRUITER_FUNCTION_IDS = ["12"]
 
 _COMPANY_SUFFIXES = (
     "-technologies", "-technology", "-incorporated", "-corporation",
@@ -61,6 +63,8 @@ async def _fetch_apify_employees_at_url(
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
     start_page: int = 1,
+    function_ids: list[str] | None = None,
+    max_items: int | None = None,
 ) -> list:
     """Run Apify against one LinkedIn company page URL."""
 
@@ -76,7 +80,13 @@ async def _fetch_apify_employees_at_url(
     if not api_token:
         raise ApifyInfrastructureError("APIFY_API_TOKEN not set")
 
-    actor_input = {"companies": [company_url], "maxItems": CONTACT_SAMPLE_SIZE, "startPage": start_page}
+    actor_input = {
+        "companies": [company_url],
+        "maxItems": max_items if max_items is not None else CONTACT_SAMPLE_SIZE,
+        "startPage": start_page,
+    }
+    if function_ids:
+        actor_input["functionIds"] = function_ids
 
     run_url = f"{APIFY_API_BASE}/acts/{ACTOR_ID}/runs"
     params = {"token": api_token}
@@ -194,6 +204,38 @@ async def _run_apify_actor(
         timeout_seconds=timeout_seconds,
         poll_interval=poll_interval,
         start_page=start_page,
+    )
+
+
+async def _run_apify_for_recruiters(
+    company_url: str,
+    log_func=None,
+    timeout_seconds: float = 300.0,
+    poll_interval: float = 5.0,
+    start_page: int = 1,
+) -> list:
+    """Fetch recruiter profiles via Apify using the HR function filter.
+
+    Uses functionIds=["12"] (HR/Recruiting) and maxItems=RECRUITER_SAMPLE_SIZE.
+    Raises ApifyInfrastructureError for credential or API failures.
+    Raises ApifyTimeoutError when local polling times out.
+    Returns a (possibly empty) list on a successful Apify run.
+    """
+    if not company_url:
+        raise ApifyInfrastructureError("No companyUrl provided for Apify fetch.")
+    normalized = normalize_linkedin_company_url(company_url)
+    if not normalized:
+        return []
+    slug = linkedin_company_slug_from_url(normalized)
+    return await _fetch_apify_employees_at_url(
+        normalized,
+        label=f"recruiters stream for '{slug}'",
+        log_func=log_func,
+        timeout_seconds=timeout_seconds,
+        poll_interval=poll_interval,
+        start_page=start_page,
+        function_ids=RECRUITER_FUNCTION_IDS,
+        max_items=RECRUITER_SAMPLE_SIZE,
     )
 
 
