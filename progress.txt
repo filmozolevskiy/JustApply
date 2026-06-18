@@ -1,5 +1,15 @@
 # Ralph Loop Progress Log
 
+## Iteration 5 — Issue #76: Re-classify from merged per-stream Contact Sample Cache
+
+**Implemented:**
+- Fixed `run_reclassify_pipeline` in `src/pipelines.py` to check per-stream caches (instead of only the legacy `stream=''` cache) before deciding whether to take the full re-classify path or the template-only path.
+- Settings are now loaded before the cache check, so active streams (`recruiters`, `russian`, or both) are determined from OutreachSettings. When at least one toggle is on, the pipeline checks `stream='recruiters'` and/or `stream='russian'`; when both are off, it falls back to the legacy `stream=''` check.
+- When any active stream has cached data, `source_contacts()` is called (which already handles per-stream and dual-audience routing and will hit the cache, not Apify). When no active stream cache exists, the template-only path (keep_contacts=True) is taken as before.
+- Removed the duplicate `settings = OutreachSettings(...)` line that had been left in the cache-hit branch after the refactor.
+- Added `tests/test_reclassify_per_stream.py` with 5 tests covering: recruiter-only cache hit (no Apify), russian-only cache hit (no Apify), dual-audience both caches (no Apify), recruiter toggle on but no recruiter cache → template-only, both toggles off → legacy stream='' cache path.
+- All 521 tests pass.
+
 ## Iteration 4 — Issue #74: Contact Search Settings section heading tooltip
 
 **Implemented:**
