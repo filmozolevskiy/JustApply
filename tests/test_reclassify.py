@@ -264,14 +264,30 @@ def test_drawer_shows_reclassify_button_for_accepted_jobs_with_contacts():
         "drawerController.js must call reclassifyJob()"
 
 
-def test_drawer_reclassify_button_only_on_accepted_not_found():
+def test_drawer_reclassify_button_gated_on_accepted_status():
+    """Re-classify is gated on status === 'accepted', not hasContactSampleActions."""
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
     idx = content.find("reclassifyJob(")
     assert idx != -1
-    nearby = content[max(0, idx - 1200):idx + 50]
+    nearby = content[max(0, idx - 400):idx + 50]
+    assert "status === 'accepted'" in nearby, \
+        "Re-classify button must be gated on job.status === 'accepted'"
+    assert "hasContactSampleActions" not in nearby, \
+        "Re-classify must not be gated on hasContactSampleActions — show for all Accepted jobs"
+
+
+def test_load_more_contacts_gated_on_company_url():
+    """Load More Contacts requires both hasContactSampleActions and companyUrl."""
+    from kanban_js import read_drawer_controller
+    content = read_drawer_controller()
+    idx = content.find("loadMoreContacts(")
+    assert idx != -1
+    nearby = content[max(0, idx - 400):idx + 50]
+    assert "companyUrl" in nearby, \
+        "Load More Contacts must be gated on job.companyUrl"
     assert "hasContactSampleActions" in nearby, \
-        "Re-classify button must be gated via hasContactSampleActions (accepted + enriched)"
+        "Load More Contacts must still be gated on hasContactSampleActions"
 
 
 # --- Dashboard: reclassifyJob is exported to window ---

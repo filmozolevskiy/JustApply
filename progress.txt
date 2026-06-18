@@ -13,3 +13,18 @@ Implemented the no-cache path for `POST /api/jobs/{id}/reclassify` (Parent PRD #
 - `tests/test_reclassify.py`: Replaced old 422-for-no-cache test with 7 new tests covering the no-cache 200 path, info kind, note text, contact preservation, activity log, and source_contacts isolation; fixed pre-existing patch bug (wrong module path for `classify_contacts` in two async tests)
 
 **Result:** 15/15 reclassify tests pass; 446/446 full suite passes; issue #69 closed.
+
+## Iteration 2 — Issue #70: Drawer action gating — Re-classify on all Accepted
+
+Implemented separate visibility gating for **Re-classify** and **Load More Contacts** in the Kanban drawer (Parent PRD #67).
+
+**Changes:**
+- `src/web/static/js/drawerController.js`: Split the unified `hasContactSampleActions` gate into two independent conditionals:
+  - **Re-classify** now shown whenever `job.status === 'accepted'` — visible even for never-enriched jobs
+  - **Load More Contacts** now gated on `hasContactSampleActions(job, contacts) && job.companyUrl` — hidden for never-enriched jobs and jobs without a companyUrl
+  - Spinner/queued/disabled behaviour for both buttons is unchanged
+- `tests/test_reclassify.py`: Replaced `test_drawer_reclassify_button_only_on_accepted_not_found` (old `hasContactSampleActions` gate assertion) with:
+  - `test_drawer_reclassify_button_gated_on_accepted_status` — verifies `status === 'accepted'` is within 400 chars of `reclassifyJob(` and `hasContactSampleActions` is not
+  - `test_load_more_contacts_gated_on_company_url` — verifies `loadMoreContacts(` is gated on both `hasContactSampleActions` and `companyUrl`
+
+**Result:** 16/16 reclassify tests pass; 462/462 full suite passes; issue #70 closed.
