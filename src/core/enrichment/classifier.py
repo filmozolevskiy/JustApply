@@ -85,17 +85,27 @@ async def classify_contacts(items: list, settings) -> list:
         if idx is None or not isinstance(idx, int) or idx >= len(items):
             continue
 
-        wants_russian = bool(entry.get("russian_speaker")) and settings.target_russian_speakers
-        wants_recruiter = bool(entry.get("is_recruiter")) and settings.target_recruiters
+        is_recruiter_classified = bool(entry.get("is_recruiter"))
+        is_russian_classified = bool(entry.get("russian_speaker"))
 
-        add_russian = wants_russian and russian_count < RUSSIAN_SPEAKER_CAP
-        add_recruiter = wants_recruiter and recruiter_count < RECRUITER_CAP
+        # Dual-classified contacts count toward Recruiter cap only (CONTEXT.md)
+        add_recruiter = (
+            is_recruiter_classified and settings.target_recruiters and recruiter_count < RECRUITER_CAP
+        )
+        # Russian pool: only contacts with russian_speaker and NOT is_recruiter
+        add_russian = (
+            is_russian_classified
+            and not is_recruiter_classified
+            and settings.target_russian_speakers
+            and russian_count < RUSSIAN_SPEAKER_CAP
+        )
 
         if not add_russian and not add_recruiter:
             continue
 
         contact = normalize_apify_employee(items[idx])
-        contact["russian_speaker"] = add_russian
+        # Dual-classified contacts show both badges (is_russian_classified preserved)
+        contact["russian_speaker"] = is_russian_classified and (add_russian or add_recruiter)
         contact["is_recruiter"] = add_recruiter
 
         if add_russian:

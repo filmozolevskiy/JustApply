@@ -1,5 +1,17 @@
 # Ralph Loop Progress Log
 
+## Iteration 2 — Issue #75: Russian-only filtered enrichment (Russian Apify filter + non-HR cap)
+
+**Implemented:**
+- Added `RUSSIAN_SAMPLE_SIZE = 5`, `RUSSIAN_SEARCH_QUERY = "Russian"`, `RUSSIAN_EXCLUDE_FUNCTION_IDS = ["12"]` constants to `contact_sample.py`.
+- Extended `_fetch_apify_employees_at_url` with `search_query` and `exclude_function_ids` parameters, wired into `actor_input` as `searchQuery` and `excludeFunctionIds`.
+- Added `_run_apify_for_russian_speakers()` which calls Apify with `searchQuery="Russian"`, `excludeFunctionIds=["12"]`, `maxItems=5`.
+- Updated `source_contacts()` to detect Russian-only mode (`target_russian_speakers=True, target_recruiters=False`) and route to `_source_stream(stream="russian", ...)`, importing `_run_apify_for_russian_speakers` and `RUSSIAN_SAMPLE_SIZE`.
+- Updated `_source_stream()` to dispatch `_run_apify_for_russian_speakers` when `stream == "russian"`.
+- Fixed `classifier.py` so the Russian Speaker pool excludes Recruiter-classified contacts (`add_russian` requires `not is_recruiter_classified`). Dual-classified contacts still show both `russian_speaker=True` and `is_recruiter=True` badges, but count toward Recruiter cap only — consistent with CONTEXT.md.
+- Added 14 new tests in `tests/test_russian_stream.py` covering constants, Russian-only orchestration (mocked Apify), per-stream cache hit/miss/empty caching, infrastructure error propagation, log messages, non-HR cap enforcement, and `_fetch_apify_employees_at_url` Apify input verification.
+- All 501 tests pass.
+
 ## Iteration 1 — Issue #73: Recruiter-only filtered enrichment (per-stream cache + Apify HR filter)
 
 **Implemented:**

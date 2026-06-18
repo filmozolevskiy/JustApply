@@ -7,8 +7,10 @@ from ...schemas import Job, OutreachSettings
 from .contact_sample import (
     CONTACT_SAMPLE_SIZE,
     RECRUITER_SAMPLE_SIZE,
+    RUSSIAN_SAMPLE_SIZE,
     _run_apify_actor,
     _run_apify_for_recruiters,
+    _run_apify_for_russian_speakers,
     company_cache_slug,
     normalize_linkedin_url,
     poster_to_apify_item,
@@ -64,6 +66,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     # Recruiter-only path: use per-stream cache + HR-filtered Apify fetch
     recruiter_only = settings.target_recruiters and not settings.target_russian_speakers
+    russian_only = settings.target_russian_speakers and not settings.target_recruiters
     if recruiter_only:
         items = await _source_stream(
             stream="recruiters",
@@ -78,8 +81,22 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             set_contact_sample=set_contact_sample,
             log_activity=log_activity,
         )
+    elif russian_only:
+        items = await _source_stream(
+            stream="russian",
+            slug=slug,
+            company=company,
+            company_url=company_url,
+            sample_size=RUSSIAN_SAMPLE_SIZE,
+            log=log,
+            meta=meta,
+            job_id=job.id,
+            get_contact_sample=get_contact_sample,
+            set_contact_sample=set_contact_sample,
+            log_activity=log_activity,
+        )
     else:
-        # Legacy unfiltered path (both on, neither on, or russian-only — future issues handle those)
+        # Legacy unfiltered path (both on, neither on — future issues handle dual-audience)
         cache_entry = get_contact_sample(slug, stream="")
         if cache_entry:
             display = cache_entry.get("display_name") or company
@@ -174,6 +191,8 @@ async def _source_stream(
     await log(f"Fetching up to {sample_size} profiles for '{company}' ({stream} stream, page 1)...", "info")
     if stream == "recruiters":
         items = await _run_apify_for_recruiters(company_url, log_func=log)
+    elif stream == "russian":
+        items = await _run_apify_for_russian_speakers(company_url, log_func=log)
     else:
         items = await _run_apify_actor(company_url, log_func=log)
     set_contact_sample(slug, items, display_name=company, stream=stream)
