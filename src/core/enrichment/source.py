@@ -64,9 +64,11 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     slug = company_cache_slug(company, company_url)
 
-    # Recruiter-only path: use per-stream cache + HR-filtered Apify fetch
+    # Determine audience mode
     recruiter_only = settings.target_recruiters and not settings.target_russian_speakers
     russian_only = settings.target_russian_speakers and not settings.target_recruiters
+    dual_audience = settings.target_recruiters and settings.target_russian_speakers
+
     if recruiter_only:
         items = await _source_stream(
             stream="recruiters",
@@ -95,8 +97,36 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             set_contact_sample=set_contact_sample,
             log_activity=log_activity,
         )
+    elif dual_audience:
+        recruiter_items = await _source_stream(
+            stream="recruiters",
+            slug=slug,
+            company=company,
+            company_url=company_url,
+            sample_size=RECRUITER_SAMPLE_SIZE,
+            log=log,
+            meta=meta,
+            job_id=job.id,
+            get_contact_sample=get_contact_sample,
+            set_contact_sample=set_contact_sample,
+            log_activity=log_activity,
+        )
+        russian_items = await _source_stream(
+            stream="russian",
+            slug=slug,
+            company=company,
+            company_url=company_url,
+            sample_size=RUSSIAN_SAMPLE_SIZE,
+            log=log,
+            meta=meta,
+            job_id=job.id,
+            get_contact_sample=get_contact_sample,
+            set_contact_sample=set_contact_sample,
+            log_activity=log_activity,
+        )
+        items = _merge_profiles(recruiter_items, russian_items)
     else:
-        # Legacy unfiltered path (both on, neither on — future issues handle dual-audience)
+        # Legacy unfiltered path (neither toggle on)
         cache_entry = get_contact_sample(slug, stream="")
         if cache_entry:
             display = cache_entry.get("display_name") or company
@@ -154,6 +184,23 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     await log(f"Found {len(contacts)} classified contact(s).", "info")
     return contacts
+
+
+def _merge_profiles(recruiter_items: list, russian_items: list) -> list:
+    """Merge two stream profile lists, deduplicating by normalized LinkedIn URL."""
+    seen_urls: set[str] = set()
+    merged = []
+    for item in recruiter_items + russian_items:
+        url = normalize_linkedin_url(
+            item.get("linkedinUrl") or item.get("linkedInUrl") or
+            item.get("profileUrl") or item.get("url") or ""
+        )
+        if url:
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+        merged.append(item)
+    return merged
 
 
 async def _source_stream(

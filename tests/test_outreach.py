@@ -76,7 +76,7 @@ async def test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poste
     }
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
-        await source_contacts(job)
+        await source_contacts(job, settings=OutreachSettings(target_recruiters=False, target_russian_speakers=False))
     mock_apify.assert_called_once()
 
 
@@ -105,7 +105,7 @@ async def test_source_contacts_injects_poster_when_not_in_apify_sample():
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(side_effect=mock_classify)):
-        await source_contacts(job)
+        await source_contacts(job, settings=OutreachSettings(target_recruiters=False, target_russian_speakers=False))
 
     assert len(classify_calls) == 1
     assert len(classify_calls[0]) == 2  # 1 Apify + 1 injected poster
@@ -198,13 +198,15 @@ async def test_source_contacts_sets_is_job_poster_on_matched_contact():
 
 @pytest.mark.asyncio
 async def test_source_contacts_delegates_to_classify_contacts_with_settings():
-    employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Engineer", "linkedinUrl": ""}]
+    employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Engineer", "linkedinUrl": "/in/ivan"}]
     settings = OutreachSettings(target_russian_speakers=True, target_recruiters=True)
-    classified = [{"name": "Ivan Petrov", "title": "Engineer", "url": "", "contacted": False,
+    classified = [{"name": "Ivan Petrov", "title": "Engineer", "url": "/in/ivan", "contacted": False,
                    "russian_speaker": True, "is_recruiter": False, "currentPosition": "", "location": ""}]
     job = {"title": "QA", "company": "TechCorp", "companyUrl": "https://www.linkedin.com/company/techcorp/", "contacts": []}
 
-    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+    # In dual-audience mode, patch both stream functions; one returns employees, other empty
+    with patch.object(source_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "_run_apify_for_russian_speakers", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)) as mock_classify:
         result = await source_contacts(job, settings=settings)
 
@@ -217,7 +219,9 @@ async def test_source_contacts_uses_default_settings_when_none_provided():
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Dev", "linkedinUrl": ""}]
     job = {"title": "QA", "company": "Corp", "companyUrl": "https://www.linkedin.com/company/corp/", "contacts": []}
 
-    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+    # Default settings have both toggles True → dual-audience path; patch both stream functions
+    with patch.object(source_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "_run_apify_for_russian_speakers", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
         await source_contacts(job)
 
@@ -412,7 +416,7 @@ async def test_source_contacts_passes_company_url_to_apify():
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)) as mock_apify, \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)):
-        await source_contacts(job)
+        await source_contacts(job, settings=OutreachSettings(target_recruiters=False, target_russian_speakers=False))
 
     mock_apify.assert_called_once()
     assert mock_apify.call_args.args[0] == job["companyUrl"]
@@ -425,7 +429,7 @@ async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
            "companyUrl": "https://www.linkedin.com/company/tranetechnologies/", "contacts": []}
     meta = {}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])):
-        result = await source_contacts(job, meta=meta)
+        result = await source_contacts(job, settings=OutreachSettings(target_recruiters=False, target_russian_speakers=False), meta=meta)
     assert result == []
     assert meta["empty_reason"] == "no_employees"
 

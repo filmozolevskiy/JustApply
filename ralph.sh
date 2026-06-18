@@ -1,20 +1,42 @@
 #!/bin/bash
 set -e
 
+usage() {
+  cat <<EOF
+Usage: $0 -p <prd> [options]
+
+Required:
+  -p <prd>       Parent PRD issue number or GitHub issue URL
+
+Options:
+  -a <agent>     Agent to run: gemini (default) or claude
+  -i <n>         Max iterations (default: 10)
+  -s <skill>     Skill name under ~/.claude/skills or ~/.gemini/config/skills
+  -v             Stream Claude tool calls and progress (--verbose; claude agent only)
+  -h             Show this help
+
+Example:
+  unset GITHUB_TOKEN && $0 -p 68 -a claude -s tdd -i 8 -v
+EOF
+}
+
 # Default values
 AGENT="gemini"
 ITERATIONS=10
 SKILL=""
 PRD=""
+VERBOSE=0
 
 # Parse flags
-while getopts "a:i:s:p:" opt; do
+while getopts "a:i:s:p:vh" opt; do
   case $opt in
     a) AGENT="$OPTARG" ;;
     i) ITERATIONS="$OPTARG" ;;
     s) SKILL="$OPTARG" ;;
     p) PRD="$OPTARG" ;;
-    *) echo "Usage: $0 -p <prd> [-a agent] [-i iterations] [-s skill]" && exit 1 ;;
+    v) VERBOSE=1 ;;
+    h) usage && exit 0 ;;
+    *) usage && exit 1 ;;
   esac
 done
 
@@ -49,7 +71,11 @@ case "$AGENT" in
     CMD_TEMPLATE='agy --dangerously-skip-permissions -p {prompt}'
     SKILLS_DIR="$HOME/.gemini/config/skills" ;;
   claude)
-    CMD_TEMPLATE='claude --dangerously-skip-permissions -p {prompt}'
+    CLAUDE_VERBOSE=""
+    if [ "$VERBOSE" -eq 1 ]; then
+      CLAUDE_VERBOSE="--verbose "
+    fi
+    CMD_TEMPLATE="claude --dangerously-skip-permissions ${CLAUDE_VERBOSE}-p {prompt}"
     SKILLS_DIR="$HOME/.claude/skills" ;;
   *)
     echo "Unknown agent: $AGENT" && exit 1 ;;
@@ -79,7 +105,16 @@ COLOR_ITERATION="\033[1;35m" # Bold Magenta
 COLOR_TASK="\033[1;36m"      # Bold Cyan
 COLOR_RESET="\033[0m"
 
-echo "Starting Ralph Loop ($ITERATIONS iterations max) using agent: $AGENT"
+if [ "$VERBOSE" -eq 1 ] && [ "$AGENT" != "claude" ]; then
+  echo "Warning: -v applies to the claude agent only; ignored for $AGENT."
+fi
+
+VERBOSE_LABEL=""
+if [ "$VERBOSE" -eq 1 ] && [ "$AGENT" = "claude" ]; then
+  VERBOSE_LABEL=", verbose on"
+fi
+
+echo "Starting Ralph Loop ($ITERATIONS iterations max) using agent: $AGENT${VERBOSE_LABEL}"
 
 for ((i=1; i<=ITERATIONS; i++)); do
   echo -e "\n${COLOR_ITERATION}=== Iteration $i of $ITERATIONS ===${COLOR_RESET}\n"

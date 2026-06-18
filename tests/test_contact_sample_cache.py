@@ -11,6 +11,9 @@ import src.core.enrichment.source as source_module
 from src import db as database
 from src.db.cache import get_contact_sample, set_contact_sample, delete_contact_sample
 from src.core.outreach import source_contacts
+from src.schemas import OutreachSettings
+
+_LEGACY_SETTINGS = OutreachSettings(target_recruiters=False, target_russian_speakers=False)
 
 
 @pytest.fixture
@@ -84,7 +87,7 @@ async def test_source_contacts_calls_apify_on_cache_miss(db):
     job = {"title": "QA", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])) as mock_apify, \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
-        await source_contacts(job)
+        await source_contacts(job, settings=_LEGACY_SETTINGS)
     mock_apify.assert_called_once()
 
 
@@ -107,7 +110,7 @@ async def test_source_contacts_populates_cache_after_apify_fetch(db):
     job = {"title": "QA", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=profiles)), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
-        await source_contacts(job)
+        await source_contacts(job, settings=_LEGACY_SETTINGS)
     cached = get_contact_sample("acme", db_path=db)
     assert cached is not None
     assert cached["profiles"] == profiles
@@ -119,7 +122,7 @@ async def test_source_contacts_empty_apify_is_cached(db):
     job = {"title": "QA", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
-        await source_contacts(job)
+        await source_contacts(job, settings=_LEGACY_SETTINGS)
     cached = get_contact_sample("acme", db_path=db)
     assert cached is not None
     assert cached["profiles"] == []
@@ -133,7 +136,7 @@ async def test_source_contacts_classify_runs_on_cache_hit(db):
     job = {"title": "QA", "company": "Acme", "contacts": []}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
-        await source_contacts(job)
+        await source_contacts(job, settings=_LEGACY_SETTINGS)
     mock_classify.assert_called_once()
 
 
@@ -150,7 +153,7 @@ async def test_source_contacts_cache_hit_logs_company_and_fetch_date(db):
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
-        await source_contacts(job, log_func=capture_log)
+        await source_contacts(job, settings=_LEGACY_SETTINGS, log_func=capture_log)
 
     joined = " ".join(log_records)
     assert "Acme Corp" in joined or "acme" in joined.lower()
@@ -175,7 +178,7 @@ async def test_source_contacts_cache_hit_appends_activity_log(db):
 
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
-        await source_contacts(job)
+        await source_contacts(job, settings=_LEGACY_SETTINGS)
 
     updated = database.get_job(1, db_path=db)
     messages = [e.message for e in updated.activityLog]
@@ -211,7 +214,7 @@ async def test_source_contacts_infrastructure_error_not_cached(db):
     job = {"title": "QA", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(side_effect=ApifyInfrastructureError("trigger failed"))):
         with pytest.raises(ApifyInfrastructureError):
-            await source_contacts(job)
+            await source_contacts(job, settings=_LEGACY_SETTINGS)
     assert get_contact_sample("acme", db_path=db) is None
 
 
