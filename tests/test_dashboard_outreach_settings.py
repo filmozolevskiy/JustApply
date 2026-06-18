@@ -468,3 +468,61 @@ def test_greeting_functions_support_hello_prefix():
         fn_body = script[fn_start:fn_start + 500]
         assert "Hello" in fn_body, \
             f"{fn_name} must match Hello greetings from outreach templates"
+
+
+# --- Issue #71: Info vs warning Enrichment Note styling ---
+
+def test_board_renderer_card_info_note_uses_cyan_styling():
+    """boardRenderer uses enrichmentNoteKind to apply cyan info styling on cards."""
+    board_renderer_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
+    with open(board_renderer_path) as f:
+        content = f.read()
+    # Must branch on enrichmentNoteKind
+    assert "enrichmentNoteKind" in content, \
+        "boardRenderer must reference enrichmentNoteKind for styling branches"
+    # Info path must use a cyan color (#22d3ee is the cyan token)
+    assert "#22d3ee" in content, \
+        "boardRenderer card strip must use cyan #22d3ee for enrichmentNoteKind === 'info'"
+    # Info path must use an info icon, not always exclamation
+    assert "fa-circle-info" in content, \
+        "boardRenderer card strip must use fa-circle-info icon for info notes"
+
+
+def test_board_renderer_card_warning_note_keeps_amber_styling():
+    """boardRenderer card strip keeps amber #f59e0b for warning/unset enrichmentNoteKind."""
+    board_renderer_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
+    with open(board_renderer_path) as f:
+        content = f.read()
+    assert "#f59e0b" in content, \
+        "boardRenderer card strip must keep amber #f59e0b for warning enrichment notes"
+    assert "fa-triangle-exclamation" in content, \
+        "boardRenderer card strip must keep fa-triangle-exclamation icon for warning notes"
+
+
+def test_drawer_enrichment_status_info_uses_cyan_styling():
+    """Drawer Enrichment Status section uses cyan styling when enrichmentNoteKind === 'info'."""
+    content = read_drawer_controller()
+    fn_start = content.find("function openJobDetailsDrawer(")
+    assert fn_start != -1
+    # Find the Enrichment Status section within openJobDetailsDrawer
+    enrichment_status_pos = content.find("Enrichment Status", fn_start)
+    assert enrichment_status_pos != -1, "openJobDetailsDrawer must contain 'Enrichment Status'"
+    nearby = content[max(fn_start, enrichment_status_pos - 200):enrichment_status_pos + 600]
+    assert "enrichmentNoteKind" in nearby, \
+        "Enrichment Status section must branch on enrichmentNoteKind for styling"
+    assert "accent-cyan" in nearby or "#22d3ee" in nearby, \
+        "Enrichment Status section must use cyan styling for info notes"
+    assert "fa-circle-info" in nearby, \
+        "Enrichment Status section must use fa-circle-info icon for info notes"
+
+
+def test_drawer_enrichment_status_warning_keeps_amber_styling():
+    """Drawer Enrichment Status section keeps amber styling for warning notes."""
+    content = read_drawer_controller()
+    enrichment_status_pos = content.find("Enrichment Status")
+    assert enrichment_status_pos != -1
+    nearby = content[max(0, enrichment_status_pos - 200):enrichment_status_pos + 600]
+    assert "accent-amber" in nearby or "#f59e0b" in nearby or "fbbf24" in nearby, \
+        "Enrichment Status section must keep amber styling for warning notes"
+    assert "fa-triangle-exclamation" in nearby, \
+        "Enrichment Status section must keep fa-triangle-exclamation for warning notes"

@@ -210,8 +210,8 @@ export function renderBoard(jobs, filters = {}) {
               </div>
             ` : ''}
             ${job.enrichmentNote ? `
-              <div style="font-size: 0.72rem; color: #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #f59e0b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.enrichmentNote}">
-                <i class="fa-solid fa-triangle-exclamation"></i> ${job.enrichmentNote}
+              <div style="font-size: 0.72rem; color: ${job.enrichmentNoteKind === 'info' ? '#22d3ee' : '#f59e0b'}; background: ${job.enrichmentNoteKind === 'info' ? 'rgba(6, 182, 212, 0.08)' : 'rgba(245, 158, 11, 0.08)'}; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid ${job.enrichmentNoteKind === 'info' ? '#22d3ee' : '#f59e0b'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${job.enrichmentNote}">
+                <i class="fa-solid ${job.enrichmentNoteKind === 'info' ? 'fa-circle-info' : 'fa-triangle-exclamation'}"></i> ${job.enrichmentNote}
               </div>
             ` : ''}
             <div class="kanban-card-footer">

@@ -264,8 +264,8 @@ export function createDrawerController({
           ${job.enrichmentNote
             ? `
           <div>
-            <h4 style="font-size:0.8rem; color:var(--accent-amber); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Enrichment Status</h4>
-            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; color: #fbbf24;">
+            <h4 style="font-size:0.8rem; color:${job.enrichmentNoteKind === 'info' ? 'var(--accent-cyan)' : 'var(--accent-amber)'}; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;"><i class="fa-solid ${job.enrichmentNoteKind === 'info' ? 'fa-circle-info' : 'fa-triangle-exclamation'}"></i> Enrichment Status</h4>
+            <div style="background: ${job.enrichmentNoteKind === 'info' ? 'rgba(6, 182, 212, 0.08)' : 'rgba(245, 158, 11, 0.08)'}; border: 1px solid ${job.enrichmentNoteKind === 'info' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; color: ${job.enrichmentNoteKind === 'info' ? '#22d3ee' : '#fbbf24'};">
               ${job.enrichmentNote}
             </div>
           </div>

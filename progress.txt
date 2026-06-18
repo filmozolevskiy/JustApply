@@ -28,3 +28,14 @@ Implemented separate visibility gating for **Re-classify** and **Load More Conta
   - `test_load_more_contacts_gated_on_company_url` — verifies `loadMoreContacts(` is gated on both `hasContactSampleActions` and `companyUrl`
 
 **Result:** 16/16 reclassify tests pass; 462/462 full suite passes; issue #70 closed.
+
+## Iteration 3 — Issue #71: Info vs warning Enrichment Note styling
+
+Implemented `enrichmentNoteKind`-driven styling for Enrichment Note presentation on both the Kanban card and in the job drawer (Parent PRD #67).
+
+**Changes:**
+- `src/web/static/js/boardRenderer.js`: Card enrichment note strip now branches on `job.enrichmentNoteKind === 'info'` — info uses cyan `#22d3ee` color/border and `fa-circle-info` icon; warning/unset keeps amber `#f59e0b` and `fa-triangle-exclamation`
+- `src/web/static/js/drawerController.js`: Enrichment Status section header and body now branch on `job.enrichmentNoteKind === 'info'` — info uses `var(--accent-cyan)` heading, cyan body/border and `fa-circle-info`; warning keeps `var(--accent-amber)` heading, amber body/border and `fa-triangle-exclamation`
+- `tests/test_dashboard_outreach_settings.py`: Added 4 tests covering info cyan styling in card and drawer, and verifying amber styling is preserved for warning notes
+
+**Result:** 4/4 new tests pass; 466/466 full suite passes; issue #71 closed.
