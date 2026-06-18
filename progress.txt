@@ -1,5 +1,16 @@
 # Ralph Loop Progress Log
 
+## Iteration 7 — Issue #79: Partial enrichment success and Enrichment Notes
+
+**Implemented:**
+- Added `enrichment_note_kind = ""` variable to `run_enrichment_pipeline` in `src/pipelines.py`.
+- After `source_contacts` returns, added dual-audience partial success detection: when both toggles are on, contacts are non-empty, and at least one stream has kept contacts but another has zero, set `enrichment_note` to "No {stream(s)} contacts found. Try Load More Contacts." with `enrichment_note_kind = "warning"`.
+- Pass `enrichment_note_kind` explicitly to `database.enrich_job`. Changed final log to use "success" level for warning-kind notes (partial success is not a failure).
+- In `src/db/jobs.py`, added `is_partial_success = (enrichment_note_kind == "warning")` flag captured BEFORE auto-inference (which would overwrite an empty kind to "warning" for any note). Activity log now skips "Enrichment failed · {note}" when `is_partial_success` is True, falling through to the normal "Enriched · {count} contacts" log.
+- Updated `test_enrichment_success_clears_note` to use both a recruiter and Russian contact (clean dual-audience success), and `test_run_enrichment_pipeline_sources_contacts_and_persists` to include the now-explicit `enrichment_note_kind=""` kwarg.
+- Added `tests/test_partial_enrichment.py` with 6 tests covering: recruiter-only partial (no Russian note), Russian-only partial (no Recruiter note), dual zero all contacts (full failure, no Load More), both streams satisfied (clean success, no note), partial success not logged as "Enrichment failed", recruiter-only mode unaffected.
+- All 534 tests pass.
+
 ## Iteration 6 — Issue #78: Enrich Job stream-aware cost confirmation
 
 **Implemented:**

@@ -316,6 +316,7 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
     await log(f"Enriching '{title}' at '{company}'...")
 
     enrichment_note = ""
+    enrichment_note_kind = ""
     contacts = []
 
     source_meta = {}
@@ -339,6 +340,20 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
                 enrichment_note = "No LinkedIn employees found for this company."
             else:
                 enrichment_note = "No contacts matched active Outreach Settings."
+        elif settings.target_recruiters and settings.target_russian_speakers:
+            recruiter_kept = sum(1 for c in contacts if c.get("is_recruiter"))
+            russian_kept = sum(1 for c in contacts if c.get("russian_speaker"))
+            empty_streams = []
+            if recruiter_kept == 0:
+                empty_streams.append("Recruiters")
+            if russian_kept == 0:
+                empty_streams.append("Russian Speakers")
+            if empty_streams and (recruiter_kept > 0 or russian_kept > 0):
+                enrichment_note = (
+                    f"No {' or '.join(empty_streams)} contacts found. "
+                    "Try Load More Contacts."
+                )
+                enrichment_note_kind = "warning"
 
     if contacts:
         await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
@@ -358,12 +373,13 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
         contacts,
         outreach_message,
         enrichment_note=enrichment_note,
+        enrichment_note_kind=enrichment_note_kind,
         recruiter_template=templates.get("recruiter", ""),
         russian_speaker_template=templates.get("russian_speaker", ""),
     )
     if enriched:
         clear_enrichment_prior(job_id)
-        if enrichment_note:
+        if enrichment_note and enrichment_note_kind != "warning":
             await log(f"Enrichment failed for job id={job_id}: {enrichment_note}", "error")
         else:
             await log(f"Enrichment complete for job id={job_id}.", "success")

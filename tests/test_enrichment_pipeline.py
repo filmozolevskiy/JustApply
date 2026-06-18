@@ -102,8 +102,14 @@ async def test_enrichment_success_clears_note(db):
     """Successful enrichment clears a pre-existing enrichmentNote."""
     enrich_job(1, [], "old msg", enrichment_note="old failure", db_path=db)
 
-    contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice",
-                 "contacted": False, "russian_speaker": True, "is_recruiter": False, "is_job_poster": False}]
+    # Include both a recruiter and a Russian speaker so dual-audience default settings yield
+    # a clean success (no partial-success warning note).
+    contacts = [
+        {"name": "Alice", "url": "https://linkedin.com/in/alice",
+         "contacted": False, "russian_speaker": False, "is_recruiter": True, "is_job_poster": False},
+        {"name": "Ivan", "url": "https://linkedin.com/in/ivan",
+         "contacted": False, "russian_speaker": True, "is_recruiter": False, "is_job_poster": False},
+    ]
     with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=contacts)), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
         from src.pipelines import run_enrichment_pipeline

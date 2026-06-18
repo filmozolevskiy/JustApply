@@ -161,6 +161,7 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
         mock_save.assert_called_once_with(
             10, mock_contacts, "Hello Jane",
             enrichment_note="",
+            enrichment_note_kind="",
             recruiter_template="Hello Jane",
             russian_speaker_template="",
         )

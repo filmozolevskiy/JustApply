@@ -210,6 +210,9 @@ def enrich_job(
     if not cursor.fetchone():
         conn.close()
         return None
+    # Capture explicit caller intent before auto-inference (distinguishes partial-success warning
+    # from a real failure note that auto-infers to "warning").
+    is_partial_success = (enrichment_note_kind == "warning")
     # Auto-infer kind: warning when note is set (unless explicitly provided), clear otherwise.
     if not enrichment_note_kind:
         enrichment_note_kind = "warning" if enrichment_note else ""
@@ -232,7 +235,7 @@ def enrich_job(
     if activity_kind == "reclassify_no_cache":
         note_text = enrichment_note or "templates refreshed"
         _append_activity_log(cursor, job_id, f"Re-classified · {note_text}")
-    elif enrichment_note:
+    elif enrichment_note and not is_partial_success:
         _append_activity_log(cursor, job_id, f"Enrichment failed · {enrichment_note}")
     elif activity_kind == "reclassify":
         count = len(contacts)
