@@ -384,7 +384,7 @@ async def scrape_linkedin_jobs(
 ) -> list:
     """
     Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
-    Applies post-filtering for remote type, seniority, company size, keyword matching, and timezone.
+    Applies post-filtering for company size, keyword matching, and timezone.
     """
     async def log(msg: str, level: str = "info"):
         if log_func:
@@ -453,12 +453,7 @@ async def scrape_linkedin_jobs(
         #     await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
         #     continue
 
-        # 3. Settings Filter - Seniority
-        if "any" not in seniorities and normalized["seniority"] not in seniorities:
-            await log(f"Skipping '{normalized['title']}': Seniority '{normalized['seniority']}' not in target {seniorities}", "info")
-            continue
-
-        # 4. Settings Filter - Company Size
+        # 3. Settings Filter - Company Size
         if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):
             await log(f"Skipping '{normalized['title']}': Company Size '{normalized['size']}' does not match {company_sizes}", "info")
             continue

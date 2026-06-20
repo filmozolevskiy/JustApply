@@ -35,6 +35,7 @@ def parse_job_row(row) -> Job:
     job["activityLog"] = _parse_activity_log(job.get("activityLog"))
     job["shouldProceed"] = bool(job["shouldProceed"])
     job["isRecruiter"] = bool(job.get("isRecruiter", 0))
+    job["unclassified"] = bool(job.get("unclassified", 0))
     job["enrichmentNote"] = job.get("enrichmentNote") or ""
     job["enrichmentNoteKind"] = job.get("enrichmentNoteKind") or ""
     job["recruiterOutreachTemplate"] = job.get("recruiterOutreachTemplate") or ""
@@ -82,5 +83,6 @@ def normalize_add_job_input(job: dict) -> dict:
         "contacts": job.get("contacts") or [],
         "outreachMessage": job.get("outreachMessage") or "",
         "isRecruiter": bool(job.get("isRecruiter")),
+        "unclassified": bool(job.get("unclassified")),
         "companyUrl": job.get("companyUrl") or "",
     }

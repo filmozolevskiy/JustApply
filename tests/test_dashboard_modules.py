@@ -273,6 +273,23 @@ def test_board_renderer_shows_reclassify_badge_for_active_task():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_dashboard_has_summary_log_level_style():
+    """Task Logs summary level has distinct styling in dashboard CSS."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert ".terminal-text.summary" in content
+    assert "border-top" in content
+
+
+def test_board_renderer_includes_unclassified_badge():
+    """boardRenderer shows Unclassified badge with hover tooltip for unclassified jobs."""
+    with open(BOARD_RENDERER_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert "job.unclassified" in content
+    assert "Unclassified" in content
+    assert "title=" in content
+
+
 def test_drawer_shows_reclassify_progress_banner():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()

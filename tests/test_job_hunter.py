@@ -68,6 +68,7 @@ async def test_run_search_calls_evaluate_when_not_mock():
         "strengths": ["Python expertise"],
         "gaps": ["No mobile testing"],
         "remoteType": "hybrid",
+        "seniority": "senior",
         "summary": "This is a concise summary of the QA Lead role."
     }
 
@@ -79,12 +80,12 @@ async def test_run_search_calls_evaluate_when_not_mock():
          patch("src.pipelines.database.add_job", return_value=42), \
          patch("src.service.job_hunter.scrape_limiter.acquire"):
 
-        results = await run_search("QA", mock_eval=False)
+        results = await run_search("QA", mock_eval=False, allowed_remote_types=["any"])
 
         assert mock_eval.called
         assert results[0]["matchScore"] == 88
         assert results[0]["shouldProceed"] is True
-        assert results[0]["remoteType"] == "remote"
+        assert results[0]["remoteType"] == "hybrid"
         assert results[0]["description"] == "This is a concise summary of the QA Lead role."
 
 

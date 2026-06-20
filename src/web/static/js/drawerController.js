@@ -199,6 +199,12 @@ export function createDrawerController({
           </div>
         ` : ''}
 
+        ${job.unclassified ? `
+          <div style="margin-bottom: 16px;">
+            <span style="font-size:0.7rem; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); padding:3px 8px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em; cursor:help;" title="Remote type and seniority were not classified by the Resume Matcher; scraper values were used instead.">Unclassified</span>
+          </div>
+        ` : ''}
+
         <div style="display:flex; flex-direction:column; gap:14px;">
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Job Info</h4>

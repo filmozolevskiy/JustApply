@@ -20,6 +20,7 @@ def mock_gemini_response():
         "gaps": ["No WebUSB experience"],
         "shouldProceed": True,
         "remoteType": "remote",
+        "seniority": "senior",
         "summary": "This is a mock summary of the job listing."
     }
     response = MagicMock()
@@ -68,6 +69,7 @@ async def test_evaluate_job_returns_structured_result(mock_gemini_response, samp
     assert "Python expertise" in result["strengths"]
     assert "No WebUSB experience" in result["gaps"]
     assert result["remoteType"] == "remote"
+    assert result["seniority"] == "senior"
     assert result["summary"] == "This is a mock summary of the job listing."
 
 
@@ -141,6 +143,7 @@ def test_build_prompt_formatting():
         description="A job description",
     )
     assert "remoteType" in prompt
+    assert "seniority" in prompt
     assert "summary" in prompt
     assert "Allowed Remote Preferences" not in prompt
 

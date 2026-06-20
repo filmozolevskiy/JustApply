@@ -41,9 +41,8 @@ async def test_scraper_mock_yields():
         company_sizes="large",
         log_func=print
     )
-    # The mock returns 3 jobs. ScaleLabs (senior, remote, 750 size) matches all.
-    # BrightFlow (senior, hybrid/in-office, 150 size) is hybrid, so skipped.
-    # WebStart (junior, San Francisco, 25 size) is skipped because it's junior and SF.
+    # The mock returns 3 jobs. ScaleLabs (senior, remote, 750 size) matches company size filter.
+    # BrightFlow (150 size) and WebStart (25 size) are skipped by company size, not seniority.
     assert len(jobs) == 1
     assert jobs[0]["company"] == "ScaleLabs Inc."
     assert jobs[0]["remoteType"] == "remote"

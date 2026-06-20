@@ -380,9 +380,10 @@ def add_job(job, db_path=None):
         INSERT INTO jobs (
             title, company, size, link, date, location, remoteType, seniority, salary,
             description, matchScore, matchType, shouldProceed, status, resumeUsed,
-            strengths, gaps, contacts, outreachMessage, comment, isRecruiter, companyUrl
+            strengths, gaps, contacts, outreachMessage, comment, isRecruiter, companyUrl,
+            unclassified
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         title,
@@ -407,6 +408,7 @@ def add_job(job, db_path=None):
         fields["comment"],
         1 if fields["isRecruiter"] else 0,
         fields["companyUrl"],
+        1 if fields["unclassified"] else 0,
     ))
     new_id = cursor.lastrowid
     _append_activity_log(cursor, new_id, "Found")

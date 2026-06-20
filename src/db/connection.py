@@ -112,6 +112,12 @@ def init_db(db_path=None):
     except sqlite3.OperationalError:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN unclassified INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS outreach_settings (
             id INTEGER PRIMARY KEY,

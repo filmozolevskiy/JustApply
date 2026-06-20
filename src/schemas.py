@@ -58,6 +58,7 @@ class Job(BaseModel):
     russianSpeakerOutreachTemplate: str = ""
     comment: str = ""
     isRecruiter: bool = False
+    unclassified: bool = False
     enrichmentNote: str = ""
     enrichmentNoteKind: str = ""
     activityLog: list[ActivityLogEntry] = []

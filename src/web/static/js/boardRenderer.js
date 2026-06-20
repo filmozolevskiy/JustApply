@@ -182,6 +182,7 @@ export function renderBoard(jobs, filters = {}) {
               <span><i class="fa-regular fa-building"></i> ${job.company}</span>
               <div style="display:flex; align-items:center; gap:4px;">
                 ${job.archived ? `<span class="archived-badge">Archived</span>` : ''}
+                ${job.unclassified ? `<span style="font-size:0.6rem; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;" title="Remote type and seniority were not classified by the Resume Matcher; scraper values were used instead.">Unclassified</span>` : ''}
                 ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
                 ${cardEnrichingBadge(job.id, enrichingJobId)}
                 ${cardLoadMoreBadge(job.id, loadMoreJobId)}
