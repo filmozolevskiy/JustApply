@@ -10,10 +10,13 @@ from .core.enrichment.contact_sample import (
     _run_apify_actor,
     _run_apify_for_recruiters,
     _run_apify_for_russian_speakers,
-    RECRUITER_SAMPLE_SIZE,
-    RUSSIAN_SAMPLE_SIZE,
 )
-from .core.pre_evaluation import format_remote_type_rejection, passes_remote_type_filter
+from .core.attribute_gating import (
+    format_attribute_mismatch,
+    is_unclassified,
+    merge_job_attributes,
+    passes_attribute_gate,
+)
 from .schemas import Job, OutreachSettings
 from .db.job_model import coerce_job
 
@@ -30,7 +33,7 @@ async def run_search_pipeline(
     time_range: str = "any",
     log_func=None,
 ) -> list:
-    """Scrape, deduplicate, apply Pre-Evaluation Filters, evaluate, and save jobs. Returns list of saved job dicts."""
+    """Scrape, deduplicate, evaluate, attribute-gate, and save jobs. Returns list of saved job dicts."""
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -66,10 +69,13 @@ async def run_search_pipeline(
             except FileNotFoundError:
                 await log("No resume found. Skipping LLM evaluation.", "warning")
 
+    if mock_eval:
+        await log("mock_eval: attribute gating skipped.", "info")
+
     database.init_db()
     saved = []
     duplicates_count = 0
-    pre_filtered_count = 0
+    attribute_filtered_count = 0
     evaluated_count = 0
 
     for job in jobs:
@@ -77,22 +83,13 @@ async def run_search_pipeline(
         company = job.get("company") or ""
         link = job.get("link") or ""
 
-        # 1. Deduplicate — skip jobs already on the board.
         if database.job_exists(title, company, link):
             await log(f"Skipping duplicate: '{title}' at '{company}'")
             duplicates_count += 1
             continue
 
-        # 2. Pre-Evaluation Filters — cheap non-LLM checks before Resume Matcher.
-        if not passes_remote_type_filter(job, allowed_remote_types):
-            pre_filtered_count += 1
-            await log(
-                format_remote_type_rejection(title, company, job, allowed_remote_types),
-                "info",
-            )
-            continue
-
         job["resumeUsed"] = active_resume
+        evaluation = {}
 
         if mock_eval:
             job.setdefault("matchScore", 0)
@@ -105,21 +102,48 @@ async def run_search_pipeline(
                 job["gaps"].append("Posted by a recruiting agency/staffing firm")
             else:
                 job["isRecruiter"] = False
-        elif resume_content:
-            evaluated_count += 1
-            await log(f"Evaluating '{title}' at {company}...")
-            evaluation = await evaluate_job(job, resume_content, log_func)
-            if evaluation:
-                job["matchScore"] = evaluation.get("matchScore", 0)
-                job["matchType"] = evaluation.get("matchType", "")
-                job["shouldProceed"] = evaluation.get("shouldProceed", False)
-                job["strengths"] = evaluation.get("strengths", [])
-                job["gaps"] = evaluation.get("gaps", [])
-                if "summary" in evaluation:
-                    job["description"] = evaluation["summary"]
-                job["isRecruiter"] = evaluation.get("isRecruiter", False)
-                if evaluation.get("salary"):
-                    job["salary"] = evaluation["salary"]
+        else:
+            if resume_content:
+                evaluated_count += 1
+                await log(f"Evaluating '{title}' at {company}...")
+                evaluation = await evaluate_job(job, resume_content, log_func)
+                if evaluation:
+                    job["matchScore"] = evaluation.get("matchScore", 0)
+                    job["matchType"] = evaluation.get("matchType", "")
+                    job["shouldProceed"] = evaluation.get("shouldProceed", False)
+                    job["strengths"] = evaluation.get("strengths", [])
+                    job["gaps"] = evaluation.get("gaps", [])
+                    if "summary" in evaluation:
+                        job["description"] = evaluation["summary"]
+                    job["isRecruiter"] = evaluation.get("isRecruiter", False)
+                    if evaluation.get("salary"):
+                        job["salary"] = evaluation["salary"]
+
+            merged = merge_job_attributes(job, evaluation)
+            if not passes_attribute_gate(
+                merged["remoteType"],
+                merged["seniority"],
+                allowed_remote_types,
+                seniorities,
+            ):
+                attribute_filtered_count += 1
+                await log(
+                    format_attribute_mismatch(
+                        title,
+                        company,
+                        remote_type=merged["remoteType"],
+                        seniority=merged["seniority"],
+                        allowed_remote_types=allowed_remote_types,
+                        seniorities=seniorities,
+                    ),
+                    "info",
+                )
+                continue
+
+            job["remoteType"] = merged["remoteType"]
+            job["seniority"] = merged["seniority"]
+            if is_unclassified(evaluation):
+                job["unclassified"] = True
 
         job_id = database.add_job(job)
         if job_id is not None:
@@ -130,282 +154,10 @@ async def run_search_pipeline(
     saved_count = len(saved)
     await log(
         f"Pipeline complete. Scraped: {scraped_count} | Duplicates skipped: {duplicates_count} | "
-        f"Pre-filtered: {pre_filtered_count} | Evaluated: {evaluated_count} | Saved: {saved_count}"
+        f"Attribute-filtered: {attribute_filtered_count} | Evaluated: {evaluated_count} | Saved: {saved_count}",
+        "summary",
     )
     return saved
 
 
 async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
-    """Re-run classification and template generation.
-
-    Cache-hit path: re-classifies cached Contact Sample for all active streams — no Apify call.
-    No-cache path: regenerates Outreach Message Templates only; contacts unchanged.
-    """
-    from .db.cache import get_contact_sample
-
-    job = database.get_job(job_id)
-    if not job:
-        raise ValueError("Job not found")
-    job = coerce_job(job)
-    if job.status != "accepted":
-        raise ValueError("Job must be in Accepted lane to re-classify")
-
-    slug = company_cache_slug(job.company or "", job.companyUrl or "")
-    settings = OutreachSettings(**database.get_outreach_settings())
-
-    # Check whether any active stream has cached data.
-    if settings.target_recruiters or settings.target_russian_speakers:
-        active_streams = []
-        if settings.target_recruiters:
-            active_streams.append("recruiters")
-        if settings.target_russian_speakers:
-            active_streams.append("russian")
-        has_cache = any(get_contact_sample(slug, stream=s) for s in active_streams)
-    else:
-        has_cache = bool(get_contact_sample(slug, stream=""))
-
-    if not has_cache:
-        # Template-only path: regenerate templates without touching contacts.
-        existing_contacts = [c.model_dump() for c in job.contacts]
-        templates = await generate_outreach_templates(
-            job,
-            existing_contacts,
-            log_func=log_func,
-            short_connection_note=settings.short_connection_note,
-        )
-        outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
-        note = "Outreach templates refreshed; contacts unchanged (no cached employee sample)."
-        updated = database.enrich_job(
-            job_id,
-            [],
-            outreach_message,
-            enrichment_note=note,
-            enrichment_note_kind="info",
-            recruiter_template=templates.get("recruiter", ""),
-            russian_speaker_template=templates.get("russian_speaker", ""),
-            activity_kind="reclassify_no_cache",
-            keep_contacts=True,
-        )
-        if not updated:
-            raise ValueError("Failed to persist re-classified job")
-        return updated
-
-    source_meta = {}
-    contacts = await source_contacts(
-        job,
-        settings=settings,
-        log_func=log_func,
-        meta=source_meta,
-    )
-
-    enrichment_note = ""
-    if not contacts:
-        if source_meta.get("empty_reason") == "no_company_url":
-            enrichment_note = "No LinkedIn company URL — cannot fetch employees."
-        elif source_meta.get("empty_reason") == "no_employees":
-            enrichment_note = "No LinkedIn employees found for this company."
-        else:
-            enrichment_note = "No contacts matched active Outreach Settings."
-
-    templates = await generate_outreach_templates(
-        job,
-        contacts,
-        log_func=log_func,
-        short_connection_note=settings.short_connection_note,
-    )
-    outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
-
-    updated = database.enrich_job(
-        job_id,
-        contacts,
-        outreach_message,
-        enrichment_note=enrichment_note,
-        recruiter_template=templates.get("recruiter", ""),
-        russian_speaker_template=templates.get("russian_speaker", ""),
-        activity_kind="reclassify",
-    )
-    if not updated:
-        raise ValueError("Failed to persist re-classified job")
-    return updated
-
-
-async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
-    """Fetch next Apify page for short streams, append to per-stream cache, and re-classify."""
-    from .db.cache import get_contact_sample, append_contact_sample
-
-    job = database.get_job(job_id)
-    if not job:
-        raise ValueError("Job not found")
-    job = coerce_job(job)
-    if job.status != "accepted":
-        raise ValueError("Job must be in Accepted lane to load more contacts")
-
-    settings = OutreachSettings(**database.get_outreach_settings())
-    slug = company_cache_slug(job.company or "", job.companyUrl or "")
-    company_url = job.companyUrl or ""
-
-    contacts_list = [c if isinstance(c, dict) else c.model_dump() for c in (job.contacts or [])]
-    recruiter_count = sum(1 for c in contacts_list if c.get("is_recruiter"))
-    russian_count = sum(1 for c in contacts_list if c.get("russian_speaker") and not c.get("is_recruiter"))
-
-    streams_to_fetch = []
-    if settings.target_recruiters and recruiter_count < RECRUITER_SAMPLE_SIZE:
-        cache = get_contact_sample(slug, stream="recruiters")
-        if cache:
-            streams_to_fetch.append(("recruiters", cache.get("pages_fetched", 1)))
-    if settings.target_russian_speakers and russian_count < RUSSIAN_SAMPLE_SIZE:
-        cache = get_contact_sample(slug, stream="russian")
-        if cache:
-            streams_to_fetch.append(("russian", cache.get("pages_fetched", 1)))
-
-    if not streams_to_fetch:
-        raise ValueError(
-            "No short streams to fetch — all active streams are either at cap or missing a contact sample cache."
-        )
-
-    total_new_profiles = 0
-    for stream, pages_fetched in streams_to_fetch:
-        if stream == "recruiters":
-            new_profiles = await _run_apify_for_recruiters(
-                company_url, log_func=log_func, start_page=pages_fetched + 1
-            )
-        else:
-            new_profiles = await _run_apify_for_russian_speakers(
-                company_url, log_func=log_func, start_page=pages_fetched + 1
-            )
-        append_contact_sample(slug, new_profiles, stream=stream)
-        total_new_profiles += len(new_profiles)
-
-    source_meta = {}
-    contacts = await source_contacts(
-        job,
-        settings=settings,
-        log_func=log_func,
-        meta=source_meta,
-    )
-
-    enrichment_note = ""
-    if not contacts:
-        if source_meta.get("empty_reason") == "no_company_url":
-            enrichment_note = "No LinkedIn company URL — cannot fetch employees."
-        elif source_meta.get("empty_reason") == "no_employees":
-            enrichment_note = "No LinkedIn employees found for this company."
-        else:
-            enrichment_note = "No contacts matched active Outreach Settings."
-
-    templates = await generate_outreach_templates(
-        job,
-        contacts,
-        log_func=log_func,
-        short_connection_note=settings.short_connection_note,
-    )
-    outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
-
-    updated = database.enrich_job(
-        job_id,
-        contacts,
-        outreach_message,
-        enrichment_note=enrichment_note,
-        recruiter_template=templates.get("recruiter", ""),
-        russian_speaker_template=templates.get("russian_speaker", ""),
-        activity_kind="load_more",
-        new_profile_count=total_new_profiles,
-    )
-    if not updated:
-        raise ValueError("Failed to persist updated job")
-    return updated
-
-
-async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
-    """Source contacts, generate outreach message, and persist enriched job."""
-
-    async def log(msg: str, level: str = "info"):
-        if log_func is None:
-            return
-        if inspect.iscoroutinefunction(log_func):
-            await log_func(msg, level)
-        else:
-            log_func(msg, level)
-
-    job = coerce_job(job)
-    job_id = job.id
-    if not job_id:
-        return None
-
-    if job.status != "accepted":
-        await log(f"Job id={job_id} is not accepted; call begin_enrichment first.", "error")
-        return None
-
-    title = job.title or ""
-    company = job.company or ""
-    await log(f"Enriching '{title}' at '{company}'...")
-
-    enrichment_note = ""
-    enrichment_note_kind = ""
-    contacts = []
-
-    source_meta = {}
-    try:
-        settings = OutreachSettings(**database.get_outreach_settings())
-        contacts = await source_contacts(
-            job,
-            settings=settings,
-            log_func=log_func,
-            meta=source_meta,
-        )
-    except Exception as exc:
-        enrichment_note = f"Enrichment failed: {exc}"
-        await log(enrichment_note, "error")
-
-    if not enrichment_note:
-        if source_meta.get("empty_reason") == "no_company_url":
-            enrichment_note = "No LinkedIn company URL — cannot fetch employees."
-        elif not contacts:
-            if source_meta.get("empty_reason") == "no_employees":
-                enrichment_note = "No LinkedIn employees found for this company."
-            else:
-                enrichment_note = "No contacts matched active Outreach Settings."
-        elif settings.target_recruiters and settings.target_russian_speakers:
-            recruiter_kept = sum(1 for c in contacts if c.get("is_recruiter"))
-            russian_kept = sum(1 for c in contacts if c.get("russian_speaker"))
-            empty_streams = []
-            if recruiter_kept == 0:
-                empty_streams.append("Recruiters")
-            if russian_kept == 0:
-                empty_streams.append("Russian Speakers")
-            if empty_streams and (recruiter_kept > 0 or russian_kept > 0):
-                enrichment_note = (
-                    f"No {' or '.join(empty_streams)} contacts found. "
-                    "Try Load More Contacts."
-                )
-                enrichment_note_kind = "warning"
-
-    if contacts:
-        await log(f"Found {len(contacts)} contact(s). Primary: {contacts[0].get('name', 'Unknown')}")
-    else:
-        await log("No contacts found.", "warning")
-
-    templates = await generate_outreach_templates(
-        job,
-        contacts,
-        log_func=log_func,
-        short_connection_note=settings.short_connection_note,
-    )
-    outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
-
-    enriched = database.enrich_job(
-        job_id,
-        contacts,
-        outreach_message,
-        enrichment_note=enrichment_note,
-        enrichment_note_kind=enrichment_note_kind,
-        recruiter_template=templates.get("recruiter", ""),
-        russian_speaker_template=templates.get("russian_speaker", ""),
-    )
-    if enriched:
-        clear_enrichment_prior(job_id)
-        if enrichment_note and enrichment_note_kind != "warning":
-            await log(f"Enrichment failed for job id={job_id}: {enrichment_note}", "error")
-        else:
-            await log(f"Enrichment complete for job id={job_id}.", "success")
-    return enriched

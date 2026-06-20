@@ -233,6 +233,7 @@ def test_load_more_contacts_shows_card_spinner_while_loading():
     body = _get_function_body(script, "loadMoreContacts")
     assert "activeLoadMoreJobId" in body, "loadMoreContacts must set activeLoadMoreJobId"
     assert "renderActiveVariant()" in body, "loadMoreContacts must re-render to show card spinner"
+    assert "refreshDrawerIfOpen" in body, "loadMoreContacts must refresh drawer to show loading animation"
 
 
 # ── Client static: reclassifyJob — no confirm ─────────────────────────────────

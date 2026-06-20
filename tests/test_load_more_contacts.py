@@ -124,12 +124,21 @@ async def test_pipeline_raises_for_non_accepted_job(db):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_raises_when_no_cache(db):
+async def test_pipeline_fetches_page_one_when_no_cache(db):
+    """Missing cache is not a blocker — pipeline fetches page 1."""
     from src.pipelines import run_load_more_contacts_pipeline
+    import src.pipelines as pipelines_module
     job_id = _make_accepted_job_with_cache(db)
-    with patch("src.db.cache.get_contact_sample", return_value=None):
-        with pytest.raises(ValueError, match="[Cc]ache"):
-            await run_load_more_contacts_pipeline(job_id)
+    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
+
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=[])) as mock_apify, \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=[])), \
+         patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value={})):
+        await run_load_more_contacts_pipeline(job_id)
+
+    mock_apify.assert_called_once()
+    assert mock_apify.call_args.kwargs.get("start_page") == 1
 
 
 @pytest.mark.asyncio
@@ -241,12 +250,18 @@ def test_load_more_endpoint_returns_422_for_non_accepted_job(db):
     assert "accepted" in resp.json()["message"].lower()
 
 
-def test_load_more_endpoint_returns_422_when_no_cache(db):
+def test_load_more_endpoint_fetches_when_no_cache(db):
+    """Missing cache is not a blocker — endpoint runs pipeline at page 1."""
+    import src.pipelines as pipelines_module
     job_id = _make_accepted_job_with_cache(db)
-    with patch("src.db.cache.get_contact_sample", return_value=None):
+    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
+
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=[])), \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=[])), \
+         patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value={})):
         resp = client.post(f"/api/jobs/{job_id}/load-more-contacts")
-    assert resp.status_code == 422
-    assert "cache" in resp.json()["message"].lower()
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -287,20 +302,37 @@ def test_drawer_load_more_only_on_accepted_jobs():
     idx = content.find("Load More Contacts")
     assert idx != -1
     nearby = content[max(0, idx - 600):idx + 50]
-    assert "hasContactSampleActions" in nearby, \
-        "Load More Contacts button must be gated via hasContactSampleActions (accepted + enriched)"
+    assert "status === 'accepted'" in nearby, \
+        "Load More Contacts button must be gated on job.status === 'accepted'"
+    assert "companyUrl" in nearby, \
+        "Load More Contacts must be gated on job.companyUrl"
 
 
-def test_drawer_load_more_gated_on_enrichment_not_contact_count():
+def test_drawer_load_more_not_gated_on_enrichment():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
-    assert "hasContactSampleActions" in content, \
-        "drawerController must gate Load More / Re-classify via hasContactSampleActions"
     idx = content.find("Load More Contacts")
+    if idx == -1:
+        idx = content.find("Loading contacts…")
     assert idx != -1
     nearby = content[max(0, idx - 600):idx + 50]
-    assert "hasContactSampleActions" in nearby, \
-        "Load More Contacts must use hasContactSampleActions (not contacts.length only)"
+    assert "hasContactSampleActions" not in nearby, \
+        "Load More Contacts must not require prior enrichment"
+
+
+def test_drawer_load_more_shows_spinner_while_loading():
+    """Load More button and contacts section show spinner when active."""
+    from kanban_js import read_drawer_controller
+    content = read_drawer_controller()
+    assert "isLoadingMore" in content
+    assert "Loading contacts…" in content
+    assert "Loading more contacts…" in content
+    idx = content.find("Load More Contacts")
+    if idx == -1:
+        idx = content.find("Loading contacts…")
+    assert idx != -1
+    nearby = content[max(0, idx - 800):idx + 200]
+    assert "fa-spinner fa-spin" in nearby
 
 
 # --- Dashboard JS export ---

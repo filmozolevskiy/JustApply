@@ -60,8 +60,8 @@ def test_preflight_recruiter_below_cap_returns_stream(db):
     assert "Recruiters" in streams
 
 
-def test_preflight_recruiter_at_cap_excluded(db):
-    """Recruiter stream at cap (3 contacts) → not billable."""
+def test_preflight_recruiter_at_cap_still_billable(db):
+    """Contact count does not cap Load More — recruiter stream with cache remains billable."""
     contacts = [
         {"name": f"R{i}", "title": "Recruiter", "url": f"/in/r{i}", "contacted": False,
          "russian_speaker": False, "is_recruiter": True}
@@ -74,11 +74,11 @@ def test_preflight_recruiter_at_cap_excluded(db):
     resp = client.get(f"/api/jobs/{job_id}/load-more-preflight")
     data = resp.json()
     streams = [s["stream"] for s in data["billable_streams"]]
-    assert "Recruiters" not in streams
+    assert "Recruiters" in streams
 
 
-def test_preflight_russian_at_cap_excluded(db):
-    """Russian stream at cap (5 non-recruiter contacts) → not billable."""
+def test_preflight_russian_at_cap_still_billable(db):
+    """Contact count does not cap Load More — russian stream with cache remains billable."""
     contacts = [
         {"name": f"I{i}", "title": "Dev", "url": f"/in/i{i}", "contacted": False,
          "russian_speaker": True, "is_recruiter": False}
@@ -91,7 +91,7 @@ def test_preflight_russian_at_cap_excluded(db):
     resp = client.get(f"/api/jobs/{job_id}/load-more-preflight")
     data = resp.json()
     streams = [s["stream"] for s in data["billable_streams"]]
-    assert "Russian Speakers" not in streams
+    assert "Russian Speakers" in streams
 
 
 def test_preflight_inactive_toggle_excluded(db):
@@ -106,13 +106,38 @@ def test_preflight_inactive_toggle_excluded(db):
     assert data["billable_streams"] == []
 
 
-def test_preflight_no_per_stream_cache_excluded(db):
-    """Stream with no per-stream cache → not billable."""
+def test_preflight_no_cache_is_billable_page_one(db):
+    """Missing per-stream cache → billable at page 1."""
     job_id = _make_accepted_job(db, contacts=[])
+    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
+
+    resp = client.get(f"/api/jobs/{job_id}/load-more-preflight")
+    data = resp.json()
+    assert data["estimated_runs"] == 1
+    assert data["billable_streams"][0]["page"] == 1
+    assert data["billable_streams"][0]["stream"] == "Recruiters"
+
+
+def test_preflight_exhausted_stream_excluded(db):
+    """Stream Exhausted (last_fetch_empty) → not billable."""
+    job_id = _make_accepted_job(db, contacts=[])
+    set_contact_sample("acme", [], last_fetch_empty=True, stream="recruiters", db_path=db)
+    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
     resp = client.get(f"/api/jobs/{job_id}/load-more-preflight")
     data = resp.json()
     assert data["estimated_runs"] == 0
+    assert data["blocked_reason"] == "all_streams_exhausted"
+
+
+def test_preflight_blocked_reason_no_audience_toggles(db):
+    job_id = _make_accepted_job(db, contacts=[])
+    database.save_outreach_settings(target_recruiters=False, target_russian_speakers=False, db_path=db)
+
+    resp = client.get(f"/api/jobs/{job_id}/load-more-preflight")
+    data = resp.json()
+    assert data["estimated_runs"] == 0
+    assert data["blocked_reason"] == "no_audience_toggles"
 
 
 def test_preflight_both_short_streams_returns_both(db):
@@ -209,26 +234,38 @@ async def test_pipeline_calls_apify_for_russian_when_russian_short(db):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_skips_apify_for_stream_at_cap(db):
-    """Pipeline does not call Apify for a stream already at cap."""
-    contacts = [
-        {"name": f"R{i}", "title": "Recruiter", "url": f"/in/r{i}", "contacted": False,
-         "russian_speaker": False, "is_recruiter": True}
-        for i in range(3)
-    ]
-    job_id = _make_job_with_per_stream_caches(db, contacts=contacts)
-    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=True, db_path=db)
+async def test_pipeline_skips_exhausted_stream(db):
+    """Pipeline does not call Apify for a Stream Exhausted stream."""
+    job_id = _make_job_with_per_stream_caches(db, contacts=[], with_russian_cache=False)
+    set_contact_sample("acme", [], last_fetch_empty=True, stream="recruiters", db_path=db)
+    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
     from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
     with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=[])) as mock_recruiters, \
-         patch.object(pipelines_module, "_run_apify_for_russian_speakers", new=AsyncMock(return_value=[])) as mock_russian, \
+         patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=[])), \
+         patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value={})):
+        with pytest.raises(ValueError):
+            await run_load_more_contacts_pipeline(job_id)
+
+    mock_recruiters.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_fetches_page_one_when_no_cache(db):
+    """Pipeline calls Apify at page 1 when per-stream cache is missing."""
+    from src.pipelines import run_load_more_contacts_pipeline
+    import src.pipelines as pipelines_module
+    job_id = _make_accepted_job(db, contacts=[])
+    database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
+
+    with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=[])) as mock_apify, \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=[])), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value={})):
         await run_load_more_contacts_pipeline(job_id)
 
-    mock_recruiters.assert_not_called()
-    mock_russian.assert_called_once()
+    mock_apify.assert_called_once()
+    assert mock_apify.call_args.kwargs.get("start_page") == 1
 
 
 @pytest.mark.asyncio
@@ -255,15 +292,11 @@ async def test_pipeline_appends_to_per_stream_cache(db):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_raises_when_no_short_streams(db):
-    """Pipeline raises ValueError when all active streams are at cap."""
+async def test_pipeline_raises_when_all_streams_exhausted(db):
+    """Pipeline raises ValueError when all active streams are Stream Exhausted."""
     from src.pipelines import run_load_more_contacts_pipeline
-    contacts = [
-        {"name": f"R{i}", "title": "Recruiter", "url": f"/in/r{i}", "contacted": False,
-         "russian_speaker": False, "is_recruiter": True}
-        for i in range(3)
-    ]
-    job_id = _make_job_with_per_stream_caches(db, contacts=contacts, with_russian_cache=False)
+    job_id = _make_job_with_per_stream_caches(db, contacts=[], with_russian_cache=False)
+    set_contact_sample("acme", [], last_fetch_empty=True, stream="recruiters", db_path=db)
     database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
     with pytest.raises(ValueError):
@@ -297,12 +330,23 @@ def test_dashboard_load_more_fetches_preflight():
     assert "load-more-preflight" in content
 
 
+def test_dashboard_load_more_uses_blocked_reason():
+    """loadMoreContacts shows specific alert from blocked_reason, not generic cap message."""
+    from kanban_js import read_dashboard_html
+    content = read_dashboard_html()
+    idx = content.find("loadMoreContacts")
+    assert idx != -1
+    nearby = content[idx:idx + 1200]
+    assert "blocked_reason" in nearby
+    assert "at cap" not in nearby.lower()
+
+
 def test_dashboard_load_more_confirm_includes_stream_and_page():
     """loadMoreContacts confirm builds lines from billable_streams and includes page number."""
     from kanban_js import read_dashboard_html
     content = read_dashboard_html()
     idx = content.find("loadMoreContacts")
     assert idx != -1
-    nearby = content[idx:idx + 1000]
+    nearby = content[idx:idx + 1200]
     assert "billable_streams" in nearby, "confirm must reference billable_streams"
     assert "page" in nearby, "confirm must include page number"

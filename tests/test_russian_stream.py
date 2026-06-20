@@ -222,8 +222,8 @@ async def test_russian_only_logs_stream_name(db, russian_only_settings):
 # ─── Non-HR cap (5 Russian Speakers who are not Recruiters) ───────────────────
 
 @pytest.mark.asyncio
-async def test_russian_speaker_non_recruiter_cap_is_5():
-    """Classifier keeps at most 5 non-HR Russian Speaker contacts in Russian-only mode."""
+async def test_russian_speaker_non_recruiter_keeps_all_matches():
+    """Classifier keeps all non-HR Russian Speaker contacts in Russian-only mode."""
     from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
 
@@ -239,7 +239,7 @@ async def test_russian_speaker_non_recruiter_cap_is_5():
          patch.object(gemini_mod, "generate_text", new=AsyncMock(return_value=json.dumps(classified_raw))):
         result = await classify_contacts(items, settings)
 
-    assert len(result) == 5
+    assert len(result) == 7
     assert all(c["russian_speaker"] for c in result)
     assert all(not c["is_recruiter"] for c in result)
 

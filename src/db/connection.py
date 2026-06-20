@@ -130,10 +130,19 @@ def init_db(db_path=None):
             fetched_at TEXT NOT NULL,
             display_name TEXT DEFAULT '',
             pages_fetched INTEGER DEFAULT 1,
+            last_fetch_empty INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (company_slug, stream)
         )
     """)
     conn.commit()
+
+    try:
+        cursor.execute(
+            "ALTER TABLE contact_sample_cache ADD COLUMN last_fetch_empty INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     # Migrate legacy single-PK cache table to compound (company_slug, stream) key
     cursor.execute("PRAGMA table_info(contact_sample_cache)")

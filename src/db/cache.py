@@ -13,7 +13,7 @@ def get_contact_sample(company_slug: str, stream: str = "", db_path=None) -> dic
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT profiles, fetched_at, display_name, pages_fetched "
+        "SELECT profiles, fetched_at, display_name, pages_fetched, last_fetch_empty "
         "FROM contact_sample_cache WHERE company_slug = ? AND stream = ?",
         (company_slug, stream),
     )
@@ -26,11 +26,13 @@ def get_contact_sample(company_slug: str, stream: str = "", db_path=None) -> dic
     except Exception:
         profiles = []
     pages_fetched = row[3] if row[3] is not None else 1
+    last_fetch_empty = bool(row[4]) if len(row) > 4 and row[4] is not None else len(profiles) == 0
     return {
         "profiles": profiles,
         "fetched_at": row[1],
         "display_name": row[2] or "",
         "pages_fetched": pages_fetched,
+        "last_fetch_empty": last_fetch_empty,
     }
 
 
@@ -40,17 +42,25 @@ def set_contact_sample(
     display_name: str = "",
     pages_fetched: int = 1,
     stream: str = "",
+    last_fetch_empty: bool | None = None,
     db_path=None,
 ) -> None:
     """Write raw Contact Sample profiles to cache, including empty lists from successful Apify runs."""
+    if last_fetch_empty is None:
+        last_fetch_empty = len(profiles) == 0
     if db_path is None:
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
         "INSERT OR REPLACE INTO contact_sample_cache "
-        "(company_slug, stream, profiles, fetched_at, display_name, pages_fetched) VALUES (?, ?, ?, ?, ?, ?)",
-        (company_slug, stream, json.dumps(profiles), datetime.now(timezone.utc).isoformat(), display_name, pages_fetched),
+        "(company_slug, stream, profiles, fetched_at, display_name, pages_fetched, last_fetch_empty) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            company_slug, stream, json.dumps(profiles),
+            datetime.now(timezone.utc).isoformat(), display_name, pages_fetched,
+            1 if last_fetch_empty else 0,
+        ),
     )
     conn.commit()
     conn.close()
@@ -102,6 +112,7 @@ def append_contact_sample(company_slug: str, new_profiles: list, stream: str = "
         display_name=display_name,
         pages_fetched=pages_fetched + 1,
         stream=stream,
+        last_fetch_empty=len(new_profiles) == 0,
         db_path=db_path,
     )
 

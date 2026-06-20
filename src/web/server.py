@@ -259,46 +259,31 @@ async def reclassify_job(job_id: int, background_tasks: BackgroundTasks):
 
 @app.get("/api/jobs/{job_id}/load-more-preflight")
 async def load_more_preflight(job_id: int):
-    """Return which active streams are below cap and can be fetched with Load More."""
+    """Return which active streams can be fetched with Load More."""
     job = get_job(job_id)
     if not job:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     from ..db.cache import get_contact_sample
-    from ..core.enrichment.contact_sample import (
-        company_cache_slug, RECRUITER_SAMPLE_SIZE, RUSSIAN_SAMPLE_SIZE,
-    )
+    from ..core.enrichment.contact_sample import company_cache_slug, resolve_load_more_streams
 
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
     settings = get_outreach_settings()
-
-    contacts_list = job.contacts or []
-    recruiter_count = sum(1 for c in contacts_list if c.is_recruiter)
-    russian_count = sum(1 for c in contacts_list if c.russian_speaker and not c.is_recruiter)
-
-    billable_streams = []
-    if settings.get("target_recruiters", True) and recruiter_count < RECRUITER_SAMPLE_SIZE:
-        cache = get_contact_sample(slug, stream="recruiters")
-        if cache:
-            billable_streams.append({
-                "stream": "Recruiters",
-                "profile_count": RECRUITER_SAMPLE_SIZE,
-                "page": cache.get("pages_fetched", 1) + 1,
-            })
-    if settings.get("target_russian_speakers", True) and russian_count < RUSSIAN_SAMPLE_SIZE:
-        cache = get_contact_sample(slug, stream="russian")
-        if cache:
-            billable_streams.append({
-                "stream": "Russian Speakers",
-                "profile_count": RUSSIAN_SAMPLE_SIZE,
-                "page": cache.get("pages_fetched", 1) + 1,
-            })
-
+    resolved = resolve_load_more_streams(
+        slug, settings, job.companyUrl or "", get_contact_sample,
+    )
+    billable_streams = [
+        {k: v for k, v in s.items() if k != "stream_key"}
+        for s in resolved["billable_streams"]
+    ]
     estimated_runs = len(billable_streams)
-    return {
+    result = {
         "billable_streams": billable_streams,
         "estimated_runs": estimated_runs,
         "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
     }
+    if resolved.get("blocked_reason"):
+        result["blocked_reason"] = resolved["blocked_reason"]
+    return result
 
 
 @app.post("/api/jobs/{job_id}/load-more-contacts", response_model=Job)

@@ -265,11 +265,11 @@ async def test_recruiter_only_logs_stream_name(db, recruiter_only_settings):
     assert "recruiter" in combined
 
 
-# ─── Recruiter cap (3) via classifier ─────────────────────────────────────────
+# ─── Classifier keeps all matching contacts (no retention cap) ────────────────
 
 @pytest.mark.asyncio
-async def test_recruiter_cap_is_3():
-    """Classifier keeps at most 3 Recruiter contacts regardless of input size."""
+async def test_classifier_keeps_all_recruiters():
+    """Classifier keeps all Recruiter contacts regardless of input size."""
     import json
     from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
@@ -286,13 +286,13 @@ async def test_recruiter_cap_is_3():
          patch.object(gemini_mod, "generate_text", new=AsyncMock(return_value=json.dumps(classified_raw))):
         result = await classify_contacts(items, settings)
 
-    assert len(result) == 3, f"Expected cap of 3 recruiters, got {len(result)}"
+    assert len(result) == 5
     assert all(c["is_recruiter"] for c in result)
 
 
 @pytest.mark.asyncio
-async def test_russian_speaker_cap_is_5():
-    """Classifier keeps at most 5 Russian Speaker contacts."""
+async def test_classifier_keeps_all_russian_speakers():
+    """Classifier keeps all Russian Speaker contacts."""
     import json
     from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
@@ -309,7 +309,7 @@ async def test_russian_speaker_cap_is_5():
          patch.object(gemini_mod, "generate_text", new=AsyncMock(return_value=json.dumps(classified_raw))):
         result = await classify_contacts(items, settings)
 
-    assert len(result) == 5, f"Expected cap of 5 Russian speakers, got {len(result)}"
+    assert len(result) == 7
     assert all(c["russian_speaker"] for c in result)
 
 

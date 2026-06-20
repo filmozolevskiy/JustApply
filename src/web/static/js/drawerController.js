@@ -321,9 +321,9 @@ export function createDrawerController({
             `}
           </div>
           <div style="display:flex; justify-content:flex-end; gap:12px; border-top:1px solid var(--border-color); padding-top:16px; margin-top:8px;">
-            ${hasContactSampleActions(job, contacts) && job.companyUrl
+            ${job.status === 'accepted' && job.companyUrl
               ? `
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-indigo); border-color: rgba(99,102,241,0.2);${contactActionInProgress ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="loadMoreContacts(${job.id})"${contactActionInProgress ? ' disabled' : ''}><i class="fa-solid fa-users-line"></i> Load More Contacts</button>
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-indigo); border-color: rgba(99,102,241,0.2);${contactActionInProgress ? ' opacity:0.55; pointer-events:none;' : ''}" onclick="loadMoreContacts(${job.id})"${contactActionInProgress ? ' disabled' : ''}><i class="fa-solid ${isLoadingMore ? 'fa-spinner fa-spin' : 'fa-users-line'}"></i> ${isLoadingMore ? 'Loading contacts…' : 'Load More Contacts'}</button>
               `
               : ''}
             ${job.status === 'accepted'

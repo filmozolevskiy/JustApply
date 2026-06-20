@@ -551,6 +551,7 @@
     .settings-tooltip-wrap {
       position: relative;
       display: inline-flex;
+      cursor: default;
     }
 
     .settings-tooltip-floating {
@@ -1674,11 +1675,18 @@
       const job = findJob(id);
       if (!job) return;
 
+      const LOAD_MORE_BLOCKED_MESSAGES = {
+        all_streams_exhausted: 'All active streams are exhausted — LinkedIn returned no further profiles.',
+        no_audience_toggles: 'No audience toggles active in Contact Search Settings.',
+        missing_company_url: 'No LinkedIn company URL — cannot fetch employees.',
+      };
+
       const preflightResp = await fetch(`/api/jobs/${id}/load-more-preflight`);
       if (preflightResp.ok) {
         const preflightData = await preflightResp.json();
         if (preflightData.estimated_runs === 0) {
-          alert('All active streams are at cap — nothing more to fetch.');
+          const reason = preflightData.blocked_reason || 'unknown';
+          alert(LOAD_MORE_BLOCKED_MESSAGES[reason] || 'No streams available to fetch.');
           return;
         }
         const streamLines = (preflightData.billable_streams || [])
@@ -1694,6 +1702,7 @@
 
       activeLoadMoreJobId = id;
       renderActiveVariant();
+      refreshDrawerIfOpen(id);
       addLogLine(`Loading more contacts for [${job.title} @ ${job.company}]...`, 'info');
       expandLogsConsole();
       try {
@@ -1712,6 +1721,7 @@
       } finally {
         activeLoadMoreJobId = null;
         renderActiveVariant();
+        refreshDrawerIfOpen(id);
       }
     }
 

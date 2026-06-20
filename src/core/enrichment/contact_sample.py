@@ -327,3 +327,52 @@ def poster_to_apify_item(poster: dict) -> dict:
         "location": "",
         "languages": [],
     }
+
+
+def resolve_load_more_streams(
+    slug: str,
+    settings: dict,
+    company_url: str,
+    get_contact_sample,
+) -> dict:
+    """Return billable streams and blocked_reason for Load More preflight/pipeline."""
+    if not company_url:
+        return {"billable_streams": [], "blocked_reason": "missing_company_url"}
+
+    active_recruiters = settings.get("target_recruiters", True)
+    active_russian = settings.get("target_russian_speakers", True)
+    if not active_recruiters and not active_russian:
+        return {"billable_streams": [], "blocked_reason": "no_audience_toggles"}
+
+    stream_defs = [
+        ("recruiters", "Recruiters", RECRUITER_SAMPLE_SIZE, active_recruiters),
+        ("russian", "Russian Speakers", RUSSIAN_SAMPLE_SIZE, active_russian),
+    ]
+
+    billable_streams = []
+    exhausted_count = 0
+    active_count = 0
+
+    for stream_key, stream_label, profile_count, is_active in stream_defs:
+        if not is_active:
+            continue
+        active_count += 1
+        cache = get_contact_sample(slug, stream=stream_key)
+        if cache and cache.get("last_fetch_empty"):
+            exhausted_count += 1
+            continue
+        page = (cache.get("pages_fetched", 0) + 1) if cache else 1
+        billable_streams.append({
+            "stream": stream_label,
+            "profile_count": profile_count,
+            "page": page,
+            "stream_key": stream_key,
+        })
+
+    if billable_streams:
+        return {"billable_streams": billable_streams, "blocked_reason": None}
+
+    if exhausted_count == active_count and active_count > 0:
+        return {"billable_streams": [], "blocked_reason": "all_streams_exhausted"}
+
+    return {"billable_streams": [], "blocked_reason": None}

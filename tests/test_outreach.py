@@ -549,7 +549,7 @@ async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_classify_contacts_caps_at_five_per_group(monkeypatch):
+async def test_classify_contacts_keeps_all_matching_russian_speakers(monkeypatch):
     from src.core.outreach import classify_contacts
     from src.schemas import OutreachSettings
 
@@ -562,7 +562,7 @@ async def test_classify_contacts_caps_at_five_per_group(monkeypatch):
     with patch("src.core.gemini_client.generate_text", new=AsyncMock(return_value=llm_response)):
         result = await classify_contacts(items, settings)
 
-    assert sum(1 for c in result if c["russian_speaker"]) == 5
+    assert sum(1 for c in result if c["russian_speaker"]) == 7
 
 
 @pytest.mark.asyncio

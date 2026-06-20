@@ -319,7 +319,7 @@ def test_drawer_reclassify_button_gated_on_accepted_status():
 
 
 def test_load_more_contacts_gated_on_company_url():
-    """Load More Contacts requires both hasContactSampleActions and companyUrl."""
+    """Load More Contacts requires Accepted status and companyUrl."""
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
     idx = content.find("loadMoreContacts(")
@@ -327,8 +327,8 @@ def test_load_more_contacts_gated_on_company_url():
     nearby = content[max(0, idx - 400):idx + 50]
     assert "companyUrl" in nearby, \
         "Load More Contacts must be gated on job.companyUrl"
-    assert "hasContactSampleActions" in nearby, \
-        "Load More Contacts must still be gated on hasContactSampleActions"
+    assert "status === 'accepted'" in nearby, \
+        "Load More Contacts must be gated on job.status === 'accepted'"
 
 
 # --- Dashboard: reclassifyJob is exported to window ---

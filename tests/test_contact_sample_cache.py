@@ -60,6 +60,17 @@ def test_set_contact_sample_stores_empty_list(db):
     assert cached["profiles"] == []
 
 
+def test_set_contact_sample_tracks_stream_exhausted(db):
+    """last_fetch_empty marks Stream Exhausted when Apify returned zero profiles."""
+    set_contact_sample("acme", [], last_fetch_empty=True, stream="recruiters", db_path=db)
+    cached = get_contact_sample("acme", stream="recruiters", db_path=db)
+    assert cached["last_fetch_empty"] is True
+
+    set_contact_sample("acme", [{"firstName": "Bob"}], last_fetch_empty=False, stream="recruiters", db_path=db)
+    cached = get_contact_sample("acme", stream="recruiters", db_path=db)
+    assert cached["last_fetch_empty"] is False
+
+
 def test_set_contact_sample_replaces_existing(db):
     old = [{"firstName": "Old"}]
     new = [{"firstName": "New"}]

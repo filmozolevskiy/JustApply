@@ -256,8 +256,8 @@ async def test_dual_audience_deduplicates_overlapping_profiles(db, dual_settings
 # ─── Cap enforcement with dual audience ───────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_dual_audience_cap_3_recruiters():
-    """Classifier with both toggles on keeps at most 3 Recruiters."""
+async def test_dual_audience_keeps_all_recruiters():
+    """Classifier with both toggles on keeps all Recruiters."""
     from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
 
@@ -274,13 +274,13 @@ async def test_dual_audience_cap_3_recruiters():
                       new=AsyncMock(return_value=json.dumps(classified_raw))):
         result = await classify_contacts(items, settings)
 
-    assert len(result) == 3
+    assert len(result) == 5
     assert all(c["is_recruiter"] for c in result)
 
 
 @pytest.mark.asyncio
-async def test_dual_audience_cap_5_non_hr_russian():
-    """Classifier with both toggles on keeps at most 5 non-HR Russian Speakers."""
+async def test_dual_audience_keeps_all_non_hr_russian():
+    """Classifier with both toggles on keeps all non-HR Russian Speakers."""
     from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
 
@@ -297,15 +297,14 @@ async def test_dual_audience_cap_5_non_hr_russian():
                       new=AsyncMock(return_value=json.dumps(classified_raw))):
         result = await classify_contacts(items, settings)
 
-    assert len(result) == 5
+    assert len(result) == 7
     assert all(c["russian_speaker"] for c in result)
     assert not any(c["is_recruiter"] for c in result)
 
 
 @pytest.mark.asyncio
-async def test_dual_audience_dual_classified_counts_toward_recruiter_cap():
-    """A dual-classified contact (both russian_speaker=True, is_recruiter=True) counts toward
-    the Recruiter cap only; the Russian Speaker count is unaffected."""
+async def test_dual_audience_dual_classified_counts_toward_recruiter_only():
+    """A dual-classified contact counts toward Recruiter only; Russian Speaker pool excludes recruiters."""
     from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
 
@@ -333,10 +332,8 @@ async def test_dual_audience_dual_classified_counts_toward_recruiter_cap():
 
     recruiters = [c for c in result if c["is_recruiter"]]
     russians = [c for c in result if c["russian_speaker"] and not c["is_recruiter"]]
-    # Dual contact counted as recruiter → only 1 recruiter total (cap=3, only 1 dual)
     assert len(recruiters) == 1
     assert recruiters[0]["russian_speaker"] is True
-    # Russian pool (non-recruiter) gets up to 5
     assert len(russians) == 5
 
 
