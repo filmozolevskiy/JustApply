@@ -139,6 +139,44 @@ def test_extract_complete_outreach_slots_falls_back_to_job_title():
     assert slots["bullets"] == []
 
 
+def test_normalize_complete_outreach_bullets_strips_trailing_justification():
+    bullets = normalize_complete_outreach_bullets(
+        ["Developed automated testing frameworks using Selenium and Java, directly matching required skills."],
+        [],
+    )
+    assert bullets == ["Developed automated testing frameworks using Selenium and Java"]
+
+
+def test_assemble_complete_outreach_spacing_with_link_and_bullets():
+    job = {
+        "title": "Senior QA Automation Analyst",
+        "company": "TELUS Health",
+        "link": "https://example.com/job",
+    }
+    slots = {
+        "adjusted_position_name": "Senior QA Automation Analyst",
+        "bullets": [
+            "Developed automated testing frameworks using Selenium and Java",
+            "Proven experience implementing automated workflows with AI agents",
+            "Extensive background in API and database validation",
+        ],
+    }
+    result = assemble_complete_outreach_template(job, "russian_speaker", slots)
+
+    expected_block = (
+        "TELUS Health is looking for a Senior QA Automation Analyst\n"
+        "https://example.com/job\n"
+        "\n"
+        f"{COMPLETE_CANDIDATE_FIT_LINE}\n"
+        "* Developed automated testing frameworks using Selenium and Java\n"
+        "* Proven experience implementing automated workflows with AI agents\n"
+        "* Extensive background in API and database validation\n"
+        "\n"
+        f"{complete_russian_speaker_cta('TELUS Health')}"
+    )
+    assert expected_block in result
+
+
 def test_assemble_complete_outreach_recruiter_with_link_and_bullets():
     job = {
         "title": "Senior QA Engineer",

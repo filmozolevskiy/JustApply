@@ -123,10 +123,20 @@ def normalize_complete_outreach_bullets(
     bullets: list[str] = []
     seen: set[str] = set()
 
+    def _trim_bullet_phrase(text: str) -> str:
+        match = re.search(
+            r",\s*(?:directly|aligning|matching|ensuring|which|as required)\b",
+            text,
+            re.I,
+        )
+        if match:
+            text = text[: match.start()]
+        return text.strip().rstrip(",")
+
     def _add(item: object) -> None:
         if not isinstance(item, str):
             return
-        cleaned = item.strip().lstrip("*-• ").strip()
+        cleaned = _trim_bullet_phrase(item.strip().lstrip("*-• ").strip())
         if not cleaned:
             return
         key = cleaned.casefold()
@@ -181,10 +191,9 @@ def assemble_complete_outreach_template(job: Job, audience: str, slots: dict) ->
         f"{company} is looking for a {adjusted}",
     ]
     if link:
-        parts.extend(["", link])
+        parts.append(link)
     parts.extend(["", COMPLETE_CANDIDATE_FIT_LINE])
     if bullets:
-        parts.append("")
         parts.extend(f"* {bullet}" for bullet in bullets)
     cta = COMPLETE_RECRUITER_CTA if audience == "recruiter" else complete_russian_speaker_cta(company)
     parts.extend(["", cta, "", SIGN_OFF])
@@ -217,7 +226,7 @@ Return ONLY valid JSON with this exact shape:
 
 Rules:
 - adjustedPositionName: shorten or rephrase the raw title so it reads naturally in that sentence.
-- bullets: exactly three short resume-matched strengths relevant to the job (no markdown, no leading bullets).
+- bullets: exactly three short resume-matched strengths (under 12 words each). State the skill or experience only — no trailing justification (avoid phrases like "directly matching required skills" or "aligning with the job's focus").
 - Output JSON only. No markdown fences or extra text.
 """
 
