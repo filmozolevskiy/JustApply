@@ -211,12 +211,11 @@ def test_api_logs_replay_reconnection():
                     data_json = json.loads(line[5:])
                     events.append(data_json)
                     
-        # Verify the logs are replayed
-        assert len(events) == 4  # log 1, log 2, result, done
+        # Verify the logs are replayed (result events are incremental job saves, not a batch summary)
+        assert len(events) == 3  # log 1, log 2, done
         assert events[0] == {"type": "log", "level": "info", "message": "Log message 1"}
         assert events[1] == {"type": "log", "level": "warning", "message": "Log message 2"}
-        assert events[2]["type"] == "result"
-        assert events[3] == {"type": "done"}
+        assert events[2] == {"type": "done"}
     finally:
         # Clean up
         active_tasks.pop(task_id, None)

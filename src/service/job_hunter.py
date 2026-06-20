@@ -44,6 +44,7 @@ async def search_jobs(
     countries: str = "us",
     time_range: str = "any",
     log_func=None,
+    job_saved_func=None,
     rate_limit: bool = True,
 ) -> list:
     """Run Search & Evaluation Pipeline with shared rate-limit gating."""
@@ -60,6 +61,7 @@ async def search_jobs(
         countries=countries,
         time_range=time_range,
         log_func=log_func,
+        job_saved_func=job_saved_func,
     )
 
 

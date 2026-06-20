@@ -165,6 +165,29 @@
     .status-found { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
     .status-accepted { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
     .status-contacted { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .contacted-elsewhere-badge {
+      display: inline-block;
+      margin-left: 4px;
+      margin-top: 2px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .contacted-elsewhere-badge:hover {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: rgba(245, 158, 11, 0.55);
+    }
     .status-interviewing { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .status-closed { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.3); }
     .status-rejected { background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); }
@@ -699,28 +722,77 @@
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
     }
 
+    .kanban-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .kanban-card-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
     .kanban-card-title {
+      flex: 1;
+      min-width: 0;
+      word-break: break-word;
       font-size: 0.95rem;
       font-weight: 600;
       color: var(--text-primary);
       line-height: 1.3;
     }
 
-    .kanban-card-company {
+    .kanban-card-linkedin {
+      color: #06b6d4;
+      font-size: 0.95rem;
+    }
+
+    .kanban-card-company-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .kanban-card-company-name {
       font-size: 0.8rem;
       color: var(--text-secondary);
+      word-break: break-word;
+    }
+
+    .kanban-card-badges {
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .kanban-card-meta-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .kanban-card-meta-primary {
+      display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
     }
 
-    .kanban-card-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 4px;
+    .kanban-card-meta-remote {
+      text-transform: capitalize;
+    }
+
+    .kanban-card-meta-salary {
+      color: #10b981;
+      font-weight: 500;
+      word-break: break-word;
     }
 
     .kanban-card-footer {
@@ -782,9 +854,60 @@
       border-color: rgba(6, 182, 212, 0.3);
     }
 
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      padding-right: 36px;
+    }
+
+    .drawer-header-title {
+      flex: 1;
+      min-width: 0;
+      word-break: break-word;
+      font-size: 1.4rem;
+      color: var(--text-primary);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .drawer-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .drawer-header-linkedin {
+      color: #06b6d4;
+      font-size: 1.15rem;
+    }
+
+    .drawer-job-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .drawer-job-info-full {
+      grid-column: 1 / -1;
+    }
+
+    .drawer-salary {
+      color: #10b981;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
     .detail-description {
       color: var(--text-secondary);
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       line-height: 1.6;
       background: rgba(0,0,0,0.15);
       padding: 14px;
@@ -852,7 +975,7 @@
       font-size: 0.9rem;
       padding: 12px;
       border-radius: 6px;
-      min-height: 120px;
+      min-height: 200px;
       resize: vertical;
       line-height: 1.5;
     }
@@ -881,9 +1004,43 @@
       opacity: 1;
     }
 
+    .drawer-frame {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(860px, 96vw);
+    }
+
+    .drawer-nav {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
+    }
+
+    .drawer-nav:hover:not(:disabled) {
+      color: var(--accent-cyan);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .drawer-nav:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+
     .drawer-content {
+      flex: 1;
+      min-width: 0;
       width: 720px;
-      max-width: 90%;
+      max-width: 100%;
       max-height: 85vh;
       background: var(--bg-surface-opaque);
       border: 1px solid var(--border-color);
@@ -1291,11 +1448,19 @@
 
   <!-- Detail side drawer (Used for Kanban detail view) -->
   <div class="drawer-overlay" id="kanban-drawer" onclick="closeDrawer(event)">
-    <div class="drawer-content" onclick="event.stopPropagation()">
-      <button class="drawer-close" onclick="closeDrawer(null)"><i class="fa-solid fa-xmark"></i></button>
-      <div id="drawer-body">
-        <!-- Rendered dynamically when card clicked -->
+    <div class="drawer-frame" onclick="event.stopPropagation()">
+      <button type="button" class="drawer-nav drawer-nav-prev" id="drawer-nav-prev" onclick="navigateDrawerJob(-1)" aria-label="Previous job" disabled>
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      <div class="drawer-content">
+        <button class="drawer-close" onclick="closeDrawer(null)"><i class="fa-solid fa-xmark"></i></button>
+        <div id="drawer-body">
+          <!-- Rendered dynamically when card clicked -->
+        </div>
       </div>
+      <button type="button" class="drawer-nav drawer-nav-next" id="drawer-nav-next" onclick="navigateDrawerJob(1)" aria-label="Next job" disabled>
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
     </div>
   </div>
 
@@ -1316,6 +1481,7 @@
   <script type="module">
     import {
       getJobs, setJobs, findJob, updateJob, removeJob, addJob, hasJobMatching,
+      integrateIncomingJobs,
     } from '/static/js/jobStore.js';
     import {
       renderBoard, getBoardFiltersFromDom,
@@ -1357,6 +1523,21 @@
       });
     }
 
+    function integrateSearchResultFromStream(logData) {
+      const incoming = [];
+      if (logData.job) {
+        incoming.push(logData.job);
+      }
+      if (logData.jobs?.length) {
+        incoming.push(...logData.jobs);
+      }
+      const added = integrateIncomingJobs(incoming);
+      if (added > 0) {
+        renderActiveVariant();
+      }
+      return added;
+    }
+
     const taskLog = createTaskLogClient();
     const {
       addLogLine,
@@ -1373,16 +1554,20 @@
       addLogLine,
       getActiveReclassifyJobIds: () => activeReclassifyJobIds,
       getActiveLoadMoreJobId: () => activeLoadMoreJobId,
+      getBoardFilters: getBoardFiltersFromDom,
     });
     const {
       closeDrawer,
       copyDrawerOutreach,
+      navigateDrawerJob,
+      openContactedElsewhereJob,
       openJobDetailsDrawer,
       refreshDrawerIfOpen,
       saveOutreachTemplate,
       selectActiveContact,
       toggleActivityLog,
       toggleContacted,
+      updateDrawerNav,
       updateJobComment,
       updateOutreachCounter,
     } = drawer;
@@ -1399,6 +1584,7 @@
       localStorage.setItem('boardSortBy', sortBy);
 
       renderActiveVariant();
+      updateDrawerNav();
     }
 
     function getArchivedFilter() {
@@ -1899,19 +2085,11 @@
           taskKey: ACTIVE_SCRAPE_TASK_KEY,
           existingSource: taskLog.getLogEventSource(),
           onResult(logData) {
-            if (logData.jobs && logData.jobs.length > 0) {
-              logData.jobs.forEach(newJob => {
-                if (!hasJobMatching(newJob.title, newJob.company)) {
-                  addJob(newJob);
-                }
-              });
-              addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
-            }
+            integrateSearchResultFromStream(logData);
           },
           onDone() {
             addLogLine('Scraper process complete.', 'success');
             resetScrapeButtons();
-            renderActiveVariant();
           },
           onError() {
             addLogLine('Scraper SSE stream closed unexpectedly.', 'warning');
@@ -2088,19 +2266,11 @@
         taskKey: ACTIVE_SCRAPE_TASK_KEY,
         existingSource: taskLog.getLogEventSource(),
         onResult(logData) {
-          if (logData.jobs && logData.jobs.length > 0) {
-            logData.jobs.forEach(newJob => {
-              if (!hasJobMatching(newJob.title, newJob.company)) {
-                addJob(newJob);
-              }
-            });
-            addLogLine(`Integrated ${logData.jobs.length} new jobs into master state.`, 'success');
-          }
+          integrateSearchResultFromStream(logData);
         },
         onDone() {
           addLogLine('Scraper process complete.', 'success');
           resetScrapeButtons();
-          renderActiveVariant();
         },
         onError() {
           addLogLine(
@@ -2269,7 +2439,9 @@
       enrichJob,
       loadMoreContacts,
       moveJobStage,
+      navigateDrawerJob,
       reclassifyJob,
+      openContactedElsewhereJob,
       openJobDetailsDrawer,
       resetKbFilters,
       saveOutreachSettings,

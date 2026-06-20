@@ -57,6 +57,31 @@ def test_job_store_round_trips_jobs():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_job_store_integrates_incoming_search_jobs():
+    """integrateIncomingJobs adds new jobs and skips duplicates by id or title/company."""
+    result = _run_node(
+        """
+        import {
+          getJobs, setJobs, findJob, integrateIncomingJobs,
+        } from './src/web/static/js/jobStore.js';
+
+        setJobs([{ id: 1, title: 'QA', company: 'Acme', status: 'found' }]);
+
+        const added = integrateIncomingJobs([
+          { id: 1, title: 'QA', company: 'Acme', status: 'found' },
+          { id: 2, title: 'PM', company: 'Beta', status: 'found' },
+          { title: 'PM', company: 'Beta', status: 'found' },
+        ]);
+        if (added !== 1) process.exit(1);
+        if (getJobs().length !== 2) process.exit(2);
+        if (findJob(2)?.title !== 'PM') process.exit(3);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_board_renderer_filters_and_sorts_jobs():
     """boardRenderer applies Board Controls filters without touching the DOM."""
     result = _run_node(
@@ -84,6 +109,42 @@ def test_board_renderer_filters_and_sorts_jobs():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_board_renderer_job_order_follows_lanes_and_sort():
+    """getBoardJobOrder returns jobs lane-by-lane using the active sort."""
+    result = _run_node(
+        """
+        import { getBoardJobOrder } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          { id: 1, status: 'found', matchScore: 60 },
+          { id: 2, status: 'accepted', matchScore: 90 },
+          { id: 3, status: 'found', matchScore: 80 },
+          { id: 4, status: 'rejected', matchScore: 50 },
+        ];
+
+        const ordered = getBoardJobOrder(jobs, { sortBy: 'match_desc' });
+        if (ordered.map((j) => j.id).join(',') !== '3,1,2,4') process.exit(1);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_dashboard_drawer_has_prev_next_navigation():
+    """Job drawer exposes previous/next navigation controls."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert 'id="drawer-nav-prev"' in content
+    assert 'id="drawer-nav-next"' in content
+    assert "navigateDrawerJob" in content
+
+    with open(DRAWER_CONTROLLER_PATH, encoding="utf-8") as f:
+        drawer = f.read()
+    assert "navigateDrawerJob" in drawer
+    assert "getBoardJobOrder" in drawer
+
+
 def test_drawer_controller_substitutes_greeting_name():
     """drawerController applies Name Placeholder greeting substitution."""
     result = _run_node(
@@ -104,6 +165,38 @@ def test_drawer_controller_substitutes_greeting_name():
 
         if (contactGroup({ is_recruiter: true }) !== 'recruiters') process.exit(3);
         if (contactGroup({ russian_speaker: true }) !== 'russian_speakers') process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_drawer_controller_pick_default_active_contact_deprioritizes_elsewhere():
+    """Active Contact defaults to uncontacted contacts without Contacted Elsewhere first."""
+    result = _run_node(
+        """
+        import {
+          pickDefaultActiveContact,
+          hasContactedElsewhere,
+        } from './src/web/static/js/drawerController.js';
+
+        const contacts = [
+          { name: 'A', contacted: false, contactedElsewhere: { jobId: 9, company: 'X', title: 'Y' } },
+          { name: 'B', contacted: false },
+          { name: 'C', contacted: true },
+        ];
+        if (pickDefaultActiveContact(contacts) !== 1) process.exit(1);
+        if (!hasContactedElsewhere(contacts[0])) process.exit(2);
+
+        const allElsewhere = [
+          { name: 'A', contacted: false, contactedElsewhere: { jobId: 9, company: 'X', title: 'Y' } },
+          { name: 'B', contacted: false, contactedElsewhere: { jobId: 10, company: 'Z', title: 'W' } },
+        ];
+        if (pickDefaultActiveContact(allElsewhere) !== 0) process.exit(3);
+
+        const allContacted = [{ name: 'C', contacted: true }];
+        if (pickDefaultActiveContact(allContacted) !== 0) process.exit(4);
 
         console.log('ok');
         """

@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from . import connection
+from .contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
 from .job_model import normalize_add_job_input, parse_job_row
 
 VALID_STATUSES = frozenset({
@@ -80,7 +81,8 @@ def get_jobs(db_path=None, archived_filter="active"):
         cursor.execute("SELECT * FROM jobs WHERE archived = 0 ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
-    return [parse_job_row(r) for r in rows]
+    jobs = [parse_job_row(r) for r in rows]
+    return enrich_jobs_with_contacted_elsewhere(jobs, db_path=db_path)
 
 
 def update_job_status(job_id, status, db_path=None):
@@ -157,8 +159,11 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     contacts[contact_idx]["contacted"] = bool(contacted)
 
     if contacted:
+        contacts[contact_idx]["contacted_at"] = datetime.now(timezone.utc).isoformat()
         contact_name = contacts[contact_idx].get("name") or "Contact"
         _append_activity_log(cursor, job_id, f"Marked {contact_name} contacted")
+    else:
+        contacts[contact_idx].pop("contacted_at", None)
 
     cursor.execute(
         "UPDATE jobs SET contacts = ? WHERE id = ?",
@@ -169,7 +174,8 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()
     conn.close()
-    return parse_job_row(updated)
+    enriched = enrich_jobs_with_contacted_elsewhere([parse_job_row(updated)], db_path=db_path)
+    return enriched[0] if enriched else None
 
 
 def get_job(job_id, db_path=None):
@@ -182,7 +188,8 @@ def get_job(job_id, db_path=None):
     conn.close()
     if not row:
         return None
-    return parse_job_row(row)
+    enriched = enrich_jobs_with_contacted_elsewhere([parse_job_row(row)], db_path=db_path)
+    return enriched[0] if enriched else None
 
 
 def start_enrichment(job_id, db_path=None):

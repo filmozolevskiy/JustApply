@@ -32,6 +32,7 @@ async def run_search_pipeline(
     countries: str = "us",
     time_range: str = "any",
     log_func=None,
+    job_saved_func=None,
 ) -> list:
     """Scrape, deduplicate, evaluate, attribute-gate, and save jobs. Returns list of saved job dicts."""
 
@@ -150,6 +151,11 @@ async def run_search_pipeline(
             job["id"] = job_id
             saved.append(job)
             await log(f"Saved: '{title}' at {company} (id={job_id})")
+            if job_saved_func:
+                if inspect.iscoroutinefunction(job_saved_func):
+                    await job_saved_func(job)
+                else:
+                    job_saved_func(job)
 
     saved_count = len(saved)
     await log(

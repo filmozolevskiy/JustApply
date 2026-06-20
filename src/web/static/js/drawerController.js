@@ -1,6 +1,7 @@
 /** Job details drawer — Active Contact, templates, and outreach UI. */
 
-import { findJob, updateJob } from './jobStore.js';
+import { findJob, getJobs, setJobs, updateJob, upsertJob } from './jobStore.js';
+import { getBoardJobOrder } from './boardRenderer.js';
 
 export const NAME_PLACEHOLDER = '______';
 
@@ -49,6 +50,26 @@ function activityLogEntryMeta(message) {
   return { color: 'var(--text-secondary)', icon: null };
 }
 
+export function hasContactedElsewhere(contact) {
+  return Boolean(contact?.contactedElsewhere?.jobId);
+}
+
+export function pickDefaultActiveContact(contacts) {
+  if (!contacts.length) return -1;
+  const withoutElsewhere = contacts.findIndex((c) => !c.contacted && !hasContactedElsewhere(c));
+  if (withoutElsewhere !== -1) return withoutElsewhere;
+  const uncontacted = contacts.findIndex((c) => !c.contacted);
+  if (uncontacted !== -1) return uncontacted;
+  return 0;
+}
+
+function contactedElsewhereBadgeHtml(contact) {
+  if (contact.contacted || !hasContactedElsewhere(contact)) return '';
+  const { jobId, company, title } = contact.contactedElsewhere;
+  const label = `${company} — ${title}`;
+  return `<button type="button" class="contacted-elsewhere-badge" onclick="openContactedElsewhereJob(${jobId}, event)" title="Already contacted for another role — click to review">${label}</button>`;
+}
+
 export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
   if (contacts.length === 0) {
     return '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>';
@@ -83,6 +104,7 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
                     ${contact.russian_speaker ? '<span style="font-size:0.65rem; background:rgba(239,68,68,0.15); color:#f87171; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🇷🇺 RU</span>' : ''}
                     ${contact.is_recruiter ? '<span style="font-size:0.65rem; background:rgba(99,102,241,0.15); color:#a5b4fc; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">🎯 HR</span>' : ''}
                     ${contact.is_job_poster ? '<span style="font-size:0.65rem; background:rgba(245,158,11,0.15); color:#fbbf24; padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600; letter-spacing:0.04em;">📋 Poster</span>' : ''}
+                    ${contactedElsewhereBadgeHtml(contact)}
                   </span>
                   <span style="font-size:0.75rem; color:var(--text-secondary);">${contact.title || contact.role || ''}</span>
                 </div>
@@ -103,10 +125,12 @@ export function createDrawerController({
   addLogLine,
   getActiveReclassifyJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
+  getBoardFilters = () => ({}),
 }) {
   let activeContactIdx = -1;
   let commentTimeout = null;
   let templateSaveTimeout = null;
+  let drawerJobId = null;
 
   function selectActiveContact(jobId, contactIdx) {
     activeContactIdx = contactIdx;
@@ -138,9 +162,48 @@ export function createDrawerController({
     }
   }
 
+  function getDrawerJobNeighbors() {
+    if (drawerJobId == null) {
+      return { prevId: null, nextId: null, index: -1, total: 0 };
+    }
+    const ordered = getBoardJobOrder(getJobs(), getBoardFilters());
+    const index = ordered.findIndex((j) => j.id === drawerJobId);
+    if (index === -1) {
+      return { prevId: null, nextId: null, index: -1, total: ordered.length };
+    }
+    return {
+      prevId: index > 0 ? ordered[index - 1].id : null,
+      nextId: index < ordered.length - 1 ? ordered[index + 1].id : null,
+      index,
+      total: ordered.length,
+    };
+  }
+
+  function updateDrawerNav() {
+    const { prevId, nextId } = getDrawerJobNeighbors();
+    const prevBtn = document.getElementById('drawer-nav-prev');
+    const nextBtn = document.getElementById('drawer-nav-next');
+    if (prevBtn) {
+      prevBtn.disabled = prevId == null;
+    }
+    if (nextBtn) {
+      nextBtn.disabled = nextId == null;
+    }
+  }
+
+  function navigateDrawerJob(delta) {
+    const { prevId, nextId } = getDrawerJobNeighbors();
+    const targetId = delta < 0 ? prevId : nextId;
+    if (targetId == null) return;
+    openJobDetailsDrawer(targetId);
+    document.querySelector('.drawer-content')?.scrollTo(0, 0);
+  }
+
   function openJobDetailsDrawer(id) {
     const job = findJob(id);
     if (!job) return;
+
+    drawerJobId = id;
 
     const overlay = document.getElementById('kanban-drawer');
     const body = document.getElementById('drawer-body');
@@ -162,9 +225,7 @@ export function createDrawerController({
     }
 
     const contacts = job.contacts || [];
-    let defaultContactIdx = contacts.findIndex((c) => !c.contacted);
-    if (defaultContactIdx === -1) defaultContactIdx = contacts.length > 0 ? 0 : -1;
-    activeContactIdx = defaultContactIdx;
+    activeContactIdx = pickDefaultActiveContact(contacts);
 
     const rawActiveTemplate = activeContactIdx >= 0 ? getActiveTemplate(job, activeContactIdx) : '';
     const defaultContact = activeContactIdx >= 0 ? contacts[activeContactIdx] : null;
@@ -178,18 +239,18 @@ export function createDrawerController({
     const contactActionInProgress = isReclassifying || isLoadingMore;
     const reclassifyBusy = isReclassifying;
 
+    const hasPostingLink =
+      job.link && job.link.trim() && job.link !== '#' && job.link !== 'undefined';
+
     body.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:16px;">
-          <div>
-            <h2 style="font-size:1.4rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
-              ${job.title}
-              <a href="${job.link}" target="_blank" style="color:#06b6d4; font-size:1.15rem;" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
-            </h2>
-            <div style="color:var(--text-secondary); margin-top:4px; font-size:0.9rem;">
-              <strong>${job.company}</strong> &bull; ${job.location} &bull; ${job.salary || 'Not specified'}
-            </div>
+        <div class="drawer-header">
+          <h2 class="drawer-header-title">${job.title}</h2>
+          <div class="drawer-header-actions">
+            ${hasPostingLink ? `
+              <a href="${job.link}" target="_blank" class="drawer-header-linkedin" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
+            ` : ''}
+            <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
           </div>
-          <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
         </div>
 
         ${job.isRecruiter ? `
@@ -208,11 +269,14 @@ export function createDrawerController({
         <div style="display:flex; flex-direction:column; gap:14px;">
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Job Info</h4>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:0.85rem; color:var(--text-secondary);">
+            <div class="drawer-job-info-grid">
               <div>Status: <span class="status-badge status-${job.status}" style="font-size:0.65rem; padding: 2px 6px;">${job.status}</span></div>
               <div>Seniority: <span style="text-transform:capitalize;">${job.seniority}</span></div>
+              <div>Company: <strong>${job.company}</strong></div>
+              <div>Location: ${job.location}</div>
               <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
-              <div>Resume Profile: <code>${job.resumeUsed}</code></div>
+              <div>Salary: <span class="drawer-salary">${job.salary || 'Not specified'}</span></div>
+              <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
             </div>
           </div>
 
@@ -254,7 +318,7 @@ export function createDrawerController({
 
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Description</h4>
-            <div class="detail-description" style="font-size:0.85rem; max-height: 150px; overflow-y: auto;">${job.description}</div>
+            <div class="detail-description">${job.description}</div>
           </div>
 
           <div class="match-breakdown">
@@ -306,7 +370,7 @@ export function createDrawerController({
             </div>
             ${activeTemplate || (contacts.length === 0 && (job.outreachMessage || job.recruiterOutreachTemplate || job.russianSpeakerOutreachTemplate))
               ? `
-              <textarea class="outreach-text" id="drawer-outreach-text" oninput="updateOutreachCounter(); saveOutreachTemplate(${job.id}, this.value)" style="font-size:0.8rem; min-height:100px;">${activeTemplate}</textarea>
+              <textarea class="outreach-text" id="drawer-outreach-text" oninput="updateOutreachCounter(); saveOutreachTemplate(${job.id}, this.value)" style="font-size:0.8rem;">${activeTemplate}</textarea>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
                 <span id="drawer-char-counter" style="font-size:0.75rem; color:var(--text-muted);">${activeTemplate.length}/200</span>
                 <div style="display:flex; gap:8px;">
@@ -348,6 +412,7 @@ export function createDrawerController({
       `;
 
     overlay.classList.add('active');
+    updateDrawerNav();
   }
 
   function updateJobComment(id, value) {
@@ -423,6 +488,34 @@ export function createDrawerController({
     }, 500);
   }
 
+  async function reloadJobsFromServer() {
+    const archivedFilter =
+      document.getElementById('board-filter-archived')?.value ||
+      localStorage.getItem('boardFilterArchived') ||
+      'active';
+    const resp = await fetch(`/api/jobs?archived=${archivedFilter}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    setJobs(Array.isArray(data) ? data : []);
+  }
+
+  async function openContactedElsewhereJob(sourceJobId, event) {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    if (!findJob(sourceJobId)) {
+      try {
+        const resp = await fetch(`/api/jobs/${sourceJobId}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        upsertJob(await resp.json());
+      } catch (err) {
+        addLogLine(`Could not open job #${sourceJobId}: ${err.message}`, 'error');
+        return;
+      }
+    }
+    openJobDetailsDrawer(sourceJobId);
+    onJobMutated();
+  }
+
   async function toggleContacted(jobId, contactIdx, isChecked) {
     const job = findJob(jobId);
     if (!job || !job.contacts || !job.contacts[contactIdx]) return;
@@ -438,6 +531,12 @@ export function createDrawerController({
 
       updateJob(jobId, updated);
 
+      try {
+        await reloadJobsFromServer();
+      } catch (reloadErr) {
+        addLogLine(`Contact updated but refresh failed: ${reloadErr.message}`, 'warning');
+      }
+
       addLogLine(
         `Marked contact ${job.contacts[contactIdx].name} as ${isChecked ? 'CONTACTED' : 'NOT CONTACTED'}.`,
         isChecked ? 'success' : 'warning',
@@ -451,8 +550,13 @@ export function createDrawerController({
   }
 
   function closeDrawer(e) {
-    if (!e || e.target === document.getElementById('kanban-drawer') || e.target.closest('.drawer-close')) {
+    if (
+      !e ||
+      e.target === document.getElementById('kanban-drawer') ||
+      e.target.closest('.drawer-close')
+    ) {
       document.getElementById('kanban-drawer').classList.remove('active');
+      drawerJobId = null;
     }
   }
 
@@ -490,15 +594,28 @@ export function createDrawerController({
     counter.style.color = len > 200 ? 'var(--accent-rose)' : 'var(--text-muted)';
   }
 
+  document.addEventListener('keydown', (e) => {
+    const overlay = document.getElementById('kanban-drawer');
+    if (!overlay?.classList.contains('active')) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    navigateDrawerJob(e.key === 'ArrowLeft' ? -1 : 1);
+  });
+
   return {
     closeDrawer,
     copyDrawerOutreach,
+    navigateDrawerJob,
+    openContactedElsewhereJob,
     openJobDetailsDrawer,
     refreshDrawerIfOpen,
     saveOutreachTemplate,
     selectActiveContact,
     toggleActivityLog,
     toggleContacted,
+    updateDrawerNav,
     updateJobComment,
     updateOutreachCounter,
   };

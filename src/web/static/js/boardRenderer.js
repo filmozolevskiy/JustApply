@@ -1,6 +1,6 @@
 /** Kanban board filtering, sorting, and DOM rendering. */
 
-const LANES = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
+export const LANES = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
 
 export function getCompanySizeCategory(sizeStr) {
   if (!sizeStr) return 'unknown';
@@ -103,6 +103,20 @@ export function getBoardFiltersFromDom() {
   };
 }
 
+/** Visible jobs in Kanban display order: lane left-to-right, sorted within each lane. */
+export function getBoardJobOrder(jobs, filters = {}) {
+  const filtered = sortJobs(filterJobs(jobs, filters), filters.sortBy || 'match_desc');
+  const ordered = [];
+  for (const lane of LANES) {
+    for (const job of filtered) {
+      if (job.status === lane) {
+        ordered.push(job);
+      }
+    }
+  }
+  return ordered;
+}
+
 export function cardEnrichingBadge(jobId, enrichingJobId) {
   if (enrichingJobId != null && jobId === enrichingJobId) {
     return `<span style="font-size:0.6rem; background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;"><i class="fa-solid fa-spinner fa-spin"></i> Enriching…</span>`;
@@ -168,33 +182,42 @@ export function renderBoard(jobs, filters = {}) {
       if (job.matchScore >= 85) matchClass = 'match-high';
       else if (job.matchScore >= 70) matchClass = 'match-mid';
 
+      const badgeParts = [
+        job.archived ? `<span class="archived-badge">Archived</span>` : '',
+        job.unclassified
+          ? `<span style="font-size:0.6rem; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;" title="Remote type and seniority were not classified by the Resume Matcher; scraper values were used instead.">Unclassified</span>`
+          : '',
+        job.isRecruiter
+          ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>`
+          : '',
+        cardEnrichingBadge(job.id, enrichingJobId),
+        cardLoadMoreBadge(job.id, loadMoreJobId),
+        cardReclassifyBadge(job.id, reclassifyJobIds),
+      ].filter(Boolean);
+      const badgesHtml = badgeParts.length
+        ? `<div class="kanban-card-badges">${badgeParts.join('')}</div>`
+        : '';
+
       card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div class="kanban-card-title" style="flex:1; min-width:0; word-break:break-word;">${job.title || 'Incomplete Job'}</div>
-              <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+            <div class="kanban-card-header">
+              <div class="kanban-card-title">${job.title || 'Incomplete Job'}</div>
+              <div class="kanban-card-header-actions">
                 ${job.link && job.link.trim() && job.link !== '#' && job.link !== 'undefined' ? `
-                  <a href="${job.link}" target="_blank" onclick="event.stopPropagation()" style="color:#06b6d4; font-size:0.95rem;" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
+                  <a href="${job.link}" target="_blank" onclick="event.stopPropagation()" class="kanban-card-linkedin" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
                 ` : ''}
                 <span class="match-pill ${matchClass}">${job.matchScore}%</span>
               </div>
             </div>
-            <div class="kanban-card-company" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-              <span><i class="fa-regular fa-building"></i> ${job.company}</span>
-              <div style="display:flex; align-items:center; gap:4px;">
-                ${job.archived ? `<span class="archived-badge">Archived</span>` : ''}
-                ${job.unclassified ? `<span style="font-size:0.6rem; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;" title="Remote type and seniority were not classified by the Resume Matcher; scraper values were used instead.">Unclassified</span>` : ''}
-                ${job.isRecruiter ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>` : ''}
-                ${cardEnrichingBadge(job.id, enrichingJobId)}
-                ${cardLoadMoreBadge(job.id, loadMoreJobId)}
-                ${cardReclassifyBadge(job.id, reclassifyJobIds)}
-              </div>
+            <div class="kanban-card-company-block">
+              <span class="kanban-card-company-name"><i class="fa-regular fa-building"></i> ${job.company}</span>
+              ${badgesHtml}
             </div>
-            <div class="kanban-card-meta" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-              <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
-              <span style="display:flex; align-items:center; gap:6px;">
-                <span style="text-transform:capitalize;">${job.remoteType}</span>
-                ${job.salary ? `&bull; <span style="color:#10b981; font-weight:500; font-size:0.75rem;"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</span>` : ''}
-              </span>
+            <div class="kanban-card-meta-block">
+              <div class="kanban-card-meta-primary">
+                <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
+                <span class="kanban-card-meta-remote">${job.remoteType}</span>
+              </div>
+              ${job.salary ? `<div class="kanban-card-meta-salary"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</div>` : ''}
             </div>
             ${job.comment ? `
               <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">

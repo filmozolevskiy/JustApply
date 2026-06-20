@@ -51,9 +51,12 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
     existing = [c.model_dump() for c in job.contacts]
     job_poster = next((c for c in existing if c.get("is_job_poster")), None)
     contacted_by_slug = {
-        normalize_linkedin_url(c.get("url", "")): c.get("contacted", False)
+        normalize_linkedin_url(c.get("url", "") or c.get("linkedin", "")): {
+            "contacted": c.get("contacted", False),
+            "contacted_at": c.get("contacted_at"),
+        }
         for c in existing
-        if normalize_linkedin_url(c.get("url", ""))
+        if normalize_linkedin_url(c.get("url", "") or c.get("linkedin", ""))
     }
 
     company = job.company or ""
@@ -176,11 +179,14 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
     for contact in contacts:
-        contact_slug = normalize_linkedin_url(contact.get("url", ""))
+        contact_slug = normalize_linkedin_url(contact.get("url", "") or contact.get("linkedin", ""))
         if poster_slug and contact_slug == poster_slug:
             contact["is_job_poster"] = True
         if contact_slug in contacted_by_slug:
-            contact["contacted"] = contacted_by_slug[contact_slug]
+            state = contacted_by_slug[contact_slug]
+            contact["contacted"] = state["contacted"]
+            if state.get("contacted_at"):
+                contact["contacted_at"] = state["contacted_at"]
 
     await log(f"Found {len(contacts)} classified contact(s).", "info")
     return contacts

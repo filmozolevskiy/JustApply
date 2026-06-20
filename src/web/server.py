@@ -81,6 +81,14 @@ async def get_all_jobs(archived: str = Query("active")):
     return get_jobs(archived_filter=archived)
 
 
+@app.get("/api/jobs/{job_id}", response_model=Job)
+async def get_one_job(job_id: int):
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return job
+
+
 class StatusUpdate(BaseModel):
     status: str
 
@@ -340,9 +348,17 @@ async def run_scraping_task(task_id: str):
     params = state.params
 
     async def log_callback(message: str, level: str = "info"):
-        event = {"level": level, "message": message}
-        state.logs.append(event)
+        event = {"type": "log", "level": level, "message": message}
+        state.logs.append({"level": level, "message": message})
         await state.queue.put(event)
+
+    async def job_saved_callback(job: dict):
+        saved_job = get_job(job.get("id"))
+        if not saved_job:
+            return
+        payload = saved_job.model_dump()
+        state.jobs.append(payload)
+        await state.queue.put({"type": "result", "job": payload})
 
     try:
         state.jobs = await search_jobs(
@@ -356,6 +372,7 @@ async def run_scraping_task(task_id: str):
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
             log_func=log_callback,
+            job_saved_func=job_saved_callback,
             rate_limit=False,
         )
 
@@ -440,19 +457,25 @@ async def logs_stream(task_id: str, skip: int = 0):
         skip = 0
 
     async def event_generator():
+        def _yield_log(level: str, message: str):
+            return {
+                "data": json.dumps({
+                    "type": "log",
+                    "level": level,
+                    "message": message,
+                })
+            }
+
+        def _yield_result(item: dict):
+            return {"data": json.dumps(item)}
+
         try:
             for log in state.logs[skip:]:
-                yield {
-                    "data": json.dumps({
-                        "type": "log",
-                        "level": log["level"],
-                        "message": log["message"],
-                    })
-                }
+                yield _yield_log(log["level"], log["message"])
 
-            # log_callback mirrors each line into logs and the queue; drop
-            # the full queued history (skip only affects replay, not queue depth).
-            for _ in range(len(state.logs)):
+            logs_dropped = 0
+            buffered_results = []
+            while logs_dropped < len(state.logs):
                 try:
                     queued = state.queue.get_nowait()
                 except asyncio.QueueEmpty:
@@ -460,24 +483,26 @@ async def logs_stream(task_id: str, skip: int = 0):
                 if queued is None:
                     await state.queue.put(None)
                     break
+                if queued.get("type") == "result":
+                    buffered_results.append(queued)
+                else:
+                    logs_dropped += 1
+
+            for item in buffered_results:
+                yield _yield_result(item)
 
             while True:
-                log = await state.queue.get()
-                if log is None:
+                item = await state.queue.get()
+                if item is None:
                     break
-                yield {
-                    "data": json.dumps({
-                        "type": "log",
-                        "level": log["level"],
-                        "message": log["message"],
-                    })
-                }
+                if item.get("type") == "result":
+                    yield _yield_result(item)
+                else:
+                    yield _yield_log(item["level"], item["message"])
 
             if state.status == "completed":
                 if state.result is not None:
-                    yield {"data": json.dumps(state.result)}
-                else:
-                    yield {"data": json.dumps({"type": "result", "jobs": state.jobs})}
+                    yield _yield_result(state.result)
                 yield {"data": json.dumps({"type": "done"})}
             else:
                 yield {

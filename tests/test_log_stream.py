@@ -132,8 +132,8 @@ def _make_live_task_state(log_messages):
     """Mirror log_callback: each line is stored in logs and queued."""
     state = TaskState({"job_id": 1})
     for msg in log_messages:
-        event = {"level": "info", "message": msg}
-        state.logs.append(event)
+        event = {"type": "log", "level": "info", "message": msg}
+        state.logs.append({"level": "info", "message": msg})
         state.queue.put_nowait(event)
     state.status = "completed"
     state.queue.put_nowait(None)
@@ -159,3 +159,23 @@ def test_live_stream_reconnect_skips_replayed_and_queued_history():
     msgs = _collect_messages("live2", skip=1)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["B", "C"]
+
+
+def test_live_stream_yields_incremental_job_results():
+    """Search saves emit result events on the SSE stream before done."""
+    state = TaskState({"query": "QA"})
+    state.logs.append({"level": "info", "message": "Evaluating..."})
+    state.queue.put_nowait({"type": "log", "level": "info", "message": "Evaluating..."})
+    state.queue.put_nowait({
+        "type": "result",
+        "job": {"id": 42, "title": "QA Engineer", "company": "Acme", "status": "found"},
+    })
+    state.status = "completed"
+    state.queue.put_nowait(None)
+    active_tasks["live3"] = state
+
+    msgs = _collect_messages("live3")
+    results = [m for m in msgs if m.get("type") == "result"]
+    assert len(results) == 1
+    assert results[0]["job"]["id"] == 42
+    assert any(m.get("type") == "done" for m in msgs)
