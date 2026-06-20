@@ -1,17 +1,30 @@
+import json
 import os
 import sys
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock, call
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.core.enrichment.connection_note as connection_note_module
 from src.core.enrichment.connection_note import (
-    minimal_fallback_template,
+    FIT_LINE,
+    COMPLETE_OUTREACH_OPENER,
+    COMPLETE_CANDIDATE_FIT_LINE,
+    COMPLETE_RECRUITER_CTA,
+    SIGN_OFF,
+    assemble_complete_outreach_template,
     complete_outreach_fallback_template,
+    complete_outreach_greeting,
+    complete_russian_speaker_cta,
+    extract_complete_outreach_slots,
+    fetch_complete_outreach_slots,
     generate_connection_note_template,
     generate_complete_outreach_template,
     generate_outreach_templates,
+    minimal_fallback_template,
+    normalize_complete_outreach_bullets,
+    parse_complete_outreach_json,
     RECRUITER_CTA,
     RUSSIAN_SPEAKER_CTA,
 )
@@ -37,6 +50,12 @@ def test_minimal_fallback_russian_speaker_within_200_chars():
     assert len(minimal_fallback_template("russian_speaker")) <= 200
 
 
+def test_minimal_fallback_uses_hi_greeting():
+    for audience in ("recruiter", "russian_speaker"):
+        result = minimal_fallback_template(audience)
+        assert result.startswith("Hi ______,")
+
+
 def test_minimal_fallback_contains_name_placeholder():
     for audience in ("recruiter", "russian_speaker"):
         result = minimal_fallback_template(audience)
@@ -52,7 +71,6 @@ def test_minimal_fallback_uses_job_company_and_title():
 
 
 def test_minimal_fallback_contains_fit_line():
-    from src.core.enrichment.connection_note import FIT_LINE
     for audience in ("recruiter", "russian_speaker"):
         assert FIT_LINE in minimal_fallback_template(audience)
 
@@ -60,7 +78,6 @@ def test_minimal_fallback_contains_fit_line():
 # --- Complete Outreach Fallback ---
 
 def test_complete_outreach_fallback_uses_name_placeholder_and_profile_label():
-    from src.core.enrichment.connection_note import complete_outreach_fallback_template
     job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md"}
     result = complete_outreach_fallback_template(job, "recruiter")
     assert "______" in result
@@ -71,19 +88,96 @@ def test_complete_outreach_fallback_uses_name_placeholder_and_profile_label():
 
 
 def test_complete_outreach_fallback_recruiter_cta():
-    from src.core.enrichment.connection_note import complete_outreach_fallback_template
-    from src.core.enrichment.connection_note import RECRUITER_CTA
     job = {"title": "Dev", "company": "Corp", "resumeUsed": "qa.md"}
     result = complete_outreach_fallback_template(job, "recruiter")
     assert RECRUITER_CTA in result
 
 
 def test_complete_outreach_fallback_russian_speaker_cta():
-    from src.core.enrichment.connection_note import complete_outreach_fallback_template
-    from src.core.enrichment.connection_note import RUSSIAN_SPEAKER_CTA
     job = {"title": "Dev", "company": "Corp", "resumeUsed": "qa.md"}
     result = complete_outreach_fallback_template(job, "russian_speaker")
     assert RUSSIAN_SPEAKER_CTA in result
+
+
+# --- Complete Outreach skeleton helpers ---
+
+def test_complete_outreach_greeting_audience_specific():
+    assert complete_outreach_greeting("recruiter") == "Hello ______,"
+    assert complete_outreach_greeting("russian_speaker") == "Hi ______,"
+
+
+def test_parse_complete_outreach_json_strips_markdown_fence():
+    raw = '```json\n{"adjustedPositionName": "QA Lead", "bullets": ["A"]}\n```'
+    parsed = parse_complete_outreach_json(raw)
+    assert parsed["adjustedPositionName"] == "QA Lead"
+
+
+def test_parse_complete_outreach_json_returns_none_for_invalid_json():
+    assert parse_complete_outreach_json("not json") is None
+
+
+def test_normalize_complete_outreach_bullets_pads_from_strengths():
+    bullets = normalize_complete_outreach_bullets(
+        ["Python skills"],
+        ["Python skills", "CI/CD experience", "Selenium"],
+    )
+    assert bullets == ["Python skills", "CI/CD experience", "Selenium"]
+
+
+def test_normalize_complete_outreach_bullets_truncates_to_three():
+    bullets = normalize_complete_outreach_bullets(
+        ["A", "B", "C", "D"],
+        [],
+    )
+    assert bullets == ["A", "B", "C"]
+
+
+def test_extract_complete_outreach_slots_falls_back_to_job_title():
+    job = {"title": "Senior QA Engineer", "company": "Acme", "strengths": []}
+    slots = extract_complete_outreach_slots({}, job)
+    assert slots["adjusted_position_name"] == "Senior QA Engineer"
+    assert slots["bullets"] == []
+
+
+def test_assemble_complete_outreach_recruiter_with_link_and_bullets():
+    job = {
+        "title": "Senior QA Engineer",
+        "company": "Acme",
+        "link": "http://job.url",
+    }
+    slots = {
+        "adjusted_position_name": "QA Lead",
+        "bullets": ["Python skills", "CI/CD", "Selenium"],
+    }
+    result = assemble_complete_outreach_template(job, "recruiter", slots)
+
+    assert result.startswith("Hello ______,\n\n")
+    assert COMPLETE_OUTREACH_OPENER in result
+    assert "Acme is looking for a QA Lead" in result
+    assert "http://job.url" in result
+    assert COMPLETE_CANDIDATE_FIT_LINE in result
+    assert "* Python skills" in result
+    assert COMPLETE_RECRUITER_CTA in result
+    assert result.endswith(SIGN_OFF)
+
+
+def test_assemble_complete_outreach_russian_speaker_omits_link_when_missing():
+    job = {"title": "QA Lead", "company": "Acme", "link": ""}
+    slots = {"adjusted_position_name": "QA Lead", "bullets": ["Python"]}
+    result = assemble_complete_outreach_template(job, "russian_speaker", slots)
+
+    assert result.startswith("Hi ______,\n\n")
+    assert "http://" not in result
+    assert complete_russian_speaker_cta("Acme") in result
+
+
+def test_assemble_complete_outreach_omits_bullet_block_when_empty():
+    job = {"title": "QA Lead", "company": "Acme"}
+    slots = {"adjusted_position_name": "QA Lead", "bullets": []}
+    result = assemble_complete_outreach_template(job, "recruiter", slots)
+
+    assert "* " not in result
+    assert COMPLETE_CANDIDATE_FIT_LINE in result
 
 
 # --- generate_complete_outreach_template ---
@@ -98,25 +192,71 @@ async def test_generate_complete_outreach_falls_back_without_api_key():
 
 
 @pytest.mark.asyncio
-async def test_generate_complete_outreach_returns_llm_result(monkeypatch):
+async def test_generate_complete_outreach_assembles_from_llm_json(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
-    long_note = (
-        "Hello ______,\n\n"
-        "Acme is hiring a QA Lead. See http://job.url\n"
-        "- Strong automation background\n"
-        "- CI/CD experience\n\n"
-        "I would be grateful to connect and share my CV."
-    )
+    llm_json = json.dumps({
+        "adjustedPositionName": "QA Lead",
+        "bullets": ["Automation", "Python", "CI/CD"],
+    })
 
     with patch("src.core.enrichment.connection_note.load_resume_for_outreach", return_value="resume text"), \
-         patch("src.core.enrichment.connection_note.gemini_generate_text", new=AsyncMock(return_value=long_note)) as mock_generate:
+         patch("src.core.enrichment.connection_note.gemini_generate_text", new=AsyncMock(return_value=llm_json)) as mock_generate:
         result = await generate_complete_outreach_template(
-            {"title": "QA Lead", "company": "Acme", "link": "http://job.url", "description": "test", "resumeUsed": "qa.md"},
+            {
+                "title": "Senior QA Engineer",
+                "company": "Acme",
+                "link": "http://job.url",
+                "description": "test",
+                "resumeUsed": "qa.md",
+            },
             "recruiter",
         )
 
-    assert result == long_note
     assert mock_generate.call_count == 1
+    assert "Hello ______," in result
+    assert "Acme is looking for a QA Lead" in result
+    assert "* Automation" in result
+    assert COMPLETE_RECRUITER_CTA in result
+    assert result.endswith(SIGN_OFF)
+
+
+@pytest.mark.asyncio
+async def test_generate_complete_outreach_best_effort_on_partial_json(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    llm_json = json.dumps({"bullets": ["Only one bullet"]})
+
+    with patch("src.core.enrichment.connection_note.load_resume_for_outreach", return_value="resume text"), \
+         patch("src.core.enrichment.connection_note.gemini_generate_text", new=AsyncMock(return_value=llm_json)):
+        result = await generate_complete_outreach_template(
+            {
+                "title": "QA Lead",
+                "company": "Acme",
+                "resumeUsed": "qa.md",
+                "strengths": ["Extra strength"],
+            },
+            "recruiter",
+        )
+
+    assert "Acme is looking for a QA Lead" in result
+    assert "* Only one bullet" in result
+    assert "* Extra strength" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_complete_outreach_falls_back_on_unparseable_json(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+
+    with patch("src.core.enrichment.connection_note.load_resume_for_outreach", return_value="resume text"), \
+         patch("src.core.enrichment.connection_note.gemini_generate_text", new=AsyncMock(return_value="not json")):
+        result = await generate_complete_outreach_template(
+            {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md"},
+            "recruiter",
+        )
+
+    assert result == complete_outreach_fallback_template(
+        {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md"},
+        "recruiter",
+    )
 
 
 # --- generate_connection_note_template ---
@@ -133,7 +273,10 @@ async def test_generate_connection_note_falls_back_without_api_key():
 @pytest.mark.asyncio
 async def test_generate_connection_note_returns_short_llm_result(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
-    short_note = "Hello ______,\n\nAcme is looking for a QA Lead. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
+    short_note = (
+        "Hi ______,\n\nAcme is looking for a QA Lead. "
+        f"{FIT_LINE}\n\n{RECRUITER_CTA}"
+    )
     assert len(short_note) <= 200
 
     with patch("src.core.enrichment.connection_note.gemini_generate_text", new=AsyncMock(return_value=short_note)) as mock_generate:
@@ -147,7 +290,10 @@ async def test_generate_connection_note_returns_short_llm_result(monkeypatch):
 async def test_generate_connection_note_retries_when_first_result_too_long(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
     long_note = "X" * 201
-    short_note = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
+    short_note = (
+        "Hi ______,\n\nAcme is looking for a QA. "
+        f"{FIT_LINE}\n\n{RECRUITER_CTA}"
+    )
     assert len(short_note) <= 200
 
     mock_generate = AsyncMock(side_effect=[long_note, short_note])
@@ -167,7 +313,10 @@ async def test_generate_connection_note_falls_back_when_both_attempts_too_long(m
     mock_generate = AsyncMock(return_value=long_note)
 
     with patch("src.core.enrichment.connection_note.gemini_generate_text", mock_generate):
-        result = await generate_connection_note_template({"title": "QA Lead", "company": "Acme"}, "russian_speaker")
+        result = await generate_connection_note_template(
+            {"title": "QA Lead", "company": "Acme"},
+            "russian_speaker",
+        )
 
     assert result == minimal_fallback_template("russian_speaker", {"title": "QA Lead", "company": "Acme"})
     assert len(result) <= 200
@@ -203,28 +352,51 @@ async def test_generate_connection_note_falls_back_on_llm_timeout(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_uses_complete_format_when_short_disabled():
-    job = {"title": "QA Lead", "company": "Acme"}
+    job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md"}
     contacts = [{"name": "Sarah", "is_recruiter": True, "russian_speaker": False}]
-    complete_note = "Hello ______,\n\nLong complete outreach draft with bullets and link."
+    slots = {"adjusted_position_name": "QA Lead", "bullets": ["Python"]}
 
-    async def mock_complete(j, audience, log_func=None):
-        return complete_note
-
-    with patch.object(connection_note_module, "generate_complete_outreach_template", side_effect=mock_complete) as mock_fn, \
+    with patch.object(connection_note_module, "fetch_complete_outreach_slots", new=AsyncMock(return_value=slots)) as mock_fetch, \
          patch.object(connection_note_module, "generate_connection_note_template") as mock_short:
         result = await generate_outreach_templates(job, contacts=contacts, short_connection_note=False)
 
     mock_short.assert_not_called()
-    mock_fn.assert_called_once()
-    assert result["recruiter"] == complete_note
+    mock_fetch.assert_called_once()
+    assert "Hello ______," in result["recruiter"]
+    assert COMPLETE_OUTREACH_OPENER in result["recruiter"]
     assert result["russian_speaker"] == ""
+
+
+@pytest.mark.asyncio
+async def test_generate_outreach_templates_complete_uses_single_llm_call_for_both_audiences():
+    job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md"}
+    contacts = [
+        {"name": "Sarah", "is_recruiter": True, "russian_speaker": False},
+        {"name": "Ivan", "is_recruiter": False, "russian_speaker": True},
+    ]
+    slots = {"adjusted_position_name": "QA Lead", "bullets": ["Python"]}
+
+    with patch.object(connection_note_module, "fetch_complete_outreach_slots", new=AsyncMock(return_value=slots)) as mock_fetch:
+        result = await generate_outreach_templates(job, contacts=contacts, short_connection_note=False)
+
+    mock_fetch.assert_called_once()
+    assert result["recruiter"].startswith("Hello ______,")
+    assert result["russian_speaker"].startswith("Hi ______,")
+    assert COMPLETE_RECRUITER_CTA in result["recruiter"]
+    assert complete_russian_speaker_cta("Acme") in result["russian_speaker"]
 
 
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_generates_both_on_empty_contacts():
     job = {"title": "QA Lead", "company": "Acme"}
-    recruiter_note = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
-    russian_note = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI'd be grateful if you could refer me for the role."
+    recruiter_note = (
+        "Hi ______,\n\nAcme is looking for a QA. "
+        f"{FIT_LINE}\n\n{RECRUITER_CTA}"
+    )
+    russian_note = (
+        "Hi ______,\n\nAcme is looking for a QA. "
+        f"{FIT_LINE}\n\n{RUSSIAN_SPEAKER_CTA}"
+    )
 
     async def mock_gen(j, audience, log_func=None):
         return recruiter_note if audience == "recruiter" else russian_note

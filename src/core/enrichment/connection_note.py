@@ -1,7 +1,9 @@
 """Outreach Generator: Connection Note templates for Enrichment."""
 
 import asyncio
+import json
 import os
+import re
 from dotenv import load_dotenv
 
 from ...db.job_model import coerce_job
@@ -10,8 +12,28 @@ from ..gemini_client import generate_text as gemini_generate_text
 
 RECRUITER_CTA = "I would be grateful to connect and share my CV."
 RUSSIAN_SPEAKER_CTA = "I'd be grateful if you could refer me for the role."
-FIT_LINE = "My experience align well with the requirements."
+FIT_LINE = "My experience aligns well with the requirements."
+COMPLETE_OUTREACH_OPENER = "I don't want to waste your time, so let me get right to the point."
+COMPLETE_CANDIDATE_FIT_LINE = (
+    "I think I'm the right candidate because my experience aligns well with the requirements."
+)
+COMPLETE_RECRUITER_CTA = (
+    "I'd be grateful if you could consider my candidacy for this opportunity. "
+    "Let me know if I can share my CV or any details with you."
+)
+SIGN_OFF = "Best regards,"
 GEMINI_TIMEOUT_SECONDS = 30.0
+
+
+def complete_russian_speaker_cta(company: str) -> str:
+    return (
+        f"If {company} has a referral program, I'd be grateful if you could refer me for the role. "
+        f"Let me know if I can share my CV or any details that would make the process easier for you."
+    )
+
+
+def complete_outreach_greeting(audience: str) -> str:
+    return "Hello ______," if audience == "recruiter" else "Hi ______,"
 
 
 def minimal_fallback_template(audience: str, job: Job | None = None) -> str:
@@ -23,7 +45,7 @@ def minimal_fallback_template(audience: str, job: Job | None = None) -> str:
 
     def _build(c: str, t: str) -> str:
         return (
-            f"Hello ______,\n\n"
+            f"Hi ______,\n\n"
             f"{c} is looking for a {t}. {FIT_LINE}\n\n"
             f"{cta}"
         )
@@ -78,14 +100,105 @@ def load_resume_for_outreach(resume_name: str) -> str:
         return ""
 
 
-def _build_complete_recruiter_prompt(
+def _strip_json_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def parse_complete_outreach_json(raw: str) -> dict | None:
+    try:
+        parsed = json.loads(_strip_json_fence(raw))
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def normalize_complete_outreach_bullets(
+    llm_bullets: object,
+    strengths: list[str] | None,
+) -> list[str]:
+    bullets: list[str] = []
+    seen: set[str] = set()
+
+    def _add(item: object) -> None:
+        if not isinstance(item, str):
+            return
+        cleaned = item.strip().lstrip("*-• ").strip()
+        if not cleaned:
+            return
+        key = cleaned.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        bullets.append(cleaned)
+
+    if isinstance(llm_bullets, list):
+        for bullet in llm_bullets:
+            _add(bullet)
+            if len(bullets) >= 3:
+                break
+
+    for strength in strengths or []:
+        if len(bullets) >= 3:
+            break
+        _add(strength)
+
+    return bullets[:3]
+
+
+def extract_complete_outreach_slots(parsed: dict, job: Job) -> dict:
+    job = coerce_job(job)
+    title = job.title or ""
+    adjusted = parsed.get("adjustedPositionName") or parsed.get("adjusted_position_name") or ""
+    if isinstance(adjusted, str):
+        adjusted = adjusted.strip()
+    if not adjusted:
+        adjusted = title
+
+    bullets_raw = parsed.get("bullets")
+    if bullets_raw is None:
+        bullets_raw = parsed.get("strengthBullets") or parsed.get("strength_bullets") or []
+
+    bullets = normalize_complete_outreach_bullets(bullets_raw, job.strengths or [])
+    return {"adjusted_position_name": adjusted, "bullets": bullets}
+
+
+def assemble_complete_outreach_template(job: Job, audience: str, slots: dict) -> str:
+    job = coerce_job(job)
+    company = job.company or ""
+    link = job.link or ""
+    adjusted = slots.get("adjusted_position_name") or job.title or ""
+    bullets = slots.get("bullets") or []
+
+    parts = [
+        complete_outreach_greeting(audience),
+        "",
+        COMPLETE_OUTREACH_OPENER,
+        "",
+        f"{company} is looking for a {adjusted}",
+    ]
+    if link:
+        parts.extend(["", link])
+    parts.extend(["", COMPLETE_CANDIDATE_FIT_LINE])
+    if bullets:
+        parts.append("")
+        parts.extend(f"* {bullet}" for bullet in bullets)
+    cta = COMPLETE_RECRUITER_CTA if audience == "recruiter" else complete_russian_speaker_cta(company)
+    parts.extend(["", cta, "", SIGN_OFF])
+    return "\n".join(parts)
+
+
+def _build_complete_outreach_json_prompt(
     resume: str,
     job_title: str,
     company: str,
     job_link: str,
     description: str,
 ) -> str:
-    return f"""You are a helpful assistant writing a professional LinkedIn outreach message from a job candidate to a recruiter or HR professional.
+    return f"""You are a helpful assistant matching a candidate resume to a job posting.
 
 CANDIDATE RESUME:
 {resume}
@@ -96,46 +209,21 @@ Company: {company}
 Posting: {job_link}
 Description/Summary: {description}
 
-INSTRUCTIONS:
-1. Greet the person in English using exactly 'Hello ______,' as the first line (6 underscores as name placeholder).
-2. Keep the message concise (100-150 words), professional, and polite.
-3. Mention the job title, company name, and include the job posting link.
-4. Highlight 1-2 matching strengths from the resume relevant to the job description, as bullet points.
-5. End with: {RECRUITER_CTA}
-6. Do not include any other placeholder text. Output the final draft directly. No markdown formatting, just the raw text of the message.
+Return ONLY valid JSON with this exact shape:
+{{
+  "adjustedPositionName": "<short natural job title for the sentence '{company} is looking for a ...'>",
+  "bullets": ["<strength 1>", "<strength 2>", "<strength 3>"]
+}}
+
+Rules:
+- adjustedPositionName: shorten or rephrase the raw title so it reads naturally in that sentence.
+- bullets: exactly three short resume-matched strengths relevant to the job (no markdown, no leading bullets).
+- Output JSON only. No markdown fences or extra text.
 """
 
 
-def _build_complete_russian_speaker_prompt(
-    resume: str,
-    job_title: str,
-    company: str,
-    job_link: str,
-    description: str,
-) -> str:
-    return f"""You are a helpful assistant writing a professional LinkedIn outreach message from a job candidate.
-
-CANDIDATE RESUME:
-{resume}
-
-JOB DETAILS:
-Title: {job_title}
-Company: {company}
-Posting: {job_link}
-Description/Summary: {description}
-
-INSTRUCTIONS:
-1. Greet the person in English using exactly 'Hello ______,' as the first line (6 underscores as name placeholder).
-2. Keep the message concise (100-150 words), professional, and polite.
-3. Mention the job title, company name, and include the job posting link.
-4. Highlight 1-2 matching strengths from the resume relevant to the job description, as bullet points.
-5. End with a referral program ask — ask if they'd be willing to refer you, and offer to share your CV.
-6. Do not include any other placeholder text. Output the final draft directly. No markdown formatting, just the raw text of the message.
-"""
-
-
-async def generate_complete_outreach_template(job: Job, audience: str, log_func=None) -> str:
-    """Generate a Complete Outreach Message (~100-150 words) for the given audience."""
+async def fetch_complete_outreach_slots(job: Job, log_func=None) -> dict | None:
+    """Fetch Adjusted Position Name and bullets via one structured LLM call."""
     job = coerce_job(job)
     load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
@@ -143,22 +231,42 @@ async def generate_complete_outreach_template(job: Job, audience: str, log_func=
     resume_content = load_resume_for_outreach(resume_name)
 
     if not api_key or not resume_content:
-        return complete_outreach_fallback_template(job, audience)
+        return None
 
     title = job.title or ""
     company = job.company or ""
     job_link = job.link or ""
     description = job.description or ""
-
-    if audience == "recruiter":
-        prompt = _build_complete_recruiter_prompt(resume_content, title, company, job_link, description)
-    else:
-        prompt = _build_complete_russian_speaker_prompt(resume_content, title, company, job_link, description)
+    prompt = _build_complete_outreach_json_prompt(
+        resume_content, title, company, job_link, description
+    )
 
     try:
-        return await gemini_generate_text(prompt, timeout=GEMINI_TIMEOUT_SECONDS)
+        raw = await gemini_generate_text(prompt, timeout=GEMINI_TIMEOUT_SECONDS)
     except Exception:
+        return None
+
+    parsed = parse_complete_outreach_json(raw)
+    if parsed is None:
+        return None
+
+    return extract_complete_outreach_slots(parsed, job)
+
+
+async def generate_complete_outreach_template(
+    job: Job,
+    audience: str,
+    log_func=None,
+    *,
+    slots: dict | None = None,
+) -> str:
+    """Generate a Complete Outreach Message (~100-150 words) for the given audience."""
+    job = coerce_job(job)
+    if slots is None:
+        slots = await fetch_complete_outreach_slots(job, log_func)
+    if slots is None:
         return complete_outreach_fallback_template(job, audience)
+    return assemble_complete_outreach_template(job, audience, slots)
 
 
 async def generate_connection_note_template(job: Job, audience: str, log_func=None) -> str:
@@ -187,10 +295,10 @@ async def generate_connection_note_template(job: Job, audience: str, log_func=No
             f"{prefix}Generate a LinkedIn Connection Note for a job application.\n"
             f"Hard limit: 200 characters total (every character counts).\n\n"
             f"Format — use exactly this structure:\n"
-            f"Line 1: Hello ______,\n"
+            f"Line 1: Hi ______,\n"
             f"Line 2: (blank line)\n"
             f"Line 3: [company name shortened] is looking for a [job title shortened]. "
-            f"My experience align well with the requirements.\n"
+            f"{FIT_LINE}\n"
             f"Line 4: (blank line)\n"
             f"Line 5: {cta}\n\n"
             f"Rules:\n"
@@ -235,28 +343,42 @@ async def generate_outreach_templates(
     has_russian = any(c.get("russian_speaker") for c in contacts)
     is_enrichment_failure = not contacts
 
-    generate_template = (
-        generate_connection_note_template
-        if short_connection_note
-        else generate_complete_outreach_template
-    )
-
     recruiter_template = ""
     russian_speaker_template = ""
 
-    async def _generate(audience: str) -> tuple[str, str]:
-        return audience, await generate_template(job, audience, log_func)
+    if short_connection_note:
+        async def _generate(audience: str) -> tuple[str, str]:
+            return audience, await generate_connection_note_template(job, audience, log_func)
 
-    pending = []
-    if has_recruiter or is_enrichment_failure:
-        pending.append(_generate("recruiter"))
-    if has_russian or is_enrichment_failure:
-        pending.append(_generate("russian_speaker"))
+        pending = []
+        if has_recruiter or is_enrichment_failure:
+            pending.append(_generate("recruiter"))
+        if has_russian or is_enrichment_failure:
+            pending.append(_generate("russian_speaker"))
 
-    for audience, template in await asyncio.gather(*pending):
-        if audience == "recruiter":
-            recruiter_template = template
-        else:
-            russian_speaker_template = template
+        for audience, template in await asyncio.gather(*pending):
+            if audience == "recruiter":
+                recruiter_template = template
+            else:
+                russian_speaker_template = template
+    else:
+        needs_recruiter = has_recruiter or is_enrichment_failure
+        needs_russian = has_russian or is_enrichment_failure
+        slots = None
+        if needs_recruiter or needs_russian:
+            slots = await fetch_complete_outreach_slots(job, log_func)
+
+        if needs_recruiter:
+            recruiter_template = (
+                complete_outreach_fallback_template(job, "recruiter")
+                if slots is None
+                else assemble_complete_outreach_template(job, "recruiter", slots)
+            )
+        if needs_russian:
+            russian_speaker_template = (
+                complete_outreach_fallback_template(job, "russian_speaker")
+                if slots is None
+                else assemble_complete_outreach_template(job, "russian_speaker", slots)
+            )
 
     return {"recruiter": recruiter_template, "russian_speaker": russian_speaker_template}
