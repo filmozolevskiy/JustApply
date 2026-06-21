@@ -109,6 +109,103 @@ def test_board_renderer_filters_and_sorts_jobs():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_board_renderer_search_filters_by_title_company_location_description():
+    """Board Search uses multi-word AND across title, company, location, and description."""
+    result = _run_node(
+        """
+        import {
+          filterJobs,
+          jobMatchesBoardSearch,
+          parseBoardSearchTerms,
+        } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'Senior QA Engineer',
+            company: 'Acme Corp',
+            location: 'Remote, US',
+            description: 'Python and Selenium automation',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+          },
+          {
+            id: 2,
+            title: 'Project Manager',
+            company: 'Beta Inc',
+            location: 'New York, Hybrid',
+            description: 'Agile delivery leadership',
+            remoteType: 'hybrid',
+            size: '1000+',
+            isRecruiter: false,
+          },
+        ];
+
+        if (parseBoardSearchTerms('  QA   remote ').join(',') !== 'qa,remote') process.exit(1);
+        if (!jobMatchesBoardSearch(jobs[0], 'qa remote')) process.exit(2);
+        if (jobMatchesBoardSearch(jobs[1], 'qa remote')) process.exit(3);
+        if (!jobMatchesBoardSearch(jobs[0], 'selenium')) process.exit(4);
+        if (!jobMatchesBoardSearch(jobs[1], 'beta')) process.exit(5);
+        if (!jobMatchesBoardSearch(jobs[0], '')) process.exit(6);
+
+        const filtered = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'QA remote',
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(7);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_search_combines_with_other_board_filters():
+    """Board Search ANDs with remote, size, and recruiter filters."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'QA Lead',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing platform',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+          },
+          {
+            id: 2,
+            title: 'QA Lead',
+            company: 'Agency Staffing',
+            location: 'Remote',
+            description: 'Testing platform',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: true,
+          },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'remote',
+          size: 'all',
+          recruiter: 'exclude',
+          search: 'qa',
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_board_renderer_job_order_follows_lanes_and_sort():
     """getBoardJobOrder returns jobs lane-by-lane using the active sort."""
     result = _run_node(

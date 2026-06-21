@@ -526,6 +526,8 @@
       font-size: 1rem;
       font-weight: 600;
       color: var(--text-primary);
+      flex: 1;
+      min-width: 0;
     }
     .panel-header-left i {
       color: var(--accent-cyan);
@@ -535,6 +537,162 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .board-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .board-controls-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .board-controls-search {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .board-search-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .board-search-input {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 36px 10px 12px;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      background: rgba(6, 182, 212, 0.06);
+      color: var(--text-primary);
+    }
+
+    .board-search-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .board-search-clear {
+      position: absolute;
+      right: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .board-search-clear:hover {
+      color: var(--text-secondary);
+      background: rgba(148, 163, 184, 0.12);
+    }
+
+    .board-controls-sort {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .board-controls-sort label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .board-controls-sort select {
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-primary);
+    }
+
+    .board-controls-reset {
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .board-controls-refine {
+      border: 1px dashed var(--border-color);
+      border-radius: 10px;
+      padding: 0 12px;
+      background: rgba(15, 23, 42, 0.25);
+    }
+
+    .board-controls-refine summary {
+      cursor: pointer;
+      padding: 10px 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .board-controls-refine summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .board-controls-refine summary::before {
+      content: "▸";
+      color: var(--accent-cyan);
+      transition: transform 0.15s ease;
+    }
+
+    .board-controls-refine[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .board-controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      padding-bottom: 12px;
+    }
+
+    .board-controls-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .board-controls-field label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .board-controls-field select {
+      padding: 6px 8px;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-primary);
+    }
+
+    .board-search-empty-hint {
+      margin: 0 0 12px 0;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
     }
 
     .panel-section-divider {
@@ -1178,9 +1336,7 @@
       <div class="resume-select-container">
         <label style="font-size: 0.85rem; color: var(--text-secondary); font-family: var(--font-sans);" for="active-resume-select">Active Profile:</label>
         <select id="active-resume-select" onchange="changeActiveResume(this.value)">
-          <option value="qa.md">qa.md (QA Engineer)</option>
-          <option value="project_manager.md">project_manager.md (Delivery Manager)</option>
-          <option value="data_analyst.md">data_analyst.md (Data Analyst)</option>
+          <option value="bi_intelligence.md">bi_intelligence.md (Delivery, QA & Data)</option>
         </select>
         <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="viewResumeProfile()"><i class="fa-regular fa-eye"></i> View</button>
       </div>
@@ -1339,56 +1495,71 @@
       <!-- Board Controls panel (shared header chrome, always visible, directly above kanban) -->
       <div class="glass-panel" id="board-controls-panel" style="margin-bottom: 16px;">
         <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
-          <div class="panel-header-left" style="flex-wrap: wrap; gap: 12px;">
-            <i class="fa-solid fa-filter"></i>
-            <span style="color: var(--text-secondary); font-weight: 500; font-size: 0.9rem;">Filters:</span>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label for="board-filter-remote" style="font-size: 0.8rem; color: var(--text-muted);">Remote:</label>
-              <select id="board-filter-remote" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-                <option value="all">All Types</option>
-                <option value="remote">Remote Only</option>
-                <option value="hybrid">Hybrid Only</option>
-                <option value="in_office">In Office Only</option>
-              </select>
+          <div class="board-controls">
+            <div class="board-controls-top">
+              <div class="board-controls-search">
+                <div class="board-search-wrap">
+                  <input type="search" id="board-filter-search" class="board-search-input" placeholder="Search jobs…" autocomplete="off" aria-label="Search jobs" oninput="onBoardSearchInput()">
+                  <button type="button" id="board-filter-search-clear" class="board-search-clear" hidden onclick="clearBoardSearch()" title="Clear search" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+              <div class="board-controls-sort">
+                <label for="board-sort-by">Sort</label>
+                <select id="board-sort-by" onchange="updateBoardFiltersAndSort()">
+                  <option value="match_desc">Match Score: High to Low</option>
+                  <option value="match_asc">Match Score: Low to High</option>
+                  <option value="novelty_desc">Novelty: Newest First</option>
+                  <option value="novelty_asc">Novelty: Oldest First</option>
+                </select>
+              </div>
+              <button type="button" id="board-controls-reset" class="board-controls-reset btn btn-secondary" onclick="resetBoardControls()" title="Reset all board filters">
+                <i class="fa-solid fa-undo"></i> Reset filters
+              </button>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label for="board-filter-size" style="font-size: 0.8rem; color: var(--text-muted);">Company Size:</label>
-              <select id="board-filter-size" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-                <option value="all">All Sizes</option>
-                <option value="small">Small (1-50)</option>
-                <option value="medium">Medium (50-500)</option>
-                <option value="large">Large (500+)</option>
-              </select>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label for="board-filter-recruiter" style="font-size: 0.8rem; color: var(--text-muted);">Recruiter:</label>
-              <select id="board-filter-recruiter" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-                <option value="all">Show All</option>
-                <option value="exclude" selected>Hide Recruiters</option>
-                <option value="only">Recruiters Only</option>
-              </select>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label for="board-filter-archived" style="font-size: 0.8rem; color: var(--text-muted);">Archived:</label>
-              <select id="board-filter-archived" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateArchiveVisibility()">
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-                <option value="all">All</option>
-              </select>
-            </div>
-          </div>
-          <div class="panel-header-right">
-            <i class="fa-solid fa-arrow-down-wide-short" style="color: var(--accent-indigo); font-size: 0.9rem;"></i>
-            <label for="board-sort-by" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">Sort By:</label>
-            <select id="board-sort-by" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;" onchange="updateBoardFiltersAndSort()">
-              <option value="match_desc">Match Score: High to Low</option>
-              <option value="match_asc">Match Score: Low to High</option>
-              <option value="novelty_desc">Novelty: Newest First</option>
-              <option value="novelty_asc">Novelty: Oldest First</option>
-            </select>
+            <details class="board-controls-refine">
+              <summary>Refine board</summary>
+              <div class="board-controls-grid">
+                <div class="board-controls-field">
+                  <label for="board-filter-remote">Remote type</label>
+                  <select id="board-filter-remote" onchange="updateBoardFiltersAndSort()">
+                    <option value="all">All Types</option>
+                    <option value="remote">Remote Only</option>
+                    <option value="hybrid">Hybrid Only</option>
+                    <option value="in_office">In Office Only</option>
+                  </select>
+                </div>
+                <div class="board-controls-field">
+                  <label for="board-filter-size">Company size</label>
+                  <select id="board-filter-size" onchange="updateBoardFiltersAndSort()">
+                    <option value="all">All Sizes</option>
+                    <option value="small">Small (1-50)</option>
+                    <option value="medium">Medium (50-500)</option>
+                    <option value="large">Large (500+)</option>
+                  </select>
+                </div>
+                <div class="board-controls-field">
+                  <label for="board-filter-recruiter">Recruiter posts</label>
+                  <select id="board-filter-recruiter" onchange="updateBoardFiltersAndSort()">
+                    <option value="all">Show All</option>
+                    <option value="exclude" selected>Hide Recruiters</option>
+                    <option value="only">Recruiters Only</option>
+                  </select>
+                </div>
+                <div class="board-controls-field">
+                  <label for="board-filter-archived">Archived visibility</label>
+                  <select id="board-filter-archived" onchange="updateArchiveVisibility()">
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
+
+      <p id="board-search-empty-hint" class="board-search-empty-hint" hidden>No jobs match your search.</p>
 
       <!-- Kanban lanes -->
       <div class="kanban-board-container" id="kanban-lanes-container">
@@ -1484,7 +1655,7 @@
       integrateIncomingJobs,
     } from '/static/js/jobStore.js';
     import {
-      renderBoard, getBoardFiltersFromDom,
+      renderBoard, getBoardFiltersFromDom, filterJobs, parseBoardSearchTerms,
     } from '/static/js/boardRenderer.js';
     import {
       createTaskLogClient,
@@ -1503,24 +1674,127 @@
     let mockResumes = {};
 
     // Active configuration state
-    let activeResume = "qa.md";
+    let activeResume = "bi_intelligence.md";
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
     let activeLoadMoreJobId = null;
     let activeReclassifyJobIds = [];
+    let boardSearchDebounceTimer = null;
+    const BOARD_SEARCH_DEBOUNCE_MS = 300;
+    const BOARD_CONTROLS_DEFAULTS = {
+      search: '',
+      remote: 'all',
+      size: 'all',
+      recruiter: 'exclude',
+      sortBy: 'match_desc',
+      archived: 'active',
+    };
 
     // ----------------------------------------------------
     // ----------------------------------------------------
     // RENDERING LOGIC
     // ----------------------------------------------------
-    function renderActiveVariant() {
-      renderBoard(getJobs(), {
+    function getActiveBoardFilters() {
+      return {
         ...getBoardFiltersFromDom(),
         enrichingJobId: activeEnrichJobId,
         loadMoreJobId: activeLoadMoreJobId,
         reclassifyJobIds: activeReclassifyJobIds,
-      });
+      };
+    }
+
+    function updateBoardSearchClearVisibility() {
+      const input = document.getElementById('board-filter-search');
+      const btn = document.getElementById('board-filter-search-clear');
+      if (!input || !btn) return;
+      btn.hidden = !input.value;
+    }
+
+    function updateBoardSearchEmptyHint(jobs, filters) {
+      const hint = document.getElementById('board-search-empty-hint');
+      if (!hint) return;
+      const hasSearch = parseBoardSearchTerms(filters.search || '').length > 0;
+      const filteredCount = filterJobs(jobs, filters).length;
+      hint.hidden = !(hasSearch && filteredCount === 0);
+    }
+
+    function persistBoardSearch() {
+      const value = document.getElementById('board-filter-search')?.value || '';
+      localStorage.setItem('boardFilterSearch', value);
+    }
+
+    function onBoardSearchInput() {
+      updateBoardSearchClearVisibility();
+      if (boardSearchDebounceTimer) {
+        clearTimeout(boardSearchDebounceTimer);
+      }
+      boardSearchDebounceTimer = setTimeout(() => {
+        boardSearchDebounceTimer = null;
+        persistBoardSearch();
+        renderActiveVariant();
+        updateDrawerNav();
+      }, BOARD_SEARCH_DEBOUNCE_MS);
+    }
+
+    function clearBoardSearch() {
+      const input = document.getElementById('board-filter-search');
+      if (input) {
+        input.value = '';
+      }
+      if (boardSearchDebounceTimer) {
+        clearTimeout(boardSearchDebounceTimer);
+        boardSearchDebounceTimer = null;
+      }
+      persistBoardSearch();
+      renderActiveVariant();
+      updateDrawerNav();
+      updateBoardSearchClearVisibility();
+    }
+
+    function resetBoardControls() {
+      const previousArchived = getArchivedFilter();
+
+      if (boardSearchDebounceTimer) {
+        clearTimeout(boardSearchDebounceTimer);
+        boardSearchDebounceTimer = null;
+      }
+
+      const searchEl = document.getElementById('board-filter-search');
+      const remoteEl = document.getElementById('board-filter-remote');
+      const sizeEl = document.getElementById('board-filter-size');
+      const recruiterEl = document.getElementById('board-filter-recruiter');
+      const sortEl = document.getElementById('board-sort-by');
+      const archivedEl = document.getElementById('board-filter-archived');
+
+      if (searchEl) searchEl.value = BOARD_CONTROLS_DEFAULTS.search;
+      if (remoteEl) remoteEl.value = BOARD_CONTROLS_DEFAULTS.remote;
+      if (sizeEl) sizeEl.value = BOARD_CONTROLS_DEFAULTS.size;
+      if (recruiterEl) recruiterEl.value = BOARD_CONTROLS_DEFAULTS.recruiter;
+      if (sortEl) sortEl.value = BOARD_CONTROLS_DEFAULTS.sortBy;
+      if (archivedEl) archivedEl.value = BOARD_CONTROLS_DEFAULTS.archived;
+
+      localStorage.setItem('boardFilterSearch', BOARD_CONTROLS_DEFAULTS.search);
+      localStorage.setItem('boardFilterRemote', BOARD_CONTROLS_DEFAULTS.remote);
+      localStorage.setItem('boardFilterSize', BOARD_CONTROLS_DEFAULTS.size);
+      localStorage.setItem('boardFilterRecruiter', BOARD_CONTROLS_DEFAULTS.recruiter);
+      localStorage.setItem('boardSortBy', BOARD_CONTROLS_DEFAULTS.sortBy);
+      localStorage.setItem('boardFilterArchived', BOARD_CONTROLS_DEFAULTS.archived);
+
+      updateBoardSearchClearVisibility();
+
+      if (previousArchived !== BOARD_CONTROLS_DEFAULTS.archived) {
+        loadJobs().then(() => updateDrawerNav());
+      } else {
+        renderActiveVariant();
+        updateDrawerNav();
+      }
+    }
+
+    function renderActiveVariant() {
+      const filters = getActiveBoardFilters();
+      renderBoard(getJobs(), filters);
+      updateBoardSearchEmptyHint(getJobs(), filters);
     }
 
     function integrateSearchResultFromStream(logData) {
@@ -1592,11 +1866,11 @@
     }
 
     function initBoardControls() {
-      const remoteFilter = localStorage.getItem('boardFilterRemote') || 'all';
-      const sizeFilter = localStorage.getItem('boardFilterSize') || 'all';
-      const recruiterFilter = localStorage.getItem('boardFilterRecruiter') || 'exclude';
-      const sortBy = localStorage.getItem('boardSortBy') || 'match_desc';
-      const archivedFilter = localStorage.getItem('boardFilterArchived') || 'active';
+      const remoteFilter = localStorage.getItem('boardFilterRemote') || BOARD_CONTROLS_DEFAULTS.remote;
+      const sizeFilter = localStorage.getItem('boardFilterSize') || BOARD_CONTROLS_DEFAULTS.size;
+      const recruiterFilter = localStorage.getItem('boardFilterRecruiter') || BOARD_CONTROLS_DEFAULTS.recruiter;
+      const sortBy = localStorage.getItem('boardSortBy') || BOARD_CONTROLS_DEFAULTS.sortBy;
+      const archivedFilter = localStorage.getItem('boardFilterArchived') || BOARD_CONTROLS_DEFAULTS.archived;
 
       const remoteEl = document.getElementById('board-filter-remote');
       const sizeEl = document.getElementById('board-filter-size');
@@ -1604,11 +1878,16 @@
       const sortEl = document.getElementById('board-sort-by');
       const archivedEl = document.getElementById('board-filter-archived');
 
+      const searchFilter = localStorage.getItem('boardFilterSearch') || BOARD_CONTROLS_DEFAULTS.search;
+      const searchEl = document.getElementById('board-filter-search');
+
       if (remoteEl) remoteEl.value = remoteFilter;
       if (sizeEl) sizeEl.value = sizeFilter;
       if (recruiterEl) recruiterEl.value = recruiterFilter;
       if (sortEl) sortEl.value = sortBy;
       if (archivedEl) archivedEl.value = archivedFilter;
+      if (searchEl) searchEl.value = searchFilter;
+      updateBoardSearchClearVisibility();
     }
 
     function updateArchiveVisibility() {
@@ -2201,7 +2480,8 @@
               option.value = resume.name;
               
               let displayName = resume.name;
-              if (resume.name === 'qa.md') displayName += ' (QA Engineer)';
+              if (resume.name === 'bi_intelligence.md') displayName += ' (Delivery, QA & Data)';
+              else if (resume.name === 'qa.md') displayName += ' (QA Engineer)';
               else if (resume.name === 'project_manager.md') displayName += ' (Delivery Manager)';
               else if (resume.name === 'data_analyst.md') displayName += ' (Data Analyst)';
               option.textContent = displayName;
@@ -2432,6 +2712,7 @@
       archiveJob,
       changeActiveResume,
       changeJobStage,
+      clearBoardSearch,
       clearLogs,
       closeDrawer,
       closeModal,
@@ -2440,9 +2721,11 @@
       loadMoreContacts,
       moveJobStage,
       navigateDrawerJob,
+      onBoardSearchInput,
       reclassifyJob,
       openContactedElsewhereJob,
       openJobDetailsDrawer,
+      resetBoardControls,
       resetKbFilters,
       saveOutreachSettings,
       selectActiveContact,

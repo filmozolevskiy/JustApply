@@ -36,7 +36,7 @@ async def search_jobs(
     *,
     query: str,
     location: str = "Remote",
-    active_resume: str = "qa.md",
+    active_resume: str = "bi_intelligence.md",
     mock_eval: bool = False,
     allowed_remote_types: list | None = None,
     seniorities: str = "any",

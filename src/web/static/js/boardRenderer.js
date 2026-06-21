@@ -2,6 +2,25 @@
 
 export const LANES = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
 
+export const BOARD_SEARCH_FIELD_KEYS = ['title', 'company', 'location', 'description'];
+
+export function parseBoardSearchTerms(query) {
+  if (!query || typeof query !== 'string') {
+    return [];
+  }
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+export function jobMatchesBoardSearch(job, query) {
+  const terms = parseBoardSearchTerms(query);
+  if (terms.length === 0) {
+    return true;
+  }
+
+  const haystack = BOARD_SEARCH_FIELD_KEYS.map((key) => String(job[key] || '').toLowerCase()).join('\n');
+  return terms.every((term) => haystack.includes(term));
+}
+
 export function getCompanySizeCategory(sizeStr) {
   if (!sizeStr) return 'unknown';
   const sizeLower = sizeStr.toLowerCase().trim();
@@ -33,8 +52,13 @@ export function filterJobs(jobs, filters) {
   const remoteFilter = filters.remote || 'all';
   const sizeFilter = filters.size || 'all';
   const recruiterFilter = filters.recruiter || 'all';
+  const searchQuery = filters.search ?? '';
 
   return jobs.filter((job) => {
+    if (!jobMatchesBoardSearch(job, searchQuery)) {
+      return false;
+    }
+
     if (remoteFilter !== 'all') {
       let normalizedRemote = (job.remoteType || '').toLowerCase().trim();
       if (normalizedRemote === 'in office') normalizedRemote = 'in_office';
@@ -99,6 +123,7 @@ export function getBoardFiltersFromDom() {
     remote: document.getElementById('board-filter-remote')?.value || 'all',
     size: document.getElementById('board-filter-size')?.value || 'all',
     recruiter: document.getElementById('board-filter-recruiter')?.value || 'all',
+    search: document.getElementById('board-filter-search')?.value || '',
     sortBy: document.getElementById('board-sort-by')?.value || 'match_desc',
   };
 }

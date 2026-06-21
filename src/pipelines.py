@@ -24,7 +24,7 @@ from .db.job_model import coerce_job
 async def run_search_pipeline(
     query: str,
     location: str = "Remote",
-    active_resume: str = "qa.md",
+    active_resume: str = "bi_intelligence.md",
     mock_eval: bool = False,
     allowed_remote_types: list = None,
     seniorities: str = "any",
@@ -65,8 +65,8 @@ async def run_search_pipeline(
             await log(f"Loaded resume profile: {active_resume}")
         except FileNotFoundError:
             try:
-                resume_content = load_resume("qa.md")
-                await log(f"Resume '{active_resume}' not found, falling back to qa.md", "warning")
+                resume_content = load_resume("bi_intelligence.md")
+                await log(f"Resume '{active_resume}' not found, falling back to bi_intelligence.md", "warning")
             except FileNotFoundError:
                 await log("No resume found. Skipping LLM evaluation.", "warning")
 

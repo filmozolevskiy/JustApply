@@ -65,6 +65,8 @@ def minimal_fallback_template(audience: str, job: Job | None = None) -> str:
 
 
 def _resume_profile_label(resume_name: str) -> str:
+    if resume_name == "bi_intelligence.md":
+        return "Delivery, QA & Data"
     if resume_name == "qa.md":
         return "QA Automator"
     if resume_name == "project_manager.md":
@@ -78,7 +80,7 @@ def complete_outreach_fallback_template(job: Job, audience: str) -> str:
     cta = RECRUITER_CTA if audience == "recruiter" else RUSSIAN_SPEAKER_CTA
     title = job.title or ""
     company = job.company or ""
-    profile_name = _resume_profile_label(job.resumeUsed or "qa.md")
+    profile_name = _resume_profile_label(job.resumeUsed or "bi_intelligence.md")
     return (
         f"Hello ______,\n\n"
         f"I recently saw the {title} role at {company}. Based on my matched skills "
@@ -95,7 +97,7 @@ def load_resume_for_outreach(resume_name: str) -> str:
     except Exception:
         pass
     try:
-        return load_resume("qa.md")
+        return load_resume("bi_intelligence.md")
     except Exception:
         return ""
 
@@ -236,7 +238,7 @@ async def fetch_complete_outreach_slots(job: Job, log_func=None) -> dict | None:
     job = coerce_job(job)
     load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
-    resume_name = job.resumeUsed or "qa.md"
+    resume_name = job.resumeUsed or "bi_intelligence.md"
     resume_content = load_resume_for_outreach(resume_name)
 
     if not api_key or not resume_content:

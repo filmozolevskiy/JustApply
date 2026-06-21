@@ -47,6 +47,40 @@ def test_board_controls_immediately_precedes_kanban():
     )
 
 
+def test_board_controls_refine_drawer_layout():
+    """Board Controls uses search + sort on top and filters in a Refine board drawer."""
+    content = _read_html()
+    bc_start = content.index('id="board-controls-panel"')
+    bc_end = content.index('id="board-search-empty-hint"', bc_start)
+    block = content[bc_start:bc_end]
+    assert 'class="board-controls-top"' in block
+    assert 'class="board-controls-refine"' in block
+    assert "Refine board" in block
+    top_start = block.index('class="board-controls-top"')
+    top_end = block.index('class="board-controls-refine"', top_start)
+    top_block = block[top_start:top_end]
+    refine_block = block[block.index('class="board-controls-refine"'):]
+    assert 'id="board-filter-search"' in top_block
+    assert 'id="board-sort-by"' in top_block
+    assert 'id="board-filter-remote"' in refine_block
+    assert 'id="board-filter-size"' in refine_block
+    assert 'id="board-filter-recruiter"' in refine_block
+    assert 'id="board-filter-archived"' in refine_block
+
+
+def test_board_controls_has_search_reset_and_empty_hint():
+    """Board Controls exposes search, reset-all, clear, and zero-results hint."""
+    content = _read_html()
+    assert 'id="board-filter-search"' in content
+    assert 'placeholder="Search jobs…"' in content
+    assert 'id="board-filter-search-clear"' in content
+    assert 'id="board-controls-reset"' in content
+    assert "resetBoardControls" in content
+    assert "Reset filters" in content
+    assert 'id="board-search-empty-hint"' in content
+    assert "No jobs match your search." in content
+
+
 def test_shared_panel_header_class():
     """Utility panels use the panel-header class (Job Search, Contact Search, Task Logs, Board Controls)."""
     content = _read_html()
