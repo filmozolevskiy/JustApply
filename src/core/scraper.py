@@ -325,22 +325,65 @@ async def _scrape_linkedin_jobs_real(
                 elif status == "failed":
                     raise Exception("Bright Data scraper job reported failure.")
             
-            # Fetch results
+            # Fetch results — Bright Data may return HTTP 202 briefly after progress is "ready"
             snapshot_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
             snapshot_resp = None
-            max_retries = 3
-            for attempt in range(max_retries):
+            max_snapshot_wait_polls = 60  # 60 × 10s = 10 minutes
+            snapshot_poll_interval = 10.0
+            transient_errors = 0
+            max_transient_errors = 3
+
+            for _poll in range(max_snapshot_wait_polls):
                 try:
                     snapshot_resp = await client.get(snapshot_url, headers=headers)
-                    if snapshot_resp.status_code != 200:
-                        raise Exception(f"HTTP {snapshot_resp.status_code}")
-                    break
                 except Exception as e:
-                    if attempt == max_retries - 1:
-                        raise Exception(f"Failed to fetch snapshot results after {max_retries} attempts: {str(e)}")
-                    wait_time = 2.0 ** attempt
-                    await log(f"Error fetching snapshot results (attempt {attempt + 1}/{max_retries}): {str(e)}. Retrying in {wait_time:.0f}s...", "warning")
+                    transient_errors += 1
+                    if transient_errors >= max_transient_errors:
+                        raise Exception(
+                            f"Failed to fetch snapshot results after {max_transient_errors} attempts: {str(e)}"
+                        )
+                    wait_time = 2.0 ** (transient_errors - 1)
+                    await log(
+                        f"Error fetching snapshot results (attempt {transient_errors}/{max_transient_errors}): {str(e)}. Retrying in {wait_time:.0f}s...",
+                        "warning",
+                    )
                     await asyncio.sleep(wait_time)
+                    continue
+
+                if snapshot_resp.status_code == 200:
+                    break
+
+                if snapshot_resp.status_code == 202:
+                    transient_errors = 0
+                    await log(
+                        "Snapshot not ready for download (HTTP 202). Retrying in 10s...",
+                        "info",
+                    )
+                    await asyncio.sleep(snapshot_poll_interval)
+                    continue
+
+                if snapshot_resp.status_code >= 500:
+                    transient_errors += 1
+                    if transient_errors >= max_transient_errors:
+                        raise Exception(
+                            f"Failed to fetch snapshot results after {max_transient_errors} attempts: HTTP {snapshot_resp.status_code}"
+                        )
+                    wait_time = 2.0 ** (transient_errors - 1)
+                    await log(
+                        f"Error fetching snapshot results (attempt {transient_errors}/{max_transient_errors}): HTTP {snapshot_resp.status_code}. Retrying in {wait_time:.0f}s...",
+                        "warning",
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+
+                raise Exception(
+                    f"HTTP {snapshot_resp.status_code}"
+                    + (f" - {snapshot_resp.text}" if snapshot_resp.text else "")
+                )
+            else:
+                raise Exception(
+                    "Failed to fetch snapshot results: timed out waiting for snapshot download."
+                )
             
             try:
                 raw_jobs = snapshot_resp.json()

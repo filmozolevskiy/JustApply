@@ -462,9 +462,69 @@ async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
                 log_func=print
             )
             
-        assert "Failed to fetch snapshot results after 3 attempts" in str(excinfo.value)
+        assert "Failed to fetch snapshot results after 3 attempts: HTTP 500" in str(excinfo.value)
         # Verify get was called 4 times: 1 for progress, 3 for snapshot
         assert len(get_calls) == 4
+
+
+@pytest.mark.asyncio
+async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
+    from unittest.mock import patch, MagicMock, AsyncMock
+    monkeypatch.setenv("MOCK_SCRAPER", "false")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
+
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json = MagicMock(return_value={"snapshot_id": "snap_123"})
+
+    mock_progress_success = MagicMock()
+    mock_progress_success.status_code = 200
+    mock_progress_success.json = MagicMock(return_value={"status": "ready"})
+
+    mock_snapshot_pending = MagicMock()
+    mock_snapshot_pending.status_code = 202
+    mock_snapshot_pending.text = "Snapshot is not ready yet, try again in 10s"
+
+    mock_snapshot_success = MagicMock()
+    mock_snapshot_success.status_code = 200
+    mock_snapshot_success.json = MagicMock(return_value=[{
+        "job_title": "Data Analyst",
+        "company_name": "Acme Corp",
+        "company_size": "100",
+        "url": "https://linkedin.com/jobs/mock-202",
+        "date_posted": "2026-06-07",
+        "job_location": "Montreal, QC",
+        "job_summary": "Analyze data.",
+        "job_seniority_level": "mid",
+        "is_remote": True,
+    }])
+
+    get_calls = []
+
+    async def mock_get(url, **kwargs):
+        get_calls.append(url)
+        if "progress" in url:
+            return mock_progress_success
+        if "snapshot" in url:
+            snapshot_attempts = len([u for u in get_calls if "snapshot" in u])
+            if snapshot_attempts <= 2:
+                return mock_snapshot_pending
+            return mock_snapshot_success
+        raise Exception(f"Unexpected GET URL: {url}")
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get), \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        jobs = await scrape_linkedin_jobs(
+            query="Data Analyst",
+            location="Montreal",
+            log_func=print,
+        )
+
+    assert len(jobs) == 1
+    assert jobs[0]["company"] == "Acme Corp"
+    assert len(get_calls) == 4  # 1 progress + 3 snapshot (2×202, then 200)
+    assert mock_sleep.call_count >= 2
 
 
 @pytest.mark.asyncio
