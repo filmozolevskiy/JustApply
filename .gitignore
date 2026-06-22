@@ -26,3 +26,6 @@ bin/
 # Runtime artifacts
 data/
 uvicorn.log
+
+# Local resume profiles (not versioned)
+resumes/
