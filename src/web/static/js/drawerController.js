@@ -252,11 +252,13 @@ export function createDrawerController({
 
     body.innerHTML = `
         <div class="drawer-header">
-          <h2 class="drawer-header-title">${job.title}</h2>
-          <div class="drawer-header-actions">
+          <h2 class="drawer-header-title">
+            ${job.title}
             ${hasPostingLink ? `
-              <a href="${job.link}" target="_blank" class="drawer-header-linkedin" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
+              <a href="${job.link}" target="_blank" class="drawer-header-linkedin" title="View LinkedIn Posting" style="margin-left: 8px; vertical-align: middle;"><i class="fa-brands fa-linkedin"></i></a>
             ` : ''}
+          </h2>
+          <div class="drawer-header-actions">
             <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
           </div>
         </div>

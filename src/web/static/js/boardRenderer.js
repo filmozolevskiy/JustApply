@@ -225,11 +225,13 @@ export function renderBoard(jobs, filters = {}) {
 
       card.innerHTML = `
             <div class="kanban-card-header">
-              <div class="kanban-card-title">${job.title || 'Incomplete Job'}</div>
-              <div class="kanban-card-header-actions">
+              <div class="kanban-card-title">
+                ${job.title || 'Incomplete Job'}
                 ${job.link && job.link.trim() && job.link !== '#' && job.link !== 'undefined' ? `
-                  <a href="${job.link}" target="_blank" onclick="event.stopPropagation()" class="kanban-card-linkedin" title="View LinkedIn Posting"><i class="fa-brands fa-linkedin"></i></a>
+                  <a href="${job.link}" target="_blank" onclick="event.stopPropagation()" class="kanban-card-linkedin" title="View LinkedIn Posting" style="margin-left: 4px; vertical-align: middle;"><i class="fa-brands fa-linkedin"></i></a>
                 ` : ''}
+              </div>
+              <div class="kanban-card-header-actions">
                 <span class="match-pill ${matchClass}">${job.matchScore}%</span>
               </div>
             </div>
