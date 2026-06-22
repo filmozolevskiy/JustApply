@@ -62,10 +62,12 @@ def test_board_controls_refine_drawer_layout():
     refine_block = block[block.index('class="board-controls-refine"'):]
     assert 'id="board-filter-search"' in top_block
     assert 'id="board-sort-by"' in top_block
+    assert 'id="board-controls-reset"' not in top_block
     assert 'id="board-filter-remote"' in refine_block
     assert 'id="board-filter-size"' in refine_block
     assert 'id="board-filter-recruiter"' in refine_block
     assert 'id="board-filter-archived"' in refine_block
+    assert 'id="board-controls-reset"' in refine_block
 
 
 def test_board_controls_has_search_reset_and_empty_hint():

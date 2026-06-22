@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 from typing import Awaitable, Callable
 
 from ..schemas import Job
 
 from ..db import get_job, get_jobs, init_db
-from ..pipelines import run_enrichment_pipeline, run_search_pipeline
+from ..pipelines import run_enrichment_pipeline, run_search_pipeline, run_reassess_pipeline
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..rate_limiter import RateLimitError, scrape_limiter
 
@@ -36,7 +37,7 @@ async def search_jobs(
     *,
     query: str,
     location: str = "Remote",
-    active_resume: str = "bi_intelligence.md",
+    active_resume: str = "general_cv.md",
     mock_eval: bool = False,
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
@@ -87,6 +88,43 @@ async def complete_enrichment(
     return updated
 
 
+async def reassess_job(
+    job_id: int,
+    *,
+    active_resume: str = "general_cv.md",
+    log_func=None,
+) -> Job:
+    """Re-run Resume Matcher on a single existing job."""
+    init_db()
+    return await run_reassess_pipeline(job_id, active_resume=active_resume, log_func=log_func)
+
+
+async def reassess_all_jobs(
+    *,
+    active_resume: str = "general_cv.md",
+    archived_filter: str = "active",
+    log_func=None,
+) -> list[Job]:
+    """Re-run Resume Matcher on every job in the given archive filter."""
+    init_db()
+    jobs = get_jobs(archived_filter=archived_filter)
+    updated = []
+    for job in jobs:
+        try:
+            result = await run_reassess_pipeline(
+                job.id, active_resume=active_resume, log_func=log_func
+            )
+            updated.append(result)
+        except ValueError as e:
+            if log_func:
+                msg = f"Skipped job id={job.id}: {e}"
+                if inspect.iscoroutinefunction(log_func):
+                    await log_func(msg, "warning")
+                else:
+                    log_func(msg, "warning")
+    return updated
+
+
 async def promote_sourced_jobs(log_func=None) -> list:
     """Enrich all Found jobs that passed Resume Matcher."""
     init_db()
@@ -113,5 +151,7 @@ __all__ = [
     "complete_enrichment",
     "parse_remote_types",
     "promote_sourced_jobs",
+    "reassess_all_jobs",
+    "reassess_job",
     "search_jobs",
 ]

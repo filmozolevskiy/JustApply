@@ -12,6 +12,7 @@ from .jobs import (
     start_enrichment,
     enrich_job,
     job_exists,
+    update_job_evaluation,
     update_outreach_template,
     log_activity,
     archive_job,

@@ -330,7 +330,7 @@ class SearchRequest(BaseModel):
     query: str
     location: str
     platform: str = "brightdata_linkedin"
-    active_resume: str = "bi_intelligence.md"
+    active_resume: str = "general_cv.md"
     mock_eval: bool = True
     remote_type: str = "any"
     seniority: str = "any"
@@ -410,7 +410,7 @@ async def trigger_scrape(
     query: str = Query("Senior QA Automation"),
     location: str = Query("Remote"),
     platform: str = Query("brightdata_linkedin"),
-    active_resume: str = Query("bi_intelligence.md"),
+    active_resume: str = Query("general_cv.md"),
     mock_eval: bool = Query(True),
     remote_type: str = Query("any"),
     seniority: str = Query("any"),

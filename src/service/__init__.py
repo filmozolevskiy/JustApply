@@ -5,6 +5,8 @@ from .job_hunter import (
     complete_enrichment,
     parse_remote_types,
     promote_sourced_jobs,
+    reassess_all_jobs,
+    reassess_job,
     search_jobs,
 )
 
@@ -15,5 +17,7 @@ __all__ = [
     "complete_enrichment",
     "parse_remote_types",
     "promote_sourced_jobs",
+    "reassess_all_jobs",
+    "reassess_job",
     "search_jobs",
 ]

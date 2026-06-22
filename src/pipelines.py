@@ -24,7 +24,7 @@ from .db.job_model import coerce_job
 async def run_search_pipeline(
     query: str,
     location: str = "Remote",
-    active_resume: str = "bi_intelligence.md",
+    active_resume: str = "general_cv.md",
     mock_eval: bool = False,
     allowed_remote_types: list = None,
     seniorities: str = "any",
@@ -65,8 +65,8 @@ async def run_search_pipeline(
             await log(f"Loaded resume profile: {active_resume}")
         except FileNotFoundError:
             try:
-                resume_content = load_resume("bi_intelligence.md")
-                await log(f"Resume '{active_resume}' not found, falling back to bi_intelligence.md", "warning")
+                resume_content = load_resume("general_cv.md")
+                await log(f"Resume '{active_resume}' not found, falling back to general_cv.md", "warning")
             except FileNotFoundError:
                 await log("No resume found. Skipping LLM evaluation.", "warning")
 
@@ -164,6 +164,72 @@ async def run_search_pipeline(
         "summary",
     )
     return saved
+
+
+async def run_reassess_pipeline(
+    job_id: int,
+    active_resume: str = "general_cv.md",
+    log_func=None,
+) -> Job:
+    """Re-run Resume Matcher on an existing job and persist updated scores."""
+    job = database.get_job(job_id)
+    if not job:
+        raise ValueError("Job not found")
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    try:
+        resume_content = load_resume(active_resume)
+    except FileNotFoundError:
+        try:
+            resume_content = load_resume("general_cv.md")
+            active_resume = "general_cv.md"
+            await log(f"Resume not found, falling back to general_cv.md", "warning")
+        except FileNotFoundError:
+            raise ValueError("No resume profile found for reassessment")
+
+    title = job.title or ""
+    company = job.company or ""
+    await log(f"Re-assessing '{title}' at {company} with {active_resume}...")
+
+    job_dict = job.model_dump()
+    evaluation = await evaluate_job(job_dict, resume_content, log_func)
+    if not evaluation:
+        await log("Resume Matcher returned no result; job unchanged.", "warning")
+        raise ValueError("Resume Matcher failed — no evaluation returned")
+
+    merged = merge_job_attributes(job_dict, evaluation)
+    fields = {
+        "matchScore": evaluation.get("matchScore", 0),
+        "matchType": evaluation.get("matchType", ""),
+        "shouldProceed": evaluation.get("shouldProceed", False),
+        "resumeUsed": active_resume,
+        "strengths": evaluation.get("strengths", []),
+        "gaps": evaluation.get("gaps", []),
+        "description": evaluation.get("summary") or job.description or "",
+        "isRecruiter": evaluation.get("isRecruiter", False),
+        "salary": evaluation.get("salary") or job.salary or "",
+        "remoteType": merged["remoteType"],
+        "seniority": merged["seniority"],
+        "unclassified": False,
+    }
+
+    updated = database.update_job_evaluation(job_id, fields)
+    if not updated:
+        raise ValueError("Failed to persist reassessed job")
+
+    await log(
+        f"Re-assessed: score {fields['matchScore']}, "
+        f"{fields['matchType']}, shouldProceed={fields['shouldProceed']}",
+        "success",
+    )
+    return updated
 
 
 async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:

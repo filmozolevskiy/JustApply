@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Job Hunter Dashboard - Prototype</title>
+  <title>Job Hunter Dashboard</title>
   
   <!-- Premium Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -269,31 +269,6 @@
       display: flex;
       flex-direction: column;
       position: relative;
-    }
-
-    /* Prototype Notice */
-    .prototype-notice {
-      background: rgba(139, 92, 246, 0.1);
-      border: 1px solid rgba(139, 92, 246, 0.2);
-      border-radius: 8px;
-      padding: 12px 20px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.9rem;
-    }
-    .prototype-notice span {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .prototype-notice code {
-      background: rgba(0, 0, 0, 0.3);
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: #a78bfa;
-      font-family: var(--font-mono);
     }
 
     .form-group input, .form-group select, .form-group textarea {
@@ -621,10 +596,7 @@
     }
 
     .board-controls-reset {
-      padding: 8px 12px;
-      font-size: 0.78rem;
       white-space: nowrap;
-      flex-shrink: 0;
     }
 
     .board-controls-refine {
@@ -662,7 +634,7 @@
 
     .board-controls-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
       padding-bottom: 12px;
     }
@@ -671,6 +643,7 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0;
     }
 
     .board-controls-field label {
@@ -685,6 +658,16 @@
       border: 1px solid var(--border-color);
       background: rgba(15, 23, 42, 0.6);
       color: var(--text-primary);
+    }
+
+    .board-controls-field--reset {
+      justify-content: flex-end;
+    }
+
+    .board-controls-field--reset .board-controls-reset {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 0.78rem;
     }
 
     .board-search-empty-hint {
@@ -1336,7 +1319,7 @@
       <div class="resume-select-container">
         <label style="font-size: 0.85rem; color: var(--text-secondary); font-family: var(--font-sans);" for="active-resume-select">Active Profile:</label>
         <select id="active-resume-select" onchange="changeActiveResume(this.value)">
-          <option value="bi_intelligence.md">bi_intelligence.md (Delivery, QA & Data)</option>
+          <option value="general_cv.md">general_cv.md (Delivery, QA & Data)</option>
         </select>
         <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="viewResumeProfile()"><i class="fa-regular fa-eye"></i> View</button>
       </div>
@@ -1512,9 +1495,6 @@
                   <option value="novelty_asc">Novelty: Oldest First</option>
                 </select>
               </div>
-              <button type="button" id="board-controls-reset" class="board-controls-reset btn btn-secondary" onclick="resetBoardControls()" title="Reset all board filters">
-                <i class="fa-solid fa-undo"></i> Reset filters
-              </button>
             </div>
             <details class="board-controls-refine">
               <summary>Refine board</summary>
@@ -1552,6 +1532,12 @@
                     <option value="archived">Archived</option>
                     <option value="all">All</option>
                   </select>
+                </div>
+                <div class="board-controls-field board-controls-field--reset">
+                  <label for="board-controls-reset">Reset filters</label>
+                  <button type="button" id="board-controls-reset" class="board-controls-reset btn btn-secondary" onclick="resetBoardControls()" title="Reset all board filters">
+                    <i class="fa-solid fa-undo"></i> Reset
+                  </button>
                 </div>
               </div>
             </details>
@@ -1674,7 +1660,7 @@
     let mockResumes = {};
 
     // Active configuration state
-    let activeResume = "bi_intelligence.md";
+    let activeResume = "general_cv.md";
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
@@ -2480,7 +2466,7 @@
               option.value = resume.name;
               
               let displayName = resume.name;
-              if (resume.name === 'bi_intelligence.md') displayName += ' (Delivery, QA & Data)';
+              if (resume.name === 'general_cv.md') displayName += ' (Delivery, QA & Data)';
               else if (resume.name === 'qa.md') displayName += ' (QA Engineer)';
               else if (resume.name === 'project_manager.md') displayName += ' (Delivery Manager)';
               else if (resume.name === 'data_analyst.md') displayName += ' (Data Analyst)';

@@ -422,3 +422,61 @@ def add_job(job, db_path=None):
     conn.commit()
     conn.close()
     return new_id
+
+
+def update_job_evaluation(job_id: int, fields: dict, db_path=None):
+    """Update Resume Matcher fields on an existing job."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT matchScore, resumeUsed FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+    old_score = row[0] or 0
+    old_resume = row[1] or ""
+
+    resume_used = fields.get("resumeUsed", old_resume)
+    new_score = fields.get("matchScore", old_score)
+    cursor.execute("""
+        UPDATE jobs SET
+            matchScore = ?,
+            matchType = ?,
+            shouldProceed = ?,
+            resumeUsed = ?,
+            strengths = ?,
+            gaps = ?,
+            description = ?,
+            isRecruiter = ?,
+            salary = ?,
+            remoteType = ?,
+            seniority = ?,
+            unclassified = ?
+        WHERE id = ?
+    """, (
+        fields.get("matchScore", 0),
+        fields.get("matchType", ""),
+        1 if fields.get("shouldProceed") else 0,
+        resume_used,
+        json.dumps(fields.get("strengths") or []),
+        json.dumps(fields.get("gaps") or []),
+        fields.get("description") or "",
+        1 if fields.get("isRecruiter") else 0,
+        fields.get("salary") or "",
+        fields.get("remoteType") or "",
+        fields.get("seniority") or "",
+        1 if fields.get("unclassified") else 0,
+        job_id,
+    ))
+    _append_activity_log(
+        cursor,
+        job_id,
+        f"Re-assessed with {resume_used}: score {old_score} → {new_score}",
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    return parse_job_row(updated) if updated else None
