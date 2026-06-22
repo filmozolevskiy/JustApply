@@ -36,6 +36,10 @@ _Avoid_: sourced job, scraped job, new listing
 A job the user has decided to pursue, shown in the **Accepted** Kanban lane. Reached by dragging from **Found** (no Apify) or by clicking **Enrich Job** (which moves the job to Accepted if needed, then runs enrichment in place). The card stays in Accepted during and after enrichment — it does not move to separate enriching or enriched lanes.
 _Avoid_: enriched job, promoted job, shortlisted job
 
+**LinkedIn Company Page**:
+The LinkedIn `/company/` profile URL for the organization named on a job listing, stored on the job as `companyUrl` when Bright Data returns it at scrape time. For **Recruiting Company** postings, this is typically the staffing agency's page, not the end employer. Required for **Contact Sample** and **Load More Contacts**; absent when Bright Data omits it on the listing.
+_Avoid_: company website, employer homepage, company link
+
 **Russian Speaker**:
 A company employee classified by the LLM (using name, headline, languages, current position, and location) as likely having a Russian or CIS cultural background. Targeted for referral outreach because shared cultural background increases referral likelihood — not limited to HR or recruiting roles.
 _Avoid_: Russian HR contact, Russian recruiter, language filter

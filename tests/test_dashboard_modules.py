@@ -269,6 +269,26 @@ def test_drawer_controller_substitutes_greeting_name():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_drawer_controller_company_row_and_size_helpers():
+    """Drawer company row shows LinkedIn badge only when companyUrl is present."""
+    result = _run_node(
+        """
+        import { buildDrawerCompanyRowHtml } from './src/web/static/js/drawerController.js';
+
+        const withUrl = buildDrawerCompanyRowHtml('Acme Corp', 'https://www.linkedin.com/company/acme/');
+        if (!withUrl.includes('<strong>Acme Corp</strong>')) process.exit(1);
+        if (!withUrl.includes('drawer-company-linkedin')) process.exit(2);
+        if (!withUrl.includes('View Company on LinkedIn')) process.exit(3);
+
+        const withoutUrl = buildDrawerCompanyRowHtml('Acme Corp', '');
+        if (withoutUrl.includes('drawer-company-linkedin')) process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_drawer_controller_pick_default_active_contact_deprioritizes_elsewhere():
     """Active Contact defaults to uncontacted contacts without Contacted Elsewhere first."""
     result = _run_node(

@@ -28,6 +28,14 @@ export function getActiveTemplate(job, contactIdx) {
   return job.russianSpeakerOutreachTemplate || job.outreachMessage || '';
 }
 
+export function buildDrawerCompanyRowHtml(company, companyUrl) {
+  const badgeHtml =
+    companyUrl && companyUrl.trim()
+      ? ` <a href="${companyUrl}" target="_blank" rel="noopener noreferrer" class="drawer-company-linkedin" title="View Company on LinkedIn"><i class="fa-brands fa-linkedin"></i></a>`
+      : '';
+  return `Company: <strong>${company}</strong>${badgeHtml}`;
+}
+
 /** Accepted jobs after enrichment — show Re-classify / Load More even with zero matching contacts. */
 export function hasContactSampleActions(job, contacts = job.contacts || []) {
   if (job.status !== 'accepted') return false;
@@ -272,7 +280,7 @@ export function createDrawerController({
             <div class="drawer-job-info-grid">
               <div>Status: <span class="status-badge status-${job.status}" style="font-size:0.65rem; padding: 2px 6px;">${job.status}</span></div>
               <div>Seniority: <span style="text-transform:capitalize;">${job.seniority}</span></div>
-              <div>Company: <strong>${job.company}</strong></div>
+              <div>${buildDrawerCompanyRowHtml(job.company, job.companyUrl)}</div>
               <div>Location: ${job.location}</div>
               <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
               <div>Salary: <span class="drawer-salary">${job.salary || 'Not specified'}</span></div>
