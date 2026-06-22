@@ -330,17 +330,27 @@ export function createDrawerController({
           </div>
 
           <div class="match-breakdown">
-            <div class="match-factor-box" style="padding:10px;">
+            <div>
               <div class="factor-title strengths" style="font-size:0.75rem;"><i class="fa-solid fa-circle-check"></i> Strengths</div>
-              <ul class="factor-list" style="font-size:0.75rem;">
-                ${job.strengths.map((s) => `<li><i class="fa-solid fa-check" style="color:var(--accent-emerald)"></i> ${s}</li>`).join('')}
-              </ul>
+              <div class="factor-detailed-list">
+                ${job.strengths.map((s) => `
+                  <div class="factor-item">
+                    <span>${s}</span>
+                    <div class="factor-indicator" style="background: var(--accent-emerald)"></div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
-            <div class="match-factor-box" style="padding:10px;">
+            <div>
               <div class="factor-title gaps" style="font-size:0.75rem;"><i class="fa-solid fa-circle-xmark"></i> Gaps</div>
-              <ul class="factor-list" style="font-size:0.75rem;">
-                ${displayGaps.map((g) => `<li><i class="fa-solid fa-xmark" style="color:var(--accent-rose)"></i> ${g}</li>`).join('')}
-              </ul>
+              <div class="factor-detailed-list">
+                ${displayGaps.map((g) => `
+                  <div class="factor-item">
+                    <span>${g}</span>
+                    <div class="factor-indicator" style="background: var(--accent-rose)"></div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
 

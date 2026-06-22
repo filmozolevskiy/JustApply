@@ -1105,6 +1105,35 @@
       font-size: 0.75rem;
     }
 
+    /* Structured Factor List (Variant 4) */
+    .factor-detailed-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.1);
+    }
+    .factor-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.82rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      line-height: 1.4;
+    }
+    .factor-item:last-child { border-bottom: none; }
+    .factor-item:hover { background: rgba(255,255,255,0.03); }
+    .factor-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+
     .outreach-box {
       display: flex;
       flex-direction: column;
