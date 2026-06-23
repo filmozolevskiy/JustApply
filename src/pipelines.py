@@ -329,7 +329,11 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
 async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
     """Fetch next Apify page for billable streams, append to per-stream cache, and re-classify."""
     from .db.cache import get_contact_sample, append_contact_sample
-    from .core.enrichment.contact_sample import resolve_load_more_streams
+    from .core.enrichment.contact_sample import (
+        company_cache_slug,
+        resolve_load_more_streams,
+        detect_country_from_location,
+    )
 
     job = database.get_job(job_id)
     if not job:
@@ -355,17 +359,21 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
         }
         raise ValueError(messages.get(reason, "No streams available to fetch."))
 
+    # Detect country from job location for targeted outreach
+    detected_country = detect_country_from_location(job.location)
+    country_filter = [detected_country] if detected_country else None
+
     total_new_profiles = 0
     for stream_info in billable:
         stream = stream_info["stream_key"]
         start_page = stream_info["page"]
         if stream == "recruiters":
             new_profiles = await _run_apify_for_recruiters(
-                company_url, log_func=log_func, start_page=start_page
+                company_url, log_func=log_func, start_page=start_page, locations=country_filter
             )
         else:
             new_profiles = await _run_apify_for_russian_speakers(
-                company_url, log_func=log_func, start_page=start_page
+                company_url, log_func=log_func, start_page=start_page, locations=country_filter
             )
         append_contact_sample(slug, new_profiles, stream=stream)
         total_new_profiles += len(new_profiles)

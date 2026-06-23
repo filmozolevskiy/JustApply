@@ -26,6 +26,46 @@ RUSSIAN_SAMPLE_SIZE = 5
 RUSSIAN_SEARCH_QUERY = "Russian"
 RUSSIAN_EXCLUDE_FUNCTION_IDS = ["12"]
 
+US_STATES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
+}
+CANADA_PROVINCES = {"AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK", "YT", "NT", "NU"}
+
+
+def detect_country_from_location(location: str | None) -> str | None:
+    """Return 'Canada' or 'United States' if detected in the location string.
+    Returns None for 'Remote' or unrecognized locations.
+    """
+    if not location or location.lower() == "remote":
+        return None
+
+    loc_lower = location.lower()
+    if "canada" in loc_lower:
+        return "Canada"
+    if "united states" in loc_lower or " usa" in loc_lower or " u.s.a" in loc_lower:
+        return "United States"
+
+    # Check for 2-letter codes (e.g. "Toronto, ON")
+    match = re.search(r"\b([A-Z]{2})\b", location)
+    if match:
+        code = match.group(1)
+        if code in CANADA_PROVINCES:
+            return "Canada"
+        if code in US_STATES:
+            return "United States"
+
+    # Fallback to full province/state names if common
+    if any(p in loc_lower for p in ["ontario", "quebec", "british columbia", "alberta"]):
+        return "Canada"
+    if any(s in loc_lower for s in ["california", "new york", "texas", "florida"]):
+        return "United States"
+
+    return None
+
 _COMPANY_SUFFIXES = (
     "-technologies", "-technology", "-incorporated", "-corporation",
     "-holdings", "-international", "-solutions", "-services",
@@ -182,6 +222,7 @@ async def _run_apify_for_company_page(
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
     start_page: int = 1,
+    locations: list[str] | None = None,
 ) -> list:
     """Fetch employees using a Bright Data company page URL."""
     normalized = normalize_linkedin_company_url(company_url)
@@ -195,6 +236,7 @@ async def _run_apify_for_company_page(
         timeout_seconds=timeout_seconds,
         poll_interval=poll_interval,
         start_page=start_page,
+        locations=locations,
     )
 
 
@@ -204,6 +246,7 @@ async def _run_apify_actor(
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
     start_page: int = 1,
+    locations: list[str] | None = None,
 ) -> list:
     """Fetch employees via Apify using the LinkedIn company page URL only.
 
@@ -219,6 +262,7 @@ async def _run_apify_actor(
         timeout_seconds=timeout_seconds,
         poll_interval=poll_interval,
         start_page=start_page,
+        locations=locations,
     )
 
 
@@ -228,6 +272,7 @@ async def _run_apify_for_recruiters(
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
     start_page: int = 1,
+    locations: list[str] | None = None,
 ) -> list:
     """Fetch recruiter profiles via Apify using the HR function filter.
 
@@ -251,6 +296,7 @@ async def _run_apify_for_recruiters(
         start_page=start_page,
         function_ids=RECRUITER_FUNCTION_IDS,
         max_items=RECRUITER_SAMPLE_SIZE,
+        locations=locations,
     )
 
 
@@ -260,6 +306,7 @@ async def _run_apify_for_russian_speakers(
     timeout_seconds: float = 300.0,
     poll_interval: float = 5.0,
     start_page: int = 1,
+    locations: list[str] | None = None,
 ) -> list:
     """Fetch Russian-speaking profiles via Apify, excluding HR/Recruiters.
 
@@ -284,6 +331,7 @@ async def _run_apify_for_russian_speakers(
         search_query=RUSSIAN_SEARCH_QUERY,
         exclude_function_ids=RUSSIAN_EXCLUDE_FUNCTION_IDS,
         max_items=RUSSIAN_SAMPLE_SIZE,
+        locations=locations,
     )
 
 

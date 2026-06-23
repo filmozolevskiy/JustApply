@@ -12,6 +12,7 @@ from .contact_sample import (
     _run_apify_for_recruiters,
     _run_apify_for_russian_speakers,
     company_cache_slug,
+    detect_country_from_location,
     normalize_linkedin_url,
     poster_to_apify_item,
     ApifyTimeoutError,
@@ -67,6 +68,12 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
 
     slug = company_cache_slug(company, company_url)
 
+    # Detect country from job location for targeted outreach
+    detected_country = detect_country_from_location(job.location)
+    country_filter = [detected_country] if detected_country else None
+    if detected_country:
+        await log(f"Targeting outreach in country: {detected_country}", "info")
+
     # Determine audience mode
     recruiter_only = settings.target_recruiters and not settings.target_russian_speakers
     russian_only = settings.target_russian_speakers and not settings.target_recruiters
@@ -85,6 +92,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             get_contact_sample=get_contact_sample,
             set_contact_sample=set_contact_sample,
             log_activity=log_activity,
+            locations=country_filter,
         )
     elif russian_only:
         items = await _source_stream(
@@ -99,6 +107,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             get_contact_sample=get_contact_sample,
             set_contact_sample=set_contact_sample,
             log_activity=log_activity,
+            locations=country_filter,
         )
     elif dual_audience:
         recruiter_items = await _source_stream(
@@ -113,6 +122,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             get_contact_sample=get_contact_sample,
             set_contact_sample=set_contact_sample,
             log_activity=log_activity,
+            locations=country_filter,
         )
         russian_items = await _source_stream(
             stream="russian",
@@ -126,6 +136,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             get_contact_sample=get_contact_sample,
             set_contact_sample=set_contact_sample,
             log_activity=log_activity,
+            locations=country_filter,
         )
         items = _merge_profiles(recruiter_items, russian_items)
     else:
@@ -146,7 +157,7 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
             items = []
         else:
             await log(f"Fetching up to {CONTACT_SAMPLE_SIZE} employees for '{company}'...", "info")
-            items = await _run_apify_actor(company_url, log_func=log_func)
+            items = await _run_apify_actor(company_url, log_func=log_func, locations=country_filter)
             set_contact_sample(slug, items, display_name=company, stream="")
 
     poster_slug = normalize_linkedin_url(job_poster.get("url", "")) if job_poster else ""
@@ -222,6 +233,7 @@ async def _source_stream(
     get_contact_sample,
     set_contact_sample,
     log_activity,
+    locations: list[str] | None = None,
 ) -> list:
     """Fetch and cache profiles for one audience stream."""
     cache_entry = get_contact_sample(slug, stream=stream)
@@ -243,10 +255,10 @@ async def _source_stream(
 
     await log(f"Fetching up to {sample_size} profiles for '{company}' ({stream} stream, page 1)...", "info")
     if stream == "recruiters":
-        items = await _run_apify_for_recruiters(company_url, log_func=log)
+        items = await _run_apify_for_recruiters(company_url, log_func=log, locations=locations)
     elif stream == "russian":
-        items = await _run_apify_for_russian_speakers(company_url, log_func=log)
+        items = await _run_apify_for_russian_speakers(company_url, log_func=log, locations=locations)
     else:
-        items = await _run_apify_actor(company_url, log_func=log)
+        items = await _run_apify_actor(company_url, log_func=log, locations=locations)
     set_contact_sample(slug, items, display_name=company, stream=stream)
     return items
