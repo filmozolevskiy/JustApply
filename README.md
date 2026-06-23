@@ -1,8 +1,8 @@
-# Job Hunter
+# JustApply
 
 ## What
 
-Job Hunter is a local tool that finds jobs, scores them against your resume, finds LinkedIn contacts, and tracks applications on a Kanban board.
+JustApply is a local tool that finds jobs, scores them against your resume, finds LinkedIn contacts, and tracks applications on a Kanban board.
 
 No LinkedIn account is needed. Job and contact data is fetched through third-party APIs — your personal LinkedIn login is never used.
 
@@ -39,7 +39,7 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
 
 ### 3. Run the pipeline
 
-Use the **Kanban Dashboard** UI and/or the **Job Hunter** agent skill ([`.claude/skills/job-hunter/SKILL.md`](.claude/skills/job-hunter/SKILL.md)) to search jobs, enrich contacts, and move cards through lanes.
+Use the **Kanban Dashboard** UI and/or the **JustApply** agent skill ([`.claude/skills/just-apply/SKILL.md`](.claude/skills/just-apply/SKILL.md)) to search jobs, enrich contacts, and move cards through lanes.
 
 ---
 

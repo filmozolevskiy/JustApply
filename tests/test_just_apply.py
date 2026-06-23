@@ -32,7 +32,7 @@ async def test_run_search_calls_scraper_and_saves_to_db():
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
          patch("src.pipelines.database.add_job", return_value=1) as mock_add, \
-         patch("src.service.job_hunter.scrape_limiter.acquire"):
+         patch("src.service.just_apply.scrape_limiter.acquire"):
 
         results = await run_search("QA", mock_eval=True)
 
@@ -78,7 +78,7 @@ async def test_run_search_calls_evaluate_when_not_mock():
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
          patch("src.pipelines.database.add_job", return_value=42), \
-         patch("src.service.job_hunter.scrape_limiter.acquire"):
+         patch("src.service.just_apply.scrape_limiter.acquire"):
 
         results = await run_search("QA", mock_eval=False, allowed_remote_types=["any"])
 
@@ -100,10 +100,10 @@ async def test_run_promote_reads_found_jobs_and_sources_contacts():
     mock_contacts = [{"name": "Jane Recruiter", "title": "Recruiter", "url": "https://linkedin.com/in/jane"}]
     enriched_job = Job(**{**seeded_jobs[0].model_dump(), "status": "accepted", "contacts": []})
 
-    with patch("src.service.job_hunter.init_db"), \
-         patch("src.service.job_hunter.get_jobs", return_value=seeded_jobs), \
-         patch("src.service.job_hunter.begin_enrichment", return_value=Job(**{**seeded_jobs[0].model_dump(), "status": "accepted"})), \
-         patch("src.service.job_hunter.complete_enrichment", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
+    with patch("src.service.just_apply.init_db"), \
+         patch("src.service.just_apply.get_jobs", return_value=seeded_jobs), \
+         patch("src.service.just_apply.begin_enrichment", return_value=Job(**{**seeded_jobs[0].model_dump(), "status": "accepted"})), \
+         patch("src.service.just_apply.complete_enrichment", new=AsyncMock(return_value=enriched_job)) as mock_enrich:
 
         results = await run_promote()
 
@@ -122,10 +122,10 @@ async def test_run_promote_handles_no_contacts_gracefully():
 
     enriched_job = Job(**{**seeded_jobs[0].model_dump(), "status": "accepted"})
 
-    with patch("src.service.job_hunter.init_db"), \
-         patch("src.service.job_hunter.get_jobs", return_value=seeded_jobs), \
-         patch("src.service.job_hunter.begin_enrichment", return_value=Job(**{**seeded_jobs[0].model_dump(), "status": "accepted"})), \
-         patch("src.service.job_hunter.complete_enrichment", new=AsyncMock(return_value=enriched_job)):
+    with patch("src.service.just_apply.init_db"), \
+         patch("src.service.just_apply.get_jobs", return_value=seeded_jobs), \
+         patch("src.service.just_apply.begin_enrichment", return_value=Job(**{**seeded_jobs[0].model_dump(), "status": "accepted"})), \
+         patch("src.service.just_apply.complete_enrichment", new=AsyncMock(return_value=enriched_job)):
 
         results = await run_promote()
 

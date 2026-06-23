@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.db import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, start_enrichment, enrich_job
 
 def test_database_lifecycle(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     
     # 1. Initialize and Seed
@@ -63,7 +63,7 @@ def test_database_lifecycle(tmp_path):
 
 
 def test_add_job_persists_company_url(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
 
     job_id = add_job({
@@ -79,7 +79,7 @@ def test_add_job_persists_company_url(tmp_path):
 
 
 def test_update_nonexistent_job(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     init_db(db_str)
     
@@ -87,7 +87,7 @@ def test_update_nonexistent_job(tmp_path):
     assert res is None
 
 def test_update_job_comment(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     init_db(db_str)
     
@@ -110,7 +110,7 @@ def test_update_job_comment(tmp_path):
     assert job1_after.comment == new_comment
 
 def test_update_job_comment_nonexistent(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     init_db(db_str)
     
@@ -120,7 +120,7 @@ def test_update_job_comment_nonexistent(tmp_path):
 
 
 def test_update_job_status_invalid_status(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     init_db(db_str)
 
@@ -134,7 +134,7 @@ def test_update_job_status_invalid_status(tmp_path):
 
 
 def test_get_jobs_json_roundtrip(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     init_db(db_str)
 
@@ -155,7 +155,7 @@ def test_get_jobs_json_roundtrip(tmp_path):
 
 
 def test_job_exists(tmp_path):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
     init_db(db_str)
     
@@ -195,7 +195,7 @@ def test_job_exists(tmp_path):
 
 
 def test_start_enrichment(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
 
     updated = start_enrichment(1, db_str)
@@ -207,13 +207,13 @@ def test_start_enrichment(tmp_path):
 
 
 def test_start_enrichment_nonexistent(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     assert start_enrichment(999, db_str) is None
 
 
 def test_enrich_job_persists_contacts_and_message(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
 
     contacts = [
@@ -233,13 +233,13 @@ def test_enrich_job_persists_contacts_and_message(tmp_path):
 
 
 def test_enrich_job_nonexistent(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     assert enrich_job(999, [], "", db_path=db_str) is None
 
 
 def test_enrich_job_persists_enrichment_note(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     updated = enrich_job(1, [], "msg", enrichment_note="Apify failed: HTTP 403", db_path=db_str)
     assert updated is not None
@@ -247,7 +247,7 @@ def test_enrich_job_persists_enrichment_note(tmp_path):
 
 
 def test_enrich_job_clears_enrichment_note(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     enrich_job(1, [], "msg", enrichment_note="Previous failure", db_path=db_str)
     contacts = [{"name": "Alice", "url": "https://linkedin.com/in/alice", "contacted": False}]
@@ -257,7 +257,7 @@ def test_enrich_job_clears_enrichment_note(tmp_path):
 
 
 def test_enrich_job_persists_both_outreach_templates(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     recruiter_tmpl = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
     russian_tmpl = "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI'd be grateful if you could refer me for the role."
@@ -273,7 +273,7 @@ def test_enrich_job_persists_both_outreach_templates(tmp_path):
 
 
 def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path):
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     recruiter_tmpl = "Hello ______,\n\nAcme is looking for a QA Lead. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV."
     enrich_job(
@@ -287,7 +287,7 @@ def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path)
 
 def test_update_outreach_template_persists_recruiter_template(tmp_path):
     from src.db.jobs import update_outreach_template
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     new_text = "Hello ______,\nEdited recruiter draft."
     updated = update_outreach_template(1, "recruiter", new_text, db_path=db_str)
@@ -300,7 +300,7 @@ def test_update_outreach_template_persists_recruiter_template(tmp_path):
 
 def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
     from src.db.jobs import update_outreach_template
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     new_text = "Hello ______,\nEdited Russian speaker draft."
     updated = update_outreach_template(1, "russian_speaker", new_text, db_path=db_str)
@@ -312,7 +312,7 @@ def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
 
 def test_update_outreach_template_audiences_independent(tmp_path):
     from src.db.jobs import update_outreach_template
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     enrich_job(
         1, [], "",
@@ -328,7 +328,7 @@ def test_update_outreach_template_audiences_independent(tmp_path):
 
 def test_update_outreach_template_nonexistent_job(tmp_path):
     from src.db.jobs import update_outreach_template
-    db_str = str(tmp_path / "test_job_tracker.db")
+    db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     result = update_outreach_template(999, "recruiter", "anything", db_path=db_str)
     assert result is None

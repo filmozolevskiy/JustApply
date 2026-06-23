@@ -1,4 +1,4 @@
-from .job_hunter import (
+from .just_apply import (
     RateLimitError,
     acquire_scrape_slot,
     begin_enrichment,

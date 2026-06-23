@@ -21,7 +21,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     test_db_str = str(test_db)
 
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db_str)

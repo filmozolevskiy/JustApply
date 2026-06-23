@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src import db as database
 from src.pipelines import run_reassess_pipeline
-from src.service.job_hunter import reassess_all_jobs, reassess_job
+from src.service.just_apply import reassess_all_jobs, reassess_job
 
 
 @pytest.fixture

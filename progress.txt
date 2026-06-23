@@ -57,7 +57,7 @@
 - `_merge_profiles()` deduplicates by normalized LinkedIn URL (recruiter stream items take priority; any overlap is included once).
 - `classifier.py` already enforces dual-classified rules: a profile with both `is_recruiter=True` and `russian_speaker=True` counts toward the Recruiter cap only (3), does NOT consume from the Russian Speaker cap (5), and appears once in the output with both badges set.
 - `tests/test_dual_audience.py` (14 tests, pre-existing) covers: two Apify runs on full cache miss, per-stream cache hit skipping the respective call, both-cache-hit skips all Apify, merged batch classification, deduplication of overlapping profiles, Recruiter cap (3), non-HR Russian cap (5), dual-classified contact counted once toward Recruiter cap, dual-classified appears exactly once in output.
-- Fixed pre-existing test isolation bug in `tests/test_enrichment_modules.py`: monkeypatched `cache_mod.get_contact_sample` to return None so the test is independent of `data/job_tracker.db` state.
+- Fixed pre-existing test isolation bug in `tests/test_enrichment_modules.py`: monkeypatched `cache_mod.get_contact_sample` to return None so the test is independent of `data/just_apply.db` state.
 - All 515 tests pass.
 
 ## Iteration 2 — Issue #75: Russian-only filtered enrichment (Russian Apify filter + non-HR cap)

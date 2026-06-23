@@ -1,11 +1,11 @@
 ---
-name: job-hunter
-description: Use this skill whenever the user mentions searching for jobs, matching or evaluating candidate resumes against jobs, searching company employees/recruiters, generating cover letters, promoting active applications in the SQLite database, or running the Job Hunter CLI (python3 -m src.cli).
+name: just-apply
+description: Use this skill whenever the user mentions searching for jobs, matching or evaluating candidate resumes against jobs, searching company employees/recruiters, generating cover letters, promoting active applications in the SQLite database, or running the JustApply CLI (python3 -m src.cli).
 ---
 
-# Job Hunter Automation Skill
+# JustApply Automation Skill
 
-This skill guides the agent in coordinating the end-to-end Job Hunter pipeline to search for jobs, match them against candidate resumes, update the local SQLite Job Tracker Database, and source referral contacts on LinkedIn to generate outreach.
+This skill guides the agent in coordinating the end-to-end JustApply pipeline to search for jobs, match them against candidate resumes, update the local SQLite Job Tracker Database, and source referral contacts on LinkedIn to generate outreach.
 
 ## 1. Prerequisites Check
 
@@ -20,7 +20,7 @@ When the user asks to find or search for positions (e.g. "search for QA jobs"):
    ```bash
    python3 -m src.cli --search "<position>"
    ```
-3. Verify the CLI output. If successful, the job listings will be saved to the SQLite database (`data/job_tracker.db`) and visible in the local Kanban Dashboard.
+3. Verify the CLI output. If successful, the job listings will be saved to the SQLite database (`data/just_apply.db`) and visible in the local Kanban Dashboard.
 
 ## 3. Interactive Promotion & Outreach Pipeline
 

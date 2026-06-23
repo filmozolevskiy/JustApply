@@ -2,7 +2,7 @@
 
 > **ADR:** [0007-apify-spend-controls-and-accepted-lane.md](../adr/0007-apify-spend-controls-and-accepted-lane.md)
 >
-> **GitHub Issue:** [#57](https://github.com/filmozolevskiy/job-hunter-skill/issues/57)
+> **GitHub Issue:** [#57](https://github.com/filmozolevskiy/just-apply/issues/57)
 
 ## Problem Statement
 
@@ -181,7 +181,7 @@ Tests assert **external behavior** at the highest practical seams — HTTP API r
 ### Seam 6 — Coordinator / service layer
 
 - **What:** Idempotent begin while in-flight; abort/revert behavior updated for `accepted`-only model (no revert to `sourced`/`enriched`).
-- **Prior art:** `tests/test_enrichment_coordinator.py`, `tests/test_job_hunter_service.py`.
+- **Prior art:** `tests/test_enrichment_coordinator.py`, `tests/test_just_apply_service.py`.
 
 **Good test rule:** Each test names one user-visible or API-contract outcome. Avoid asserting call order of internal helpers unless it maps to a billed Apify call count.
 

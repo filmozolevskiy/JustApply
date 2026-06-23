@@ -16,7 +16,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
-    test_db = tmp_path / "test_job_tracker.db"
+    test_db = tmp_path / "test_just_apply.db"
     test_db_str = str(test_db)
 
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db_str)
@@ -218,7 +218,7 @@ async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
     state = TaskState({"job_id": 1})
     active_tasks[task_id] = state
 
-    with patch("src.service.job_hunter.run_enrichment_pipeline", new=AsyncMock(return_value=None)):
+    with patch("src.service.just_apply.run_enrichment_pipeline", new=AsyncMock(return_value=None)):
         await run_enrichment_task_with_logs(task_id, 1)
 
     job = database.get_job(1, setup_test_db)

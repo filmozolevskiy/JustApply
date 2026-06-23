@@ -1,11 +1,11 @@
-# Job Hunter
+# JustApply
 
 A system to automate job search, resume matching, personalized outreach, and application tracking.
 
 ## Language
 
 **Job Tracker Database**:
-A local SQLite database (`job_tracker.db` inside the `data/` directory) serving as the persistent storage for job listings, compatibility scores, outreach contacts, notes, and application pipeline workflows.
+A local SQLite database (`just_apply.db` inside the `data/` directory) serving as the persistent storage for job listings, compatibility scores, outreach contacts, notes, and application pipeline workflows.
 _Avoid_: Google Sheets, Job Tracker Sheet, Drive database, Trello database
 
 **Resume Profiles**:

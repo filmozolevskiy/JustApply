@@ -26,7 +26,7 @@ from ..pipelines import run_reclassify_pipeline, run_load_more_contacts_pipeline
 # Initialize SQLite database
 init_db()
 
-app = FastAPI(title="Job Hunter Dashboard")
+app = FastAPI(title="JustApply")
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")

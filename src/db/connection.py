@@ -4,7 +4,7 @@ import os
 from .seed import _seed_db
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.path.join(_PROJECT_ROOT, "data", "job_tracker.db")
+DB_PATH = os.path.join(_PROJECT_ROOT, "data", "just_apply.db")
 
 
 def get_db_connection(db_path=None):

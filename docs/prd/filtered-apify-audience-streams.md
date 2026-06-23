@@ -2,7 +2,7 @@
 
 > **Supersedes (partially):** ADR 0002 two-stage unfiltered fetch; ADR 0007 unfiltered 25-profile Contact Sample pages.
 >
-> **GitHub Issue:** [#68](https://github.com/filmozolevskiy/job-hunter-skill/issues/68)
+> **GitHub Issue:** [#68](https://github.com/filmozolevskiy/just-apply/issues/68)
 
 ## Problem Statement
 

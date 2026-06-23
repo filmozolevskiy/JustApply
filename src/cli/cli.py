@@ -78,7 +78,7 @@ async def run_promote() -> list:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Job Hunter CLI")
+    parser = argparse.ArgumentParser(description="JustApply CLI")
     parser.add_argument("--search", metavar="POSITION", help="Search and evaluate jobs for a position")
     parser.add_argument("--promote", action="store_true", help="Source contacts for jobs ready to proceed")
     parser.add_argument("--reassess", metavar="JOB_ID", type=int, help="Re-run Resume Matcher on a single job")

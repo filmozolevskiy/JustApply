@@ -70,6 +70,8 @@ async def _fetch_apify_employees_at_url(
     max_items: int | None = None,
     search_query: str | None = None,
     exclude_function_ids: list[str] | None = None,
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
 ) -> list:
     """Run Apify against one LinkedIn company page URL."""
 
@@ -96,6 +98,10 @@ async def _fetch_apify_employees_at_url(
         actor_input["searchQuery"] = search_query
     if exclude_function_ids:
         actor_input["excludeFunctionIds"] = exclude_function_ids
+    if locations:
+        actor_input["locations"] = locations
+    if exclude_locations:
+        actor_input["excludeLocations"] = exclude_locations
 
     run_url = f"{APIFY_API_BASE}/acts/{ACTOR_ID}/runs"
     params = {"token": api_token}

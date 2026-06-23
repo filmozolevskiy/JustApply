@@ -22,7 +22,7 @@ async def test_source_module_delegates_to_contact_sample_on_cache_miss(monkeypat
 
     monkeypatch.setattr(source_module, "_run_apify_actor", mock_apify)
     monkeypatch.setattr(source_module, "classify_contacts", mock_classify)
-    # Isolate from real DB: force cache miss regardless of data/job_tracker.db state
+    # Isolate from real DB: force cache miss regardless of data/just_apply.db state
     monkeypatch.setattr(cache_mod, "get_contact_sample", lambda *a, **kw: None)
     monkeypatch.setattr(cache_mod, "set_contact_sample", lambda *a, **kw: None)
 
