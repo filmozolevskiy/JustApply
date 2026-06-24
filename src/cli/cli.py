@@ -80,6 +80,7 @@ async def run_promote() -> list:
 def main():
     parser = argparse.ArgumentParser(description="JustApply CLI")
     parser.add_argument("--search", metavar="POSITION", help="Search and evaluate jobs for a position")
+    parser.add_argument("--mock-eval", action="store_true", help="Skip LLM evaluation and use mock data")
     parser.add_argument("--promote", action="store_true", help="Source contacts for jobs ready to proceed")
     parser.add_argument("--reassess", metavar="JOB_ID", type=int, help="Re-run Resume Matcher on a single job")
     parser.add_argument("--reassess-all", action="store_true", help="Re-run Resume Matcher on all active jobs")
@@ -87,7 +88,7 @@ def main():
     args = parser.parse_args()
 
     if args.search:
-        asyncio.run(run_search(args.search))
+        asyncio.run(run_search(args.search, mock_eval=args.mock_eval))
     elif args.promote:
         asyncio.run(run_promote())
     elif args.reassess is not None or args.reassess_all:

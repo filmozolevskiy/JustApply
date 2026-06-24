@@ -32,7 +32,7 @@ async def test_duplicate_job_skips_evaluate_and_add():
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job()]), \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=True), \
-         patch("src.pipelines.evaluate_job", new=AsyncMock()) as mock_eval, \
+         patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock()) as mock_eval, \
          patch("src.pipelines.database.add_job") as mock_add:
 
         results = await run_search_pipeline("QA", mock_eval=False, log_func=log_func)
@@ -61,7 +61,7 @@ async def test_remote_type_mismatch_evaluates_then_drops():
          patch("src.pipelines.load_resume", return_value="# Resume"), \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
-         patch("src.pipelines.evaluate_job", new=AsyncMock(return_value=mock_eval_result)) as mock_eval, \
+         patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[mock_eval_result])) as mock_eval, \
          patch("src.pipelines.database.add_job") as mock_add:
 
         results = await run_search_pipeline(
@@ -100,7 +100,7 @@ async def test_attribute_mismatch_logs_rejection():
          patch("src.pipelines.load_resume", return_value="# Resume"), \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
-         patch("src.pipelines.evaluate_job", new=AsyncMock(return_value=mock_eval_result)), \
+         patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[mock_eval_result])), \
          patch("src.pipelines.database.add_job"):
 
         await run_search_pipeline(
@@ -132,7 +132,7 @@ async def test_llm_remote_type_used_for_gating_and_persisted():
 
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job(remote_type="in_office")]), \
          patch("src.pipelines.load_resume", return_value="# Resume"), \
-         patch("src.pipelines.evaluate_job", new=AsyncMock(return_value=mock_eval_result)) as mock_eval, \
+         patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[mock_eval_result])) as mock_eval, \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
          patch("src.pipelines.database.add_job", return_value=1):
@@ -184,7 +184,7 @@ async def test_full_matcher_failure_sets_unclassified():
     """Full matcher failure falls back to scraper attributes and marks job Unclassified."""
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job(remote_type="remote")]), \
          patch("src.pipelines.load_resume", return_value="# Resume"), \
-         patch("src.pipelines.evaluate_job", new=AsyncMock(return_value={})), \
+         patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[{}])), \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
          patch("src.pipelines.database.add_job", return_value=1) as mock_add:
@@ -287,14 +287,18 @@ async def test_aggregate_summary_counts_are_correct():
         "isRecruiter": False,
     }
 
-    async def eval_side_effect(job, resume, log_func=None):
-        if job.get("title") == "Job B":
-            return {**mock_eval_result, "remoteType": "in_office"}
-        return mock_eval_result
+    async def eval_side_effect(jobs, resume, log_func=None):
+        results = []
+        for job in jobs:
+            if job.get("title") == "Job B":
+                results.append({**mock_eval_result, "remoteType": "in_office"})
+            else:
+                results.append(mock_eval_result)
+        return results
 
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=jobs), \
          patch("src.pipelines.load_resume", return_value="# Resume"), \
-         patch("src.pipelines.evaluate_job", new=AsyncMock(side_effect=eval_side_effect)), \
+         patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(side_effect=eval_side_effect)), \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", side_effect=job_exists_side_effect), \
          patch("src.pipelines.database.add_job", return_value=99):

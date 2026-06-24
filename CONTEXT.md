@@ -17,7 +17,7 @@ An LLM-based component that compares job descriptions with candidate resumes to 
 _Avoid_: Resume filter, CV checker
 
 **Search & Evaluation Pipeline**:
-The orchestrated flow triggered by job search: scrape listings via Bright Data (company size filtered at scrape), deduplicate against existing Kanban cards, run the Resume Matcher on each remaining new job, then drop jobs whose remote type or seniority do not match the search preferences before saving. No LLM calls occur for duplicates. Emits an aggregate cost summary to Task Logs at completion (scraped, duplicates skipped, attribute-filtered, evaluated, saved counts) using a distinct summary log style.
+The orchestrated flow triggered by job search: scrape listings via Bright Data (company size filtered at scrape), deduplicate against existing Kanban cards, run the Resume Matcher on each remaining new job using parallel batching (15 jobs per LLM call), then drop jobs whose remote type or seniority do not match the search preferences before saving. No LLM calls occur for duplicates. Emits an aggregate cost summary to Task Logs at completion (scraped, duplicates skipped, attribute-filtered, evaluated, saved counts) using a distinct summary log style.
 _Avoid_: search pipeline, job search flow, scrape-and-match
 
 **Unclassified Job**:

@@ -283,7 +283,8 @@ async def test_apify_input_for_russian_speakers():
 
     async def mock_fetch(url, *, label, log_func=None, timeout_seconds=300.0,
                          poll_interval=5.0, start_page=1, function_ids=None,
-                         max_items=None, search_query=None, exclude_function_ids=None):
+                         max_items=None, search_query=None, exclude_function_ids=None,
+                         locations=None):
         captured_inputs.append({
             "search_query": search_query,
             "exclude_function_ids": exclude_function_ids,
