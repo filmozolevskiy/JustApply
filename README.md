@@ -11,6 +11,7 @@ JustApply is an AI-powered job search and application pipeline that automates th
 - **Kanban Tracking**: Manage your application lifecycle in a modern web dashboard with refined board controls and search.
   ![Kanban Tracking](images/kanban.gif)
 - **Cost Controls**: Built-in warnings for paid Apify actions. It asks before spending your lunch money on contact scraping.
+  ![Cost Controls](images/cost_control.png)
 
 ### How it Works
 JustApply uses **FastAPI** for the backend and **Gemini 1.5** for intelligent job assessment. It leverages **Bright Data** for resilient scraping and **Apify** for contact discovery. Data is stored locally in a `just_apply.db` SQLite database to keep your search private and persistent.
