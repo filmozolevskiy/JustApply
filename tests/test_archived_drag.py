@@ -51,15 +51,15 @@ def test_archived_job_status_update_preserves_archived(tmp_path):
     assert updated.archived is True, "archived flag must survive a status update"
 
 
-def test_archived_job_can_move_to_contacted(tmp_path):
+def test_archived_job_can_move_to_applied(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "Acme", "status": "rejected"}, db_str)
     update_job_status(job_id, "rejected", db_str)
     archive_job(job_id, db_str)
 
-    updated = update_job_status(job_id, "contacted", db_str)
-    assert updated.status == "contacted"
+    updated = update_job_status(job_id, "applied", db_str)
+    assert updated.status == "applied"
     assert updated.archived is True
 
 

@@ -12,8 +12,7 @@ Options:
   -a <agent>     Agent to run: gemini (default) or claude
   -i <n>         Max iterations (default: 10)
   -s <skill>     Skill name under ~/.claude/skills or ~/.gemini/config/skills
-  -v             Stream Claude tool calls and progress (claude agent only; uses
-                 --verbose --output-format=stream-json, formatted with jq)
+  -v             Stream Claude tool calls and progress (--verbose; claude agent only)
   -h             Show this help
 
 Example:
@@ -72,12 +71,11 @@ case "$AGENT" in
     CMD_TEMPLATE='agy --dangerously-skip-permissions -p {prompt}'
     SKILLS_DIR="$HOME/.gemini/config/skills" ;;
   claude)
-    CLAUDE_EXTRA=""
+    CLAUDE_VERBOSE=""
     if [ "$VERBOSE" -eq 1 ]; then
-      # --verbose alone does not stream in -p mode; stream-json requires --verbose.
-      CLAUDE_EXTRA="--verbose --output-format=stream-json "
+      CLAUDE_VERBOSE="--verbose "
     fi
-    CMD_TEMPLATE="claude --dangerously-skip-permissions ${CLAUDE_EXTRA}-p {prompt} < /dev/null"
+    CMD_TEMPLATE="claude --dangerously-skip-permissions ${CLAUDE_VERBOSE}-p {prompt}"
     SKILLS_DIR="$HOME/.claude/skills" ;;
   *)
     echo "Unknown agent: $AGENT" && exit 1 ;;
@@ -113,32 +111,17 @@ fi
 
 VERBOSE_LABEL=""
 if [ "$VERBOSE" -eq 1 ] && [ "$AGENT" = "claude" ]; then
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "Error: -v requires jq (brew install jq)." && exit 1
-  fi
-  VERBOSE_LABEL=", verbose on (stream-json)"
+  VERBOSE_LABEL=", verbose on"
 fi
 
 echo "Starting Ralph Loop ($ITERATIONS iterations max) using agent: $AGENT${VERBOSE_LABEL}"
-
-# Human-readable stream from Claude print-mode NDJSON (raw JSON still tee'd for parsing).
-CLAUDE_STREAM_JQ='select(.type == "assistant") | .message.content[] |
-  if .type == "text" then .text
-  elif .type == "tool_use" then "[Tool: \(.name)] \(.input | tostring)"
-  else empty end'
 
 for ((i=1; i<=ITERATIONS; i++)); do
   echo -e "\n${COLOR_ITERATION}=== Iteration $i of $ITERATIONS ===${COLOR_RESET}\n"
   
   # Stream output to terminal and capture it
   TMPFILE=$(mktemp)
-  if [ "$VERBOSE" -eq 1 ] && [ "$AGENT" = "claude" ]; then
-    if command -v unbuffer >/dev/null 2>&1; then
-      unbuffer bash -c "$FINAL_CMD" 2>&1 | tee "$TMPFILE" | jq -r --unbuffered "$CLAUDE_STREAM_JQ"
-    else
-      eval "$FINAL_CMD" 2>&1 | tee "$TMPFILE" | jq -r --unbuffered "$CLAUDE_STREAM_JQ"
-    fi
-  elif command -v unbuffer >/dev/null 2>&1; then
+  if command -v unbuffer >/dev/null 2>&1; then
     unbuffer bash -c "$FINAL_CMD" 2>&1 | tee "$TMPFILE"
   else
     eval "$FINAL_CMD" 2>&1 | tee "$TMPFILE"

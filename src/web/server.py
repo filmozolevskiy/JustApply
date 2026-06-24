@@ -223,9 +223,10 @@ async def cache_status(job_id: int):
     if not job:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     from ..db.cache import get_contact_sample
-    from ..core.enrichment.contact_sample import company_cache_slug, RECRUITER_SAMPLE_SIZE, RUSSIAN_SAMPLE_SIZE
+    from ..core.enrichment.contact_sample import company_cache_slug, RECRUITER_SAMPLE_SIZE, RUSSIAN_SAMPLE_SIZE, detect_country_from_location
 
-    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    detected_country = detect_country_from_location(job.location)
+    slug = company_cache_slug(job.company or "", job.companyUrl or "", country=detected_country)
     settings = get_outreach_settings()
     has_company_url = bool(job.companyUrl)
 

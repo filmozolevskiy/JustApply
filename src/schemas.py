@@ -9,7 +9,8 @@ class OutreachSettings(BaseModel):
 
 JobStatus = Literal[
     "found", "accepted",
-    "contacted", "applied", "interviewing", "rejected",
+    "accepted",
+    "applied", "interviewing", "rejected",
 ]
 
 

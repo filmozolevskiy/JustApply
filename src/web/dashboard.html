@@ -164,7 +164,7 @@
     
     .status-found { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
     .status-accepted { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
-    .status-contacted { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .status-applied { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
     .contacted-elsewhere-badge {
       display: inline-block;
       margin-left: 4px;
@@ -1605,14 +1605,14 @@
           <div class="kanban-cards-wrapper" id="lane-accepted"></div>
         </div>
 
-        <!-- Contacted Column -->
-        <div class="kanban-column" data-lane="contacted">
+        <!-- Applied Column -->
+        <div class="kanban-column" data-lane="applied">
           <div class="kanban-col-header">
-            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('contacted')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
-            <span class="lane-name-text">Contacted</span>
-            <span class="kanban-col-count" id="count-contacted">0</span>
+            <button class="lane-collapse-btn" onclick="toggleLaneCollapse('applied')" title="Collapse lane"><i class="fa-solid fa-angles-left"></i></button>
+            <span class="lane-name-text">Applied</span>
+            <span class="kanban-col-count" id="count-applied">0</span>
           </div>
-          <div class="kanban-cards-wrapper" id="lane-contacted"></div>
+          <div class="kanban-cards-wrapper" id="lane-applied"></div>
         </div>
 
         <!-- Interviewing Column -->
@@ -1943,7 +1943,7 @@
     }
 
     function initLaneCollapse() {
-      const stages = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
+      const stages = ['found', 'accepted', 'applied', 'interviewing', 'rejected'];
       stages.forEach(lane => {
         const stored = localStorage.getItem('kanban-lane-' + lane + '-collapsed');
         if (stored === 'true') {
@@ -1957,7 +1957,7 @@
     }
 
     function initKanbanDnd() {
-      const stages = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
+      const stages = ['found', 'accepted', 'applied', 'interviewing', 'rejected'];
       stages.forEach(lane => {
         const wrapper = document.getElementById('lane-' + lane);
         if (!wrapper) return;

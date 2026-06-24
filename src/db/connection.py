@@ -191,9 +191,10 @@ def init_db(db_path=None):
     )
     conn.commit()
 
-    # Migrate legacy pipeline statuses to Found/Accepted model
+    # Migrate legacy pipeline statuses to Found/Accepted/Applied model
     cursor.execute("UPDATE jobs SET status = 'found' WHERE status = 'sourced'")
     cursor.execute("UPDATE jobs SET status = 'accepted' WHERE status IN ('enriching', 'enriched')")
+    cursor.execute("UPDATE jobs SET status = 'applied' WHERE status = 'contacted'")
     conn.commit()
 
     conn.close()

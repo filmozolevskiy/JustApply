@@ -70,7 +70,7 @@ def _seed_db(cursor):
             "matchScore": 75,
             "matchType": "match",
             "shouldProceed": 1,
-            "status": "contacted",
+            "status": "applied",
             "resumeUsed": "data_analyst.md",
             "strengths": json.dumps(["Excellent SQL database experience", "Experienced with Tableau and PowerBI", "Detail-oriented financial analysis"]),
             "gaps": json.dumps(["No direct experience with FinTech compliance frameworks"]),

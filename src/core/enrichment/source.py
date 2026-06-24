@@ -66,13 +66,13 @@ async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | N
         await log("No company name for Apify sourcing.", "warning")
         return []
 
-    slug = company_cache_slug(company, company_url)
-
     # Detect country from job location for targeted outreach
     detected_country = detect_country_from_location(job.location)
     country_filter = [detected_country] if detected_country else None
     if detected_country:
         await log(f"Targeting outreach in country: {detected_country}", "info")
+
+    slug = company_cache_slug(company, company_url, country=detected_country)
 
     # Determine audience mode
     recruiter_only = settings.target_recruiters and not settings.target_russian_speakers

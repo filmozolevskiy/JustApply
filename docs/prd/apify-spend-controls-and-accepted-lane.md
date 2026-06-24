@@ -64,7 +64,7 @@ Redesign the Kanban pipeline and enrichment controls so Apify runs happen only w
 
 25. As a job seeker, I want existing jobs in `enriching` and `enriched` migrated to `accepted`, so that I do not lose jobs in obsolete lanes.
 
-26. As a job seeker, I want the final lane order to be Found → Accepted → Contacted → Interviewing → Rejected, so that the pipeline reads left-to-right as my decision flow.
+26. As a job seeker, I want the final lane order to be Found → Accepted → Applied → Interviewing → Rejected, so that the pipeline reads left-to-right as my decision flow.
 
 27. As a job seeker, I want **Enrichment Failure** jobs to remain in **Accepted** with an **Enrichment Note**, so that I can fix upstream data or try **Load More Contacts** without the card jumping lanes.
 
@@ -90,7 +90,7 @@ Redesign the Kanban pipeline and enrichment controls so Apify runs happen only w
 
 - Replace DB status `sourced` with `found`; rename the first lane **Found**.
 - Replace DB statuses `enriching` and `enriched` with `accepted`; remove **Enriching** and **Enriched** lanes.
-- Final lane order: **Found** → **Accepted** → **Contacted** → **Interviewing** → **Rejected**.
+- Final lane order: **Found** → **Accepted** → **Applied** → **Interviewing** → **Rejected**.
 - One-time DB migration on init/upgrade: `sourced` → `found`; `enriching` and `enriched` → `accepted`.
 - Lane drag updates status only; never calls enrichment endpoints.
 
@@ -136,7 +136,7 @@ Redesign the Kanban pipeline and enrichment controls so Apify runs happen only w
 
 ### Status PUT endpoint
 
-- `PUT /api/jobs/{id}/status` accepts `found`, `accepted`, `contacted`, `interviewing`, `rejected` only.
+- `PUT /api/jobs/{id}/status` accepts `found`, `accepted`, `applied`, `interviewing`, `rejected` only.
 - Reject drag-to-`enriching` / auto-enrich on status change.
 
 ### Documentation alignment
@@ -187,7 +187,7 @@ Tests assert **external behavior** at the highest practical seams — HTTP API r
 
 ## QA Validation
 
-- [ ] Open Kanban Dashboard → lanes read **Found**, **Accepted**, **Contacted**, **Interviewing**, **Rejected** (no Enriching/Enriched/Sourced)
+- [ ] Open Kanban Dashboard → lanes read **Found**, **Accepted**, **Applied**, **Interviewing**, **Rejected** (no Enriching/Enriched/Sourced)
 - [ ] Drag a **Found** card to **Accepted** → card moves; no cost confirmation; Task Logs show no Apify fetch
 - [ ] Click **Enrich Job** on a **Found** card with no cached Contact Sample → cost confirmation appears → confirm → card in **Accepted** with spinner → enrichment completes; card stays **Accepted**
 - [ ] Click **Enrich Job** on an **Accepted** job whose company is already cached → no cost confirmation → contacts/templates update; Task Logs show cache hit

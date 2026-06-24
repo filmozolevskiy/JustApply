@@ -25,8 +25,8 @@ When the user asks to find or search for positions (e.g. "search for QA jobs"):
 ## 3. Interactive Promotion & Outreach Pipeline
 
 When matched jobs are in the database:
-1. Sourced jobs will appear in the database with status `sourced`.
-2. Sourced jobs with compatibility scores above the threshold and `shouldProceed=True` can be promoted to source company contacts and generate outreach letters by running:
+1. Found jobs will appear in the database with status `found`.
+2. Found jobs with compatibility scores above the threshold and `shouldProceed=True` can be promoted to source company contacts and generate outreach letters by running:
    ```bash
    python3 -m src.cli --promote
    ```
@@ -34,4 +34,4 @@ When matched jobs are in the database:
    ```bash
    python3 -m src.web.run_dashboard
    ```
-4. Access the dashboard at `http://127.0.0.1:8000` to manage applications across status lanes (`Sourced`, `Evaluating`, `Applied`, `Contacted`, `Interviewing`, `Rejected`). Marking a contact's checkbox as contacted only updates that contact's flag — it does not change the job's lane. Use the **Mark Contacted** button or kanban chevrons to move a job to the Contacted lane.
+4. Access the dashboard at `http://127.0.0.1:8000` to manage applications across status lanes (`Found`, `Accepted`, `Applied`, `Interviewing`, `Rejected`). Marking a contact's checkbox as contacted only updates that contact's flag — it does not change the job's lane. Use the **Mark Applied** button or kanban chevrons to move a job to the Applied lane.

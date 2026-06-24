@@ -157,7 +157,7 @@ def test_contact_marked_contacted_no_lane_move_in_log(tmp_path):
     update_contact_status(job_id, 0, True, db_str)
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
-    assert not any("→ Contacted" in m for m in messages)
+    assert not any("→ Applied" in m for m in messages)
 
 
 # --- cap at 50 ---

@@ -1,6 +1,6 @@
 /** Kanban board filtering, sorting, and DOM rendering. */
 
-export const LANES = ['found', 'accepted', 'contacted', 'interviewing', 'rejected'];
+export const LANES = ['found', 'accepted', 'applied', 'interviewing', 'rejected'];
 
 export const BOARD_SEARCH_FIELD_KEYS = ['title', 'company', 'location', 'description'];
 

@@ -247,7 +247,9 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
     if job.status != "accepted":
         raise ValueError("Job must be in Accepted lane to re-classify")
 
-    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    # Detect country from job location for targeted outreach
+    detected_country = detect_country_from_location(job.location)
+    slug = company_cache_slug(job.company or "", job.companyUrl or "", country=detected_country)
     settings = OutreachSettings(**database.get_outreach_settings())
 
     # Check whether any active stream has cached data.
@@ -343,7 +345,9 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
         raise ValueError("Job must be in Accepted lane to load more contacts")
 
     settings = OutreachSettings(**database.get_outreach_settings())
-    slug = company_cache_slug(job.company or "", job.companyUrl or "")
+    # Detect country from job location for targeted outreach
+    detected_country = detect_country_from_location(job.location)
+    slug = company_cache_slug(job.company or "", job.companyUrl or "", country=detected_country)
     company_url = job.companyUrl or ""
 
     resolved = resolve_load_more_streams(
@@ -359,8 +363,7 @@ async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
         }
         raise ValueError(messages.get(reason, "No streams available to fetch."))
 
-    # Detect country from job location for targeted outreach
-    detected_country = detect_country_from_location(job.location)
+    # Country filter list for Apify calls
     country_filter = [detected_country] if detected_country else None
 
     total_new_profiles = 0

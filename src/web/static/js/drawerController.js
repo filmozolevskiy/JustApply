@@ -397,7 +397,7 @@ export function createDrawerController({
                   <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyDrawerOutreach()"><i class="fa-regular fa-copy"></i> Copy</button>
                   ${job.status === 'accepted'
                     ? `
-                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="changeJobStage(${job.id}, 'contacted'); closeDrawer(null);"><i class="fa-solid fa-check"></i> Mark Contacted</button>
+                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="changeJobStage(${job.id}, 'applied'); closeDrawer(null);"><i class="fa-solid fa-check"></i> Mark Applied</button>
                   `
                     : ''}
                 </div>

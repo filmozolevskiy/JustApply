@@ -7,7 +7,7 @@ import os
 # Resolve DB path relative to project root (same location as src.db.connection.DB_PATH)
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", "..", ".."))
-DB_PATH = os.path.join(_PROJECT_ROOT, "data", "job_tracker.db")
+DB_PATH = os.path.join(_PROJECT_ROOT, "data", "just_apply.db")
 
 KEYWORDS = [
     # QA / Testing / Quality

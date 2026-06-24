@@ -8,7 +8,8 @@ JustApply is an AI-powered job search and application pipeline that automates th
   ![AI Automated Scraping + Match Scoring](images/search.gif)
 - **Smart Enrichment + Outreach & Cache**: Finds hiring managers and recruiters using Apify, featuring specialized filters for HR or specific languages (e.g., Russian-only). 
   ![Smart Enrichment + Outreach & Cache](images/enriching.gif)
-- **Kanban Tracking**: Manage your application lifecycle in a modern web dashboard with refined board controls and search. [show the Kanban board with dragging cards...]
+- **Kanban Tracking**: Manage your application lifecycle in a modern web dashboard with refined board controls and search.
+  ![Kanban Tracking](images/kanban.gif)
 - **Cost Controls**: Built-in warnings for paid Apify actions. It asks before spending your lunch money on contact scraping.
 
 ### How it Works

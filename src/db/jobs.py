@@ -6,8 +6,8 @@ from .contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
 from .job_model import normalize_add_job_input, parse_job_row
 
 VALID_STATUSES = frozenset({
-    "found", "accepted",
-    "contacted", "applied", "interviewing", "rejected",
+    "found",     "accepted",
+    "applied", "interviewing", "rejected",
 })
 
 ACTIVITY_LOG_MAX = 50

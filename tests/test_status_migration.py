@@ -87,7 +87,7 @@ def test_seed_jobs_use_found_status(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     jobs = get_jobs(db_str)
-    found_or_other = [j for j in jobs if j.status in ("found", "contacted", "interviewing", "rejected", "accepted")]
+    found_or_other = [j for j in jobs if j.status in ("found", "applied", "interviewing", "rejected", "accepted")]
     assert len(found_or_other) == len(jobs), (
         f"All seeded jobs must use new statuses; got {[j.status for j in jobs]}"
     )
@@ -145,10 +145,8 @@ def test_migration_enriching_and_enriched_to_accepted(tmp_path):
     conn2.close()
     assert rows["Job C"] == "accepted"
     assert rows["Job D"] == "accepted"
-    assert rows["Job E"] == "contacted"
+    assert rows["Job E"] == "applied"
 
-
-# ── Dashboard HTML: lanes ────────────────────────────────────────────────────
 
 def test_kanban_has_found_lane():
     content = _read_html()
@@ -158,6 +156,16 @@ def test_kanban_has_found_lane():
 def test_kanban_has_accepted_lane():
     content = _read_html()
     assert 'data-lane="accepted"' in content, "Kanban must have an Accepted lane"
+
+
+def test_kanban_has_applied_lane():
+    content = _read_html()
+    assert 'data-lane="applied"' in content, "Kanban must have an Applied lane"
+
+
+def test_kanban_no_contacted_lane():
+    content = _read_html()
+    assert 'data-lane="contacted"' not in content, "Contacted lane must be removed"
 
 
 def test_kanban_no_sourced_lane():

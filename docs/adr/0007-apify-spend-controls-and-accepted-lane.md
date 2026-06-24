@@ -18,7 +18,7 @@ Investigation showed pytest does not call Apify (tests mock `_run_apify_actor` /
 
 2. **Replace `enriching` and `enriched` with `accepted`** — single **Accepted** lane. Migrate existing `enriching` and `enriched` rows to `accepted` on upgrade.
 
-3. **Final lane order:** Found → Accepted → Contacted → Interviewing → Rejected.
+3. **Final lane order:** Found → Accepted → Applied → Interviewing → Rejected.
 
 4. **Enrichment never triggered by lane drag** — moving a card never starts Apify. Only explicit buttons do.
 
