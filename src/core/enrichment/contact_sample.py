@@ -49,10 +49,9 @@ def detect_country_from_location(location: str | None) -> str | None:
     if "united states" in loc_lower or " usa" in loc_lower or " u.s.a" in loc_lower:
         return "United States"
 
-    # Check for 2-letter codes (e.g. "Toronto, ON")
-    match = re.search(r"\b([A-Z]{2})\b", location)
-    if match:
-        code = match.group(1)
+    # Check for 2-letter codes (e.g. "Toronto, ON") — scan all matches, not just the first
+    for match in re.finditer(r"\b([a-zA-Z]{2})\b", location):
+        code = match.group(1).upper()
         if code in CANADA_PROVINCES:
             return "Canada"
         if code in US_STATES:
@@ -335,12 +334,19 @@ async def _run_apify_for_russian_speakers(
     )
 
 
-def company_cache_slug(company: str, company_url: str = "") -> str:
-    """Return the cache key slug for a company's Contact Sample."""
+def company_cache_slug(company: str, company_url: str = "", country: str | None = None) -> str:
+    """Return the cache key slug for a company's Contact Sample.
+    Includes country suffix if provided (e.g. 'microsoft-canada').
+    """
     slug = linkedin_company_slug_from_url(company_url)
-    if slug:
-        return slug
-    return normalize_company_slug(company)
+    if not slug:
+        slug = normalize_company_slug(company)
+
+    if country:
+        # Append normalized country to slug
+        country_suffix = country.lower().replace(" ", "-")
+        return f"{slug}-{country_suffix}"
+    return slug
 
 
 def normalize_linkedin_url(url: str) -> str:

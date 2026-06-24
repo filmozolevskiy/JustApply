@@ -1,87 +1,16 @@
 # Ralph Loop Progress Log
 
-## Iteration 8 — Issue #80: Load More Contacts for short streams only
+## Iteration 1 — Issue #82: Add permanent unit tests for location-to-country mapping
 
 **Implemented:**
-- Added `GET /api/jobs/{job_id}/load-more-preflight` endpoint to `server.py`. Returns `billable_streams` (active streams below cap with per-stream cache), `estimated_runs`, and `estimated_cost`. Recruiter cap=3, Russian Speaker cap=5. Counts are derived from the job's current classified contacts (`is_recruiter` for recruiters, `russian_speaker AND NOT is_recruiter` for Russian speakers).
-- Rewrote `run_load_more_contacts_pipeline` in `pipelines.py` to be stream-aware: determines short streams by comparing current classified contact counts against caps, skips inactive toggles, skips streams with no per-stream cache, calls `_run_apify_for_recruiters` or `_run_apify_for_russian_speakers` with `start_page = pages_fetched + 1` for each short stream, and appends new profiles to the correct per-stream cache entry. Raises `ValueError` if no short streams exist.
-- Removed the legacy `_run_apify_actor` pre-check from the `load-more-contacts` server endpoint — the pipeline now owns that validation and raises an appropriate ValueError.
-- Updated `loadMoreContacts()` in `dashboard.html` to call the preflight endpoint first, show an early-exit alert when all streams are at cap, and display a stream-aware confirm dialog (stream name, next page number, run count, estimated cost) matching the Enrich Job style.
-- Added `tests/test_load_more_stream_aware.py` with 18 tests covering: preflight below-cap inclusion, at-cap exclusion, inactive toggle exclusion, no cache exclusion, both-streams case, page numbering, cost calculation, 404 for unknown job, pipeline stream dispatch (recruiters vs russian), skip-at-cap behavior, per-stream cache append, no-short-streams raise, correct start_page, dashboard preflight fetch, dashboard confirm content.
-- Updated `tests/test_load_more_contacts.py`: fixture now sets `stream='recruiters'` cache (not legacy `stream=''`); all `_run_apify_actor` mocks replaced with `_run_apify_for_recruiters`.
-- Updated `tests/test_cost_confirmations.py`: replaced hardcoded `$0.22` cost assertion with dynamic `estimated_cost` preflight assertion.
-- All 551 tests pass.
-
-## Iteration 7 — Issue #79: Partial enrichment success and Enrichment Notes
-
-**Implemented:**
-- Added `enrichment_note_kind = ""` variable to `run_enrichment_pipeline` in `src/pipelines.py`.
-- After `source_contacts` returns, added dual-audience partial success detection: when both toggles are on, contacts are non-empty, and at least one stream has kept contacts but another has zero, set `enrichment_note` to "No {stream(s)} contacts found. Try Load More Contacts." with `enrichment_note_kind = "warning"`.
-- Pass `enrichment_note_kind` explicitly to `database.enrich_job`. Changed final log to use "success" level for warning-kind notes (partial success is not a failure).
-- In `src/db/jobs.py`, added `is_partial_success = (enrichment_note_kind == "warning")` flag captured BEFORE auto-inference (which would overwrite an empty kind to "warning" for any note). Activity log now skips "Enrichment failed · {note}" when `is_partial_success` is True, falling through to the normal "Enriched · {count} contacts" log.
-- Updated `test_enrichment_success_clears_note` to use both a recruiter and Russian contact (clean dual-audience success), and `test_run_enrichment_pipeline_sources_contacts_and_persists` to include the now-explicit `enrichment_note_kind=""` kwarg.
-- Added `tests/test_partial_enrichment.py` with 6 tests covering: recruiter-only partial (no Russian note), Russian-only partial (no Recruiter note), dual zero all contacts (full failure, no Load More), both streams satisfied (clean success, no note), partial success not logged as "Enrichment failed", recruiter-only mode unaffected.
-- All 534 tests pass.
-
-## Iteration 6 — Issue #78: Enrich Job stream-aware cost confirmation
-
-**Implemented:**
-- Updated `GET /api/jobs/{job_id}/cache-status` in `server.py` to return per-stream preflight: `billable_streams` (list of `{stream, profile_count, page}`), `estimated_runs`, and `estimated_cost` (at `$0.05` per Apify run). Still returns legacy `will_call_apify` and `has_cache` fields for backward compatibility.
-- The endpoint reads `OutreachSettings` from DB to check only active toggles (`target_recruiters`, `target_russian_speakers`). For each active stream it checks the per-stream cache (`stream="recruiters"` / `stream="russian"`); uncached streams with a `companyUrl` are listed as billable.
-- Updated `enrichJob()` in `dashboard.html` to branch on `estimated_runs > 0` (replacing the old `will_call_apify` boolean). The confirm dialog now shows per-stream lines ("- Recruiters — 3 profiles", "- Russian Speakers — 5 profiles"), total run count, and estimated cost in the format from the issue spec. Full cache hit → no confirm, enrichment proceeds immediately.
-- Rewrote `tests/test_cost_confirmations.py`: updated two legacy tests that used `stream=''` cache entries (now set per-stream caches), replaced `will_call_apify` dashboard assertion with `estimated_runs`, and added 6 new tests covering: billable_streams list on full miss, partial cache hit (one stream listed), estimated cost for 1 and 2 runs, profile_count/page included in billable stream entries, and dashboard branching/confirm content assertions.
-- All 528 tests pass.
-
-## Iteration 5 — Issue #76: Re-classify from merged per-stream Contact Sample Cache
-
-**Implemented:**
-- Fixed `run_reclassify_pipeline` in `src/pipelines.py` to check per-stream caches (instead of only the legacy `stream=''` cache) before deciding whether to take the full re-classify path or the template-only path.
-- Settings are now loaded before the cache check, so active streams (`recruiters`, `russian`, or both) are determined from OutreachSettings. When at least one toggle is on, the pipeline checks `stream='recruiters'` and/or `stream='russian'`; when both are off, it falls back to the legacy `stream=''` check.
-- When any active stream has cached data, `source_contacts()` is called (which already handles per-stream and dual-audience routing and will hit the cache, not Apify). When no active stream cache exists, the template-only path (keep_contacts=True) is taken as before.
-- Removed the duplicate `settings = OutreachSettings(...)` line that had been left in the cache-hit branch after the refactor.
-- Added `tests/test_reclassify_per_stream.py` with 5 tests covering: recruiter-only cache hit (no Apify), russian-only cache hit (no Apify), dual-audience both caches (no Apify), recruiter toggle on but no recruiter cache → template-only, both toggles off → legacy stream='' cache path.
-- All 521 tests pass.
-
-## Iteration 4 — Issue #74: Contact Search Settings section heading tooltip
-
-**Implemented:**
-- Wrapped `<span>Contact Search Settings</span>` in `dashboard.html` (line 1120) with `class="settings-tooltip-wrap"` and `data-tooltip="Control which audiences to enrich and how outreach messages are written."`.
-- The existing `initOutreachSettingsTooltips()` already queries all `.settings-tooltip-wrap[data-tooltip]` elements, so no JavaScript changes were needed — the heading tooltip is picked up automatically with the same ~1s delay and floating-layer pattern as toggle tooltips.
-- Added `test_contact_search_settings_heading_has_floating_tooltip` to `tests/test_dashboard_outreach_settings.py`, asserting that the tooltip copy is present in the dashboard markup and the heading element is decorated with `settings-tooltip-wrap`.
-- All 516 tests pass.
-
-## Iteration 3 — Issue #77: Dual-audience enrichment (both toggles, dual-classified rules)
-
-**Implemented:**
-- `source.py` `dual_audience` path: when both `target_recruiters` and `target_russian_speakers` are True, `source_contacts()` calls `_source_stream("recruiters", ...)` and `_source_stream("russian", ...)` independently (each respects its per-stream cache), then merges results via `_merge_profiles()` before passing to `classify_contacts()`.
-- `_merge_profiles()` deduplicates by normalized LinkedIn URL (recruiter stream items take priority; any overlap is included once).
-- `classifier.py` already enforces dual-classified rules: a profile with both `is_recruiter=True` and `russian_speaker=True` counts toward the Recruiter cap only (3), does NOT consume from the Russian Speaker cap (5), and appears once in the output with both badges set.
-- `tests/test_dual_audience.py` (14 tests, pre-existing) covers: two Apify runs on full cache miss, per-stream cache hit skipping the respective call, both-cache-hit skips all Apify, merged batch classification, deduplication of overlapping profiles, Recruiter cap (3), non-HR Russian cap (5), dual-classified contact counted once toward Recruiter cap, dual-classified appears exactly once in output.
-- Fixed pre-existing test isolation bug in `tests/test_enrichment_modules.py`: monkeypatched `cache_mod.get_contact_sample` to return None so the test is independent of `data/just_apply.db` state.
-- All 515 tests pass.
-
-## Iteration 2 — Issue #75: Russian-only filtered enrichment (Russian Apify filter + non-HR cap)
-
-**Implemented:**
-- Added `RUSSIAN_SAMPLE_SIZE = 5`, `RUSSIAN_SEARCH_QUERY = "Russian"`, `RUSSIAN_EXCLUDE_FUNCTION_IDS = ["12"]` constants to `contact_sample.py`.
-- Extended `_fetch_apify_employees_at_url` with `search_query` and `exclude_function_ids` parameters, wired into `actor_input` as `searchQuery` and `excludeFunctionIds`.
-- Added `_run_apify_for_russian_speakers()` which calls Apify with `searchQuery="Russian"`, `excludeFunctionIds=["12"]`, `maxItems=5`.
-- Updated `source_contacts()` to detect Russian-only mode (`target_russian_speakers=True, target_recruiters=False`) and route to `_source_stream(stream="russian", ...)`, importing `_run_apify_for_russian_speakers` and `RUSSIAN_SAMPLE_SIZE`.
-- Updated `_source_stream()` to dispatch `_run_apify_for_russian_speakers` when `stream == "russian"`.
-- Fixed `classifier.py` so the Russian Speaker pool excludes Recruiter-classified contacts (`add_russian` requires `not is_recruiter_classified`). Dual-classified contacts still show both `russian_speaker=True` and `is_recruiter=True` badges, but count toward Recruiter cap only — consistent with CONTEXT.md.
-- Added 14 new tests in `tests/test_russian_stream.py` covering constants, Russian-only orchestration (mocked Apify), per-stream cache hit/miss/empty caching, infrastructure error propagation, log messages, non-HR cap enforcement, and `_fetch_apify_employees_at_url` Apify input verification.
-- All 501 tests pass.
-
-## Iteration 1 — Issue #73: Recruiter-only filtered enrichment (per-stream cache + Apify HR filter)
-
-**Implemented:**
-- Migrated `contact_sample_cache` DB table from single `company_slug PRIMARY KEY` to compound `(company_slug, stream)` PRIMARY KEY, with migration for existing installs.
-- Updated all cache layer functions (`get_contact_sample`, `set_contact_sample`, `append_contact_sample`, `delete_contact_sample`) to accept a `stream` parameter (default `''`).
-- Added `RECRUITER_FUNCTION_IDS = ["12"]` and `RECRUITER_SAMPLE_SIZE = 3` constants to `contact_sample.py`.
-- Added `function_ids` and `max_items` parameters to `_fetch_apify_employees_at_url` so audience-specific Apify filters can be passed.
-- Added `_run_apify_for_recruiters()` which calls Apify with HR function filter and maxItems=3.
-- Updated `source_contacts()` to detect recruiter-only mode (`target_recruiters=True, target_russian_speakers=False`) and route to a per-stream cache path (`stream='recruiters'`) using the new filtered Apify function. Legacy path (both or neither active) is unchanged.
-- Fixed classifier recruiter cap from 5 → 3 (`RECRUITER_CAP = 3`); Russian speaker cap remains 5.
-- Added 19 new tests in `tests/test_recruiter_stream.py` covering cache schema, recruiter-only orchestration (mocked Apify), stream isolation, cap enforcement.
-- All 487 tests pass.
-
+- Created `tests/test_location_mapping.py` with 11 test methods covering all acceptance criteria:
+  - All 13 Canadian provinces and territories tested by abbreviation (ON, QC, BC, AB, MB, NB, NL, NS, PE, SK, YT, NT, NU) via `subTest`.
+  - 12 US state abbreviations tested (NY, CA, IL, FL, WA, TX, PA, OH, GA, NC, MA, AZ) via `subTest`.
+  - Full province/state name fallback (British Columbia, Alberta, Ontario, Quebec, Texas, California, Florida, New York).
+  - Full country name detection (Canada, United States).
+  - "Remote" and None return None.
+  - "Remote" suffix when combined with country still detects country.
+  - Unrecognized locations (UK, Germany, Australia, Paris) return None.
+  - Case insensitivity for both full names and abbreviations.
+- Fixed a bug in `detect_country_from_location` (`src/core/enrichment/contact_sample.py`): replaced `re.search` with `re.finditer` to scan all 2-letter codes in the location string, not just the first. This fix was needed to correctly detect "NL" in "St. John's, NL" (regex was previously stopping at "St").
+- All 11 location mapping tests pass.
