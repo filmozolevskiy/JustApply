@@ -4,12 +4,12 @@
 JustApply is an AI-powered job search and application pipeline that automates the "manual" parts of hunting for roles. It scrapes LinkedIn job listings, scores them against your resume using Gemini, and enriches leads with recruiter contacts. Stop wasting time on low-match roles and start applying where it counts.
 
 ### Details
+- **Kanban Tracking**: Manage your application lifecycle in a modern web dashboard with refined board controls and search.
+  ![Kanban Tracking](images/kanban.gif)
 - **AI Automated Scraping + Match Scoring**: Automatically evaluate job descriptions against your experience to generate a match score and summary. 
   ![AI Automated Scraping + Match Scoring](images/search.gif)
 - **Smart Enrichment + Outreach & Cache**: Finds hiring managers and recruiters using Apify, featuring specialized filters for HR or specific languages (e.g., Russian-only). 
   ![Smart Enrichment + Outreach & Cache](images/enriching.gif)
-- **Kanban Tracking**: Manage your application lifecycle in a modern web dashboard with refined board controls and search.
-  ![Kanban Tracking](images/kanban.gif)
 - **Cost Controls**: Built-in warnings for paid Apify actions. It asks before spending your lunch money on contact scraping.
   ![Cost Controls](images/cost_control.png)
 
