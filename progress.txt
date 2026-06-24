@@ -1,16 +1,10 @@
 # Ralph Loop Progress Log
 
-## Iteration 1 — Issue #82: Add permanent unit tests for location-to-country mapping
+## Iteration 1 — Issue #83: Add integration tests for country-aware enrichment cache
 
-**Implemented:**
-- Created `tests/test_location_mapping.py` with 11 test methods covering all acceptance criteria:
-  - All 13 Canadian provinces and territories tested by abbreviation (ON, QC, BC, AB, MB, NB, NL, NS, PE, SK, YT, NT, NU) via `subTest`.
-  - 12 US state abbreviations tested (NY, CA, IL, FL, WA, TX, PA, OH, GA, NC, MA, AZ) via `subTest`.
-  - Full province/state name fallback (British Columbia, Alberta, Ontario, Quebec, Texas, California, Florida, New York).
-  - Full country name detection (Canada, United States).
-  - "Remote" and None return None.
-  - "Remote" suffix when combined with country still detects country.
-  - Unrecognized locations (UK, Germany, Australia, Paris) return None.
-  - Case insensitivity for both full names and abbreviations.
-- Fixed a bug in `detect_country_from_location` (`src/core/enrichment/contact_sample.py`): replaced `re.search` with `re.finditer` to scan all 2-letter codes in the location string, not just the first. This fix was needed to correctly detect "NL" in "St. John's, NL" (regex was previously stopping at "St").
-- All 11 location mapping tests pass.
+Added two new test methods to `tests/test_targeted_enrichment.py`:
+
+- `test_cache_hit_when_country_matches`: verifies that when a valid cache entry exists for `testco-canada`, enriching a Canada job skips Apify entirely (`_run_apify_for_recruiters` not called, `set_contact_sample` not called).
+- `test_cache_miss_when_country_differs`: verifies that even though `testco-canada` is cached, enriching a US job at the same company produces a cache miss for `testco-united-states`, triggers a fresh Apify call with `locations=["United States"]`, and writes the new cache entry under `testco-united-states`.
+
+All 4 tests in the file pass. The 13 pre-existing failures in `test_reclassify*.py` and `test_russian_stream.py` are unrelated.
