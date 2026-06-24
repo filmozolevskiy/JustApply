@@ -2371,7 +2371,19 @@
       })
       .then(response => {
         if (!response.ok) {
-          throw new Error(`Server returned HTTP ${response.status}`);
+          // The backend IS reachable here — it answered with an error status
+          // (e.g. 429 rate limit, 422 validation). Surface the real reason
+          // instead of the catch-all "backend unavailable" message.
+          return response.json().catch(() => ({})).then(body => {
+            let detail = body && body.message;
+            if (!detail && body && Array.isArray(body.detail)) {
+              detail = body.detail.map(d => d.msg).join('; ');
+            }
+            const err = new Error(detail || `Server returned HTTP ${response.status}`);
+            err.handled = true;
+            err.status = response.status;
+            throw err;
+          });
         }
         return response.json();
       })
@@ -2399,8 +2411,15 @@
         }));
       })
       .catch(err => {
-        console.warn("FastAPI backend not responding.", err);
-        addLogLine("Could not start scraper — backend unavailable.", 'warning');
+        if (err && err.handled) {
+          // Backend responded with an error status — show its actual reason.
+          console.warn(`Scraper request rejected (HTTP ${err.status}).`, err);
+          addLogLine(`Could not start scraper — ${err.message}`, 'warning');
+        } else {
+          // Genuine connection failure (server down / restarting / network).
+          console.warn("FastAPI backend not responding.", err);
+          addLogLine("Could not start scraper — backend unavailable. Is the dashboard server running?", 'warning');
+        }
         resetScrapeButtons();
       });
     }
