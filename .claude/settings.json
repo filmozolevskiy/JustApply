@@ -9,5 +9,19 @@
     "apify": {
       "url": "https://mcp.apify.com?tools=actors,docs,apify/rag-web-browser"
     }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/db_safety_gate.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

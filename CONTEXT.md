@@ -200,4 +200,16 @@ _Avoid_: DB filters, scraper filters, query controls, skill search, strengths se
 A job posting publisher classified (via LLM matching or local company keyword lists) as a staffing or recruitment agency rather than the direct hiring employer. Job cards from recruiting companies display a dedicated badge on the Kanban Dashboard and are automatically discouraged by applying a compatibility score penalty.
 _Avoid_: Headhunter posting, agency recruiter
 
+**Destructive Database Operation**:
+Any action that irreversibly destroys or overwrites the **Job Tracker Database** or its rows — file deletion or overwrite of the `data/` directory or any `.db` file, `git clean` (which wipes the gitignored `data/`), a `DROP TABLE`, a `DELETE`, an unscoped `UPDATE`, or reseeding over existing data. Because the database is untracked by git, these actions cannot be recovered from version control. Every Destructive Database Operation is blocked by the **Database Safety Gate** until the user runs it deliberately, and is preceded by a **Database Snapshot**. Routine application writes (status moves, enrichment, contact updates, scoped `UPDATE ... WHERE`) are not Destructive Database Operations.
+_Avoid_: dangerous command, db wipe, reset
+
+**Database Safety Gate**:
+A deterministic interception that fires regardless of which agent or model is driving, blocking any **Destructive Database Operation** and capturing a **Database Snapshot** first. It does not rely on an allowed-action list or the model's own judgment — it inspects the intended action by path and intent (`src/safety/gate.py`). A single shared guard backs the Cursor (`beforeShellExecution` + `preToolUse`), Claude Code (`PreToolUse`), and Gemini CLI (`BeforeTool`) agent runtimes via one adapter, so detection logic cannot drift between them. The gate fails closed: it blocks with `deny` (the only decision all three runtimes reliably enforce — `ask` is accepted by Cursor and Claude Code schemas but silently ignored, which would be fail-open), so a destructive op is never waved through. The user approves an intended operation out-of-band — by running it in their own terminal (where no hook fires) or setting `JUSTAPPLY_DB_GATE=off` for that single action. An in-process guard additionally prevents auto-reseeding an existing emptied database, the one destructive path no shell interception can observe.
+_Avoid_: allowlist, command filter, cursor rule, prompt instruction
+
+**Database Snapshot**:
+A timestamped, consistent copy (`sqlite3 VACUUM INTO`) of the entire **Job Tracker Database** stored outside the repository (`~/.just_apply/backups/`) so it survives deletion of `data/` or of the repo clone itself. Taken by the **Database Safety Gate** immediately before it blocks a **Destructive Database Operation**, and at the start of major CLI runs (`--search`, `--promote`). The last 15 snapshots are retained; older ones are pruned. Distinct from a **Job Backup**, which is an in-database `jobs_backup` table snapshot.
+_Avoid_: job backup, jobs_backup table, data/ backup folder
+
 

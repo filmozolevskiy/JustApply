@@ -15,9 +15,26 @@ def get_db_connection(db_path=None):
     return conn
 
 
-def init_db(db_path=None):
+def _seeding_allowed(db_existed, allow_seed):
+    """Auto-seeding is only safe for a genuinely new database file.
+
+    Seeding an *existing* but emptied database silently overwrites real data
+    with fake rows — the one Destructive Database Operation no shell hook can
+    observe (it happens in-process). Restrict auto-seed to brand-new files;
+    seeding an existing/emptied db requires an explicit opt-in. See
+    docs/adr/0009-database-safety-gate.md.
+    """
+    if allow_seed:
+        return True
+    if os.environ.get("JUSTAPPLY_ALLOW_SEED", "").strip().lower() in {"1", "true", "yes"}:
+        return True
+    return not db_existed
+
+
+def init_db(db_path=None, allow_seed=False):
     if db_path is None:
         db_path = DB_PATH
+    db_existed = os.path.exists(os.path.abspath(db_path))
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
@@ -181,7 +198,7 @@ def init_db(db_path=None):
 
     cursor.execute("SELECT COUNT(*) FROM jobs")
     count = cursor.fetchone()[0]
-    if count == 0:
+    if count == 0 and _seeding_allowed(db_existed, allow_seed):
         _seed_db(cursor)
         conn.commit()
 

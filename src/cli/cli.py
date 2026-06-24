@@ -77,6 +77,22 @@ async def run_promote() -> list:
     return promoted
 
 
+def _snapshot_before(reason: str) -> None:
+    """Take an out-of-tree Database Snapshot before a major CLI run.
+
+    Best-effort: a snapshot failure must not block the run. See
+    docs/adr/0009-database-safety-gate.md.
+    """
+    try:
+        from ..safety import create_snapshot
+
+        path = create_snapshot(reason=reason)
+        if path:
+            print(f"[INFO] Database snapshot saved to {path}", file=sys.stderr)
+    except Exception:
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser(description="JustApply CLI")
     parser.add_argument("--search", metavar="POSITION", help="Search and evaluate jobs for a position")
@@ -88,8 +104,10 @@ def main():
     args = parser.parse_args()
 
     if args.search:
+        _snapshot_before("search")
         asyncio.run(run_search(args.search, mock_eval=args.mock_eval))
     elif args.promote:
+        _snapshot_before("promote")
         asyncio.run(run_promote())
     elif args.reassess is not None or args.reassess_all:
         asyncio.run(run_reassess(job_id=args.reassess, reassess_all=args.reassess_all))

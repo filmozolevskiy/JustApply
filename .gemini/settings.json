@@ -1,0 +1,19 @@
+{
+  "enableHooks": true,
+  "enableMessageBusIntegration": true,
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "run_shell_command|write_file|replace|delete_file",
+        "hooks": [
+          {
+            "name": "db-safety-gate",
+            "type": "command",
+            "command": "python3 \"$GEMINI_PROJECT_DIR/scripts/hooks/db_safety_gate.py\"",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}
