@@ -1,3 +1,0 @@
-# Dev tools — not needed at runtime. Install with:
-#   .venv/bin/pip install -r requirements-dev.txt
-mcp-server-git>=2026.1.14

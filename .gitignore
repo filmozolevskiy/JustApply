@@ -27,5 +27,9 @@ bin/
 data/
 uvicorn.log
 
+# Local scripts & progress
+ralph.sh
+progress.txt
+
 # Local resume profiles (not versioned)
 resumes/
