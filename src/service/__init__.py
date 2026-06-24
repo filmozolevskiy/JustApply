@@ -7,6 +7,7 @@ from .just_apply import (
     promote_sourced_jobs,
     reassess_all_jobs,
     reassess_job,
+    scraper_will_mock,
     search_jobs,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "promote_sourced_jobs",
     "reassess_all_jobs",
     "reassess_job",
+    "scraper_will_mock",
     "search_jobs",
 ]

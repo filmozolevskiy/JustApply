@@ -27,6 +27,7 @@ async def run_search_pipeline(
     location: str = "Remote",
     active_resume: str = "general_cv.md",
     mock_eval: bool = False,
+    mock_scraper: bool = False,
     allowed_remote_types: list = None,
     seniorities: str = "any",
     company_sizes: str = "any",
@@ -35,7 +36,12 @@ async def run_search_pipeline(
     log_func=None,
     job_saved_func=None,
 ) -> list:
-    """Scrape, deduplicate, evaluate, attribute-gate, and save jobs. Returns list of saved job dicts."""
+    """Scrape, deduplicate, evaluate, attribute-gate, and save jobs. Returns list of saved job dicts.
+
+    ``mock_scraper`` forces the LinkedIn scraper into mock mode (no Bright Data
+    call). Callers should resolve it via ``service.scraper_will_mock`` so a
+    mock-evaluation run never triggers a real, billable scrape.
+    """
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -54,6 +60,7 @@ async def run_search_pipeline(
         countries=countries,
         time_range=time_range,
         log_func=log_func,
+        force_mock=mock_scraper,
     )
 
     scraped_count = len(jobs)

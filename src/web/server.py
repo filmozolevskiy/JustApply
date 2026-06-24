@@ -333,6 +333,9 @@ class SearchRequest(BaseModel):
     platform: str = "brightdata_linkedin"
     active_resume: str = "general_cv.md"
     mock_eval: bool = True
+    # None => follow mock_eval (a mock-eval run also mocks the scraper, so it
+    # never spends Bright Data credits). Set False to force a real scrape.
+    mock_scraper: bool | None = None
     remote_type: str = "any"
     seniority: str = "any"
     salary: str = ""
@@ -367,6 +370,7 @@ async def run_scraping_task(task_id: str):
             location=params["location"],
             active_resume=params["active_resume"],
             mock_eval=params.get("mock_eval", True),
+            mock_scraper=params.get("mock_scraper"),
             allowed_remote_types=parse_remote_types(params.get("remote_type", "any")),
             seniorities=params.get("seniority", "any"),
             company_sizes=params.get("company_size", "any"),
@@ -391,7 +395,7 @@ async def run_scraping_task(task_id: str):
 @app.post("/api/search")
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
     try:
-        acquire_scrape_slot(request.mock_eval)
+        acquire_scrape_slot(request.mock_eval, request.mock_scraper)
     except RateLimitError as e:
         return JSONResponse(
             status_code=429,
@@ -413,6 +417,7 @@ async def trigger_scrape(
     platform: str = Query("brightdata_linkedin"),
     active_resume: str = Query("general_cv.md"),
     mock_eval: bool = Query(True),
+    mock_scraper: bool | None = Query(None),
     remote_type: str = Query("any"),
     seniority: str = Query("any"),
     salary: str = Query(""),
@@ -421,7 +426,7 @@ async def trigger_scrape(
     time_range: str = Query("any"),
 ):
     try:
-        acquire_scrape_slot(mock_eval)
+        acquire_scrape_slot(mock_eval, mock_scraper)
     except RateLimitError as e:
         return JSONResponse(
             status_code=429,
@@ -435,6 +440,7 @@ async def trigger_scrape(
         "platform": platform,
         "active_resume": active_resume,
         "mock_eval": mock_eval,
+        "mock_scraper": mock_scraper,
         "remote_type": remote_type,
         "seniority": seniority,
         "salary": salary,

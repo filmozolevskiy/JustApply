@@ -25,11 +25,26 @@ def parse_remote_types(remote_type) -> list[str]:
     return ["any"]
 
 
-def acquire_scrape_slot(mock_eval: bool) -> None:
+def scraper_will_mock(mock_eval: bool, mock_scraper: bool | None = None) -> bool:
+    """Decide whether the LinkedIn scraper runs in mock mode (no Bright Data call).
+
+    Resolution order:
+    1. ``MOCK_SCRAPER=true`` env forces mock regardless of the request.
+    2. An explicit ``mock_scraper`` flag wins when provided.
+    3. Otherwise a mock-evaluation run defaults to a mock scrape too — so a
+       "test" run never spends real Bright Data credits. Pass
+       ``mock_scraper=False`` to force a real scrape with a mock evaluation.
+    """
+    if os.getenv("MOCK_SCRAPER", "false").lower() == "true":
+        return True
+    if mock_scraper is not None:
+        return mock_scraper
+    return mock_eval
+
+
+def acquire_scrape_slot(mock_eval: bool, mock_scraper: bool | None = None) -> None:
     """Acquire the scrape rate limiter when a real Bright Data run is expected."""
-    is_mock_scraper = os.getenv("MOCK_SCRAPER", "false").lower() == "true"
-    is_real = (not mock_eval) or (not is_mock_scraper)
-    if is_real:
+    if not scraper_will_mock(mock_eval, mock_scraper):
         scrape_limiter.acquire()
 
 
@@ -39,6 +54,7 @@ async def search_jobs(
     location: str = "Remote",
     active_resume: str = "general_cv.md",
     mock_eval: bool = False,
+    mock_scraper: bool | None = None,
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
     company_sizes: str = "any",
@@ -50,12 +66,13 @@ async def search_jobs(
 ) -> list:
     """Run Search & Evaluation Pipeline with shared rate-limit gating."""
     if rate_limit:
-        acquire_scrape_slot(mock_eval)
+        acquire_scrape_slot(mock_eval, mock_scraper)
     return await run_search_pipeline(
         query=query,
         location=location,
         active_resume=active_resume,
         mock_eval=mock_eval,
+        mock_scraper=scraper_will_mock(mock_eval, mock_scraper),
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
         company_sizes=company_sizes,
@@ -153,5 +170,6 @@ __all__ = [
     "promote_sourced_jobs",
     "reassess_all_jobs",
     "reassess_job",
+    "scraper_will_mock",
     "search_jobs",
 ]

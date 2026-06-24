@@ -43,7 +43,7 @@ _PROTECTED = re.compile(
     r"(?i)(?:^|[\s'\"=(:|&>/~])"
     r"(?:"
     r"\.{0,2}/?data(?:/|\b)"          # data/ directory (incl ./data, ../data)
-    r"|just_apply(?:\.db)?\b"          # canonical db name
+    r"|just_apply\.(?:db|sqlite|sqlite3)\b"  # canonical db file (NOT just_apply.py etc.)
     r"|\.just_apply\b"                 # ~/.just_apply backup root
     r"|[^\s'\"|;&><]*\.(?:db|sqlite|sqlite3)\b"  # any *.db / *.sqlite path
     r")"

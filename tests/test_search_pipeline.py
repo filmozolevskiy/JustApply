@@ -202,6 +202,22 @@ async def test_full_matcher_failure_sets_unclassified():
 
 
 @pytest.mark.asyncio
+async def test_mock_scraper_forwarded_to_scraper_as_force_mock():
+    """run_search_pipeline must pass mock_scraper through as scraper force_mock."""
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[]) as mock_scrape, \
+         patch("src.pipelines.database.init_db"):
+        await run_search_pipeline("QA", mock_eval=True, mock_scraper=True)
+
+    assert mock_scrape.await_args.kwargs["force_mock"] is True
+
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[]) as mock_scrape, \
+         patch("src.pipelines.database.init_db"):
+        await run_search_pipeline("QA", mock_eval=True, mock_scraper=False)
+
+    assert mock_scrape.await_args.kwargs["force_mock"] is False
+
+
+@pytest.mark.asyncio
 async def test_mock_eval_skips_attribute_gating():
     """mock_eval saves jobs without checking remote/seniority preferences."""
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job(remote_type="in_office")]), \

@@ -32,6 +32,55 @@ async def test_search_jobs_skips_rate_limit_when_fully_mocked():
     mock_acquire.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_mock_eval_run_defaults_to_mock_scraper_and_skips_rate_limit():
+    """Regression: a mock-eval run must NOT trigger a real, billable scrape.
+
+    Previously mock_eval=True still hit Bright Data unless the MOCK_SCRAPER env
+    was also set, which dumped ~1,800 real jobs into the tracker during a test.
+    """
+    from src.service.just_apply import search_jobs
+
+    with patch.dict(os.environ, {}, clear=False), \
+         patch("src.service.just_apply.scrape_limiter.acquire") as mock_acquire, \
+         patch("src.service.just_apply.run_search_pipeline", new=AsyncMock(return_value=[])) as mock_pipeline:
+        os.environ.pop("MOCK_SCRAPER", None)
+        await search_jobs(query="QA", mock_eval=True)
+
+    mock_acquire.assert_not_called()
+    assert mock_pipeline.await_args.kwargs["mock_scraper"] is True
+
+
+@pytest.mark.asyncio
+async def test_explicit_mock_scraper_false_forces_real_scrape_with_mock_eval():
+    """An explicit mock_scraper=False overrides the mock_eval default."""
+    from src.service.just_apply import search_jobs
+
+    with patch.dict(os.environ, {}, clear=False), \
+         patch("src.service.just_apply.scrape_limiter.acquire") as mock_acquire, \
+         patch("src.service.just_apply.run_search_pipeline", new=AsyncMock(return_value=[])) as mock_pipeline:
+        os.environ.pop("MOCK_SCRAPER", None)
+        await search_jobs(query="QA", mock_eval=True, mock_scraper=False)
+
+    mock_acquire.assert_called_once()
+    assert mock_pipeline.await_args.kwargs["mock_scraper"] is False
+
+
+def test_scraper_will_mock_resolution_order():
+    from src.service.just_apply import scraper_will_mock
+
+    os.environ.pop("MOCK_SCRAPER", None)
+    # 3. falls back to mock_eval when nothing explicit
+    assert scraper_will_mock(mock_eval=True) is True
+    assert scraper_will_mock(mock_eval=False) is False
+    # 2. explicit flag wins over mock_eval
+    assert scraper_will_mock(mock_eval=True, mock_scraper=False) is False
+    assert scraper_will_mock(mock_eval=False, mock_scraper=True) is True
+    # 1. env forces mock regardless
+    with patch.dict(os.environ, {"MOCK_SCRAPER": "true"}):
+        assert scraper_will_mock(mock_eval=False, mock_scraper=False) is True
+
+
 def test_parse_remote_types_accepts_comma_string():
     from src.service.just_apply import parse_remote_types
 
