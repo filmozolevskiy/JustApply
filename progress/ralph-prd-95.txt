@@ -6,7 +6,7 @@ Composed skills: tdd
 ## Iteration 1 — #100 Reusable Spend Confirmation modal + convert Apify dialogs
 
 Status: DONE
-Commit: 4f6cca9
+Commit: a59570e
 
 ### Summary
 - Added reusable `#spend-confirmation-modal` styled to match the Kanban Dashboard (amber spend accent, stream list, cost estimate).
@@ -23,7 +23,7 @@ Commit: 4f6cca9
 ## Iteration 2 — #102 Region-scoped scrape backend + Bright Data per-region payload
 
 Status: DONE
-Commit: a8de06b
+Commit: a59570e
 
 ### Summary
 - `POST /api/search` now accepts structured `search_regions` (country + region pairs) and `per_region_limit` instead of free-text `location`.
