@@ -44,6 +44,12 @@ async def health_check():
     return {"status": "ok", "message": "FastAPI backend online"}
 
 
+@app.get("/api/regions")
+async def get_regions():
+    from ..core.regions import REGIONS_MAP
+    return REGIONS_MAP
+
+
 @app.get("/api/resumes")
 async def get_resumes():
     if not os.path.exists(RESUMES_DIR):
