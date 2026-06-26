@@ -1306,6 +1306,51 @@
       color: var(--text-primary);
     }
 
+    .region-country-block {
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .region-country-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .region-hint {
+      font-size: 0.8rem;
+      color: #fcd34d;
+      margin: 0 0 8px;
+    }
+    .per-region-stepper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .per-region-stepper .stepper-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .per-region-stepper .stepper-btn:hover {
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+    .per-region-stepper input[type="number"] {
+      width: 72px;
+      text-align: center;
+    }
+
     /* Profile Manager modal */
     .modal-content.pm-modal-content {
       width: min(1680px, 98vw);
@@ -1691,8 +1736,12 @@
               <input type="text" id="kb-filter-position" value="Senior QA Automation">
             </div>
             <div class="form-group">
-              <label>Location</label>
-              <input type="text" id="kb-filter-location" value="Remote">
+              <label>Per-Region Limit</label>
+              <div class="per-region-stepper" id="kb-per-region-stepper">
+                <button type="button" class="stepper-btn" id="kb-per-region-dec" aria-label="Decrease">&minus;</button>
+                <input type="number" id="kb-per-region-limit" min="25" max="1000" step="25" value="200" aria-label="Jobs per region">
+                <button type="button" class="stepper-btn" id="kb-per-region-inc" aria-label="Increase">+</button>
+              </div>
             </div>
             <div class="form-group">
               <label>Remote Type</label>
@@ -1747,9 +1796,14 @@
               </div>
             </div>
           </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label>Search Regions</label>
+            <p id="kb-region-hint" class="region-hint" hidden>Select at least one region for each checked country.</p>
+            <div id="kb-region-pickers"></div>
+          </div>
           <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px; border-top: 1px solid var(--border-color); padding-top:12px;">
             <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="resetKbFilters()"><i class="fa-solid fa-undo"></i> Reset Filters</button>
-            <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()"><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
+            <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()" disabled><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
           </div>
 
           <div class="panel-section-divider" style="margin-top: 16px;"></div>
@@ -2999,15 +3053,175 @@
     }
 
     function resetScrapeButtons() {
-      const btnPanel = document.getElementById('kb-scrape-btn-panel');
-      if (btnPanel) {
-        if (evaluationLockActive) {
-          btnPanel.disabled = true;
-          btnPanel.innerHTML = '<i class="fa-solid fa-lock"></i> Assessment in progress';
-        } else {
-          btnPanel.disabled = false;
-          btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+      updateScrapeRunButtonState();
+    }
+
+    const COUNTRY_CODE_MAP = { us: 'US', ca: 'CA', gb: 'GB', de: 'DE' };
+    const PER_REGION_LIMIT_MIN = 25;
+    const PER_REGION_LIMIT_MAX = 1000;
+    const PER_REGION_LIMIT_DEFAULT = 200;
+    const PER_REGION_LIMIT_STEP = 25;
+    let regionsMap = {};
+
+    function clampPerRegionLimit(value) {
+      const n = parseInt(value, 10);
+      if (isNaN(n)) return PER_REGION_LIMIT_DEFAULT;
+      return Math.max(PER_REGION_LIMIT_MIN, Math.min(PER_REGION_LIMIT_MAX, n));
+    }
+
+    function getSelectedCountries() {
+      const countryEls = document.querySelectorAll('input[name="kb-filter-country"]:checked');
+      return countryEls.length > 0 ? Array.from(countryEls).map(el => el.value) : [];
+    }
+
+    function getSelectedSearchRegions() {
+      const regions = [];
+      document.querySelectorAll('input[name="kb-filter-region"]:checked').forEach(el => {
+        const countryCode = el.dataset.country;
+        if (countryCode) {
+          regions.push({ country: countryCode, region: el.value });
         }
+      });
+      return regions;
+    }
+
+    function isSearchRegionsValid() {
+      const countries = getSelectedCountries();
+      if (countries.length === 0) return false;
+      for (const countryVal of countries) {
+        const code = COUNTRY_CODE_MAP[countryVal] || countryVal.toUpperCase();
+        const hasRegion = document.querySelector(`input[name="kb-filter-region"][data-country="${code}"]:checked`);
+        if (!hasRegion) return false;
+      }
+      return true;
+    }
+
+    function updateScrapeRunButtonState() {
+      const btnPanel = document.getElementById('kb-scrape-btn-panel');
+      const hint = document.getElementById('kb-region-hint');
+      if (!btnPanel) return;
+
+      const running = btnPanel.innerHTML.includes('Running');
+      if (running) return;
+
+      const regionsValid = isSearchRegionsValid();
+
+      if (hint) {
+        hint.hidden = regionsValid || evaluationLockActive;
+      }
+
+      if (evaluationLockActive) {
+        btnPanel.disabled = true;
+        btnPanel.innerHTML = '<i class="fa-solid fa-lock"></i> Assessment in progress';
+        return;
+      }
+
+      btnPanel.disabled = !regionsValid;
+      btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+    }
+
+    function renderRegionPickers() {
+      const container = document.getElementById('kb-region-pickers');
+      if (!container || !regionsMap) return;
+
+      container.innerHTML = '';
+      const countryOrder = ['US', 'CA', 'GB', 'DE'];
+
+      for (const code of countryOrder) {
+        const regions = regionsMap[code];
+        if (!regions) continue;
+
+        const lowerKey = Object.entries(COUNTRY_CODE_MAP).find(([, v]) => v === code)?.[0] || code.toLowerCase();
+
+        const block = document.createElement('div');
+        block.className = 'region-country-block';
+        block.id = `kb-regions-${lowerKey}`;
+        block.dataset.country = code;
+        block.style.display = 'none';
+
+        const label = document.createElement('div');
+        label.className = 'region-country-label';
+        label.textContent = code;
+        block.appendChild(label);
+
+        const group = document.createElement('div');
+        group.className = 'checkbox-group';
+
+        for (const region of regions) {
+          const item = document.createElement('label');
+          item.className = 'checkbox-item';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.name = 'kb-filter-region';
+          input.value = region;
+          input.dataset.country = code;
+          item.appendChild(input);
+          item.appendChild(document.createTextNode(' ' + region));
+          group.appendChild(item);
+        }
+        block.appendChild(group);
+        container.appendChild(block);
+      }
+
+      syncRegionPickerVisibility();
+    }
+
+    function syncRegionPickerVisibility() {
+      const checked = getSelectedCountries();
+      document.querySelectorAll('.region-country-block').forEach(block => {
+        const code = block.dataset.country;
+        const lowerKey = Object.entries(COUNTRY_CODE_MAP).find(([, v]) => v === code)?.[0];
+        block.style.display = checked.includes(lowerKey) ? 'block' : 'none';
+        if (!checked.includes(lowerKey)) {
+          block.querySelectorAll('input[name="kb-filter-region"]').forEach(cb => { cb.checked = false; });
+        }
+      });
+      updateScrapeRunButtonState();
+    }
+
+    async function initSearchRegionPickers() {
+      try {
+        const resp = await fetch('/api/regions');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        regionsMap = await resp.json();
+        renderRegionPickers();
+
+        document.querySelectorAll('input[name="kb-filter-country"]').forEach(cb => {
+          cb.addEventListener('change', syncRegionPickerVisibility);
+        });
+        const pickers = document.getElementById('kb-region-pickers');
+        if (pickers) {
+          pickers.addEventListener('change', (e) => {
+            if (e.target.name === 'kb-filter-region') updateScrapeRunButtonState();
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load regions:', err);
+      }
+    }
+
+    function initPerRegionLimitStepper() {
+      const input = document.getElementById('kb-per-region-limit');
+      const dec = document.getElementById('kb-per-region-dec');
+      const inc = document.getElementById('kb-per-region-inc');
+      if (!input) return;
+
+      const applyClamp = () => {
+        input.value = clampPerRegionLimit(input.value);
+      };
+
+      input.addEventListener('change', applyClamp);
+      input.addEventListener('blur', applyClamp);
+
+      if (dec) {
+        dec.addEventListener('click', () => {
+          input.value = clampPerRegionLimit(parseInt(input.value, 10) - PER_REGION_LIMIT_STEP);
+        });
+      }
+      if (inc) {
+        inc.addEventListener('click', () => {
+          input.value = clampPerRegionLimit(parseInt(input.value, 10) + PER_REGION_LIMIT_STEP);
+        });
       }
     }
 
@@ -3036,8 +3250,7 @@
         btnPanel.disabled = true;
         btnPanel.innerHTML = '<i class="fa-solid fa-lock"></i> Assessment in progress';
       } else if (btnPanel && !btnPanel.innerHTML.includes('Running')) {
-        btnPanel.disabled = false;
-        btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+        updateScrapeRunButtonState();
       }
     }
 
@@ -3086,8 +3299,11 @@
         addLogLine('Cannot start scrape: batch evaluation is in progress. Cancel or wait for completion.', 'warning');
         return;
       }
+      if (!isSearchRegionsValid()) {
+        addLogLine('Cannot start scrape: select at least one Search Region for each checked country.', 'warning');
+        return;
+      }
       let query = "QA Engineer";
-      let location = "Remote";
       let remote_type = "any";
       let seniority = "any";
       let salary = "";
@@ -3095,9 +3311,6 @@
       
       const queryEl = document.getElementById('kb-filter-position');
       if (queryEl) query = queryEl.value;
-
-      const locationEl = document.getElementById('kb-filter-location');
-      if (locationEl) location = locationEl.value;
 
       const remoteEls = document.querySelectorAll('input[name="kb-filter-remote"]:checked');
       if (remoteEls.length > 0) {
@@ -3126,6 +3339,10 @@
       const timeEl = document.querySelector('input[name="kb-filter-time"]:checked');
       const time_range = timeEl ? timeEl.value : 'any';
 
+      const search_regions = getSelectedSearchRegions();
+      const limitEl = document.getElementById('kb-per-region-limit');
+      const per_region_limit = clampPerRegionLimit(limitEl ? limitEl.value : PER_REGION_LIMIT_DEFAULT);
+
       const mockEval = false;
 
       // Reveal logs console panel in UI
@@ -3135,7 +3352,7 @@
       }
       expandLogsConsole();
 
-      let logMsg = `Initiating async scraper task. Query: "${query}", Location: "${location}", Countries: [${countries.toUpperCase()}], Time: ${time_range}, Engine: ${platform}`;
+      let logMsg = `Initiating async scraper task. Query: "${query}", Regions: [${search_regions.map(r => r.region + ' (' + r.country + ')').join(', ')}], Per-Region Limit: ${per_region_limit}, Countries: [${countries.toUpperCase()}], Time: ${time_range}, Engine: ${platform}`;
       let activeFilters = [];
       if (remote_type !== 'any') activeFilters.push(`Remote: ${remote_type}`);
       if (seniority !== 'any') activeFilters.push(`Seniority: ${seniority}`);
@@ -3165,7 +3382,8 @@
         },
         body: JSON.stringify({
           query: query,
-          location: location,
+          search_regions: search_regions,
+          per_region_limit: per_region_limit,
           platform: platform,
           active_resume: activeResume,
           mock_eval: mockEval,
@@ -3294,20 +3512,24 @@
 
     function resetKbFilters() {
       document.getElementById('kb-filter-position').value = 'Senior QA Automation';
-      document.getElementById('kb-filter-location').value = 'Remote';
       document.querySelectorAll('input[name="kb-filter-remote"]').forEach(cb => cb.checked = cb.value === 'remote');
       document.querySelectorAll('input[name="kb-filter-seniority"]').forEach(cb => cb.checked = cb.value === 'senior');
       document.querySelectorAll('input[name="kb-filter-size"]').forEach(cb => cb.checked = false);
+      document.querySelectorAll('input[name="kb-filter-region"]').forEach(cb => { cb.checked = false; });
       
       const salaryEl = document.getElementById('kb-filter-salary');
       if (salaryEl) salaryEl.value = '';
       
       const platformEl = document.getElementById('kb-filter-platform');
       if (platformEl) platformEl.value = 'brightdata_linkedin';
+
+      const limitEl = document.getElementById('kb-per-region-limit');
+      if (limitEl) limitEl.value = PER_REGION_LIMIT_DEFAULT;
       
       document.querySelectorAll('input[name="kb-filter-country"]').forEach(cb => cb.checked = cb.value === 'us');
       document.querySelectorAll('input[name="kb-filter-time"]').forEach(rb => rb.checked = rb.value === 'any');
 
+      syncRegionPickerVisibility();
       addLogLine("Kanban scraper settings reset to default values.", 'info');
     }
 
@@ -3591,6 +3813,8 @@
     initLaneCollapse();
     initLogsConsoleState();
     initJobSearchSettingsState();
+    initSearchRegionPickers();
+    initPerRegionLimitStepper();
     initOutreachSettingsTooltips();
     initEvaluationLockPolling();
     restoreSessionLogs();

@@ -35,3 +35,19 @@ Commit: a59570e
 
 ### Tests
 - 766 passed (full suite)
+
+## Iteration 3 — #103 Job Search Settings: country-scoped region pickers + Per-Region Limit stepper
+
+Status: DONE
+Commit: 8e16bdb
+
+### Summary
+- Removed free-text Location field; `"Remote"` can no longer be set as a scrape location.
+- Added country-scoped Search Region pickers rendered from `GET /api/regions`; checking a country reveals only that country's regions.
+- Run Scraper button starts disabled with a hint until each checked country has ≥1 region selected.
+- Added Per-Region Limit stepper (25–1000, step 25, default 200) with client-side clamping via `clampPerRegionLimit()`.
+- `triggerScrapeRun()` sends structured `search_regions` and `per_region_limit` to `POST /api/search` (no `location` field).
+- New static client tests in `tests/test_job_search_settings_regions.py`.
+
+### Tests
+- 777 passed (full suite)
