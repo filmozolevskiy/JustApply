@@ -149,10 +149,29 @@ def test_enrich_job_fetches_cache_status_before_enrich():
     assert cache_status_idx < enrich_idx, "/cache-status check must come before /enrich POST"
 
 
+def test_spend_confirm_modal_exists():
+    content = _dashboard_script()
+    assert "function showSpendConfirmModal(" in content or "async function showSpendConfirmModal(" in content
+    assert "spend-confirmation-modal" in content
+
+
+def test_spend_ack_modal_exists():
+    content = _dashboard_script()
+    assert "function showSpendAckModal(" in content or "async function showSpendAckModal(" in content
+
+
+def test_spend_confirm_modal_resolves_promise():
+    content = _dashboard_script()
+    body = _get_function_body(content, "openSpendModal", window=3000)
+    assert "Promise" in body, "spend modal must return a Promise"
+    assert "Escape" in body, "modal must dismiss on Esc"
+
+
 def test_enrich_job_shows_confirm_on_cache_miss():
     script = _dashboard_script()
     body = _get_function_body(script, "enrichJob")
-    assert "confirm(" in body, "enrichJob must call confirm() for cache-miss case"
+    assert "showSpendConfirmModal(" in body, "enrichJob must use spend confirmation modal for cache-miss case"
+    assert "confirm(" not in body, "enrichJob must not use native confirm()"
     assert "estimated_runs" in body, "enrichJob must branch on estimated_runs"
 
 
@@ -219,7 +238,15 @@ def test_cache_status_will_call_apify_false_when_all_active_streams_cached(db):
 def test_load_more_contacts_always_shows_confirm():
     script = _dashboard_script()
     body = _get_function_body(script, "loadMoreContacts")
-    assert "confirm(" in body, "loadMoreContacts must call confirm()"
+    assert "showSpendConfirmModal(" in body, "loadMoreContacts must use spend confirmation modal"
+    assert "confirm(" not in body, "loadMoreContacts must not use native confirm()"
+
+
+def test_load_more_blocked_uses_ack_modal():
+    script = _dashboard_script()
+    body = _get_function_body(script, "loadMoreContacts")
+    assert "showSpendAckModal(" in body, "blocked load-more must use acknowledgement modal"
+    assert "alert(" not in body, "loadMoreContacts must not use native alert()"
 
 
 def test_load_more_contacts_cost_estimate_visible():

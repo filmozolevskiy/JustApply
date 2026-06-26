@@ -1,0 +1,21 @@
+# Ralph Loop Progress — PRD #95
+
+Started: 2026-06-26
+Composed skills: tdd
+
+## Iteration 1 — #100 Reusable Spend Confirmation modal + convert Apify dialogs
+
+Status: DONE
+Commit: (pending)
+
+### Summary
+- Added reusable `#spend-confirmation-modal` styled to match the Kanban Dashboard (amber spend accent, stream list, cost estimate).
+- `showSpendConfirmModal()` — promise-based confirm (true/false); dismiss via Cancel, backdrop, or Esc.
+- `showSpendAckModal()` — single-button acknowledgement variant (no Cancel) for blocked notices.
+- Converted **Enrich Job** cache-miss gate and **Load More Contacts** preflight confirm from native `confirm()` to the modal.
+- Converted load-more blocked path from native `alert()` to `showSpendAckModal()`.
+- Re-classify unchanged (no confirmation).
+- Updated static client tests in `test_cost_confirmations.py` and `test_load_more_stream_aware.py`.
+
+### Tests
+- 756 passed (full suite)

@@ -161,6 +161,17 @@
       border-color: #fb7185;
     }
 
+    .btn-spend {
+      background: linear-gradient(135deg, var(--accent-amber), #d97706);
+      color: #1a1206;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+      font-weight: 600;
+    }
+    .btn-spend:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.45);
+    }
+
     .btn-sm {
       padding: 6px 12px;
       font-size: 0.8rem;
@@ -1510,6 +1521,107 @@
     }
     .modal-close:hover { color: var(--text-primary); }
 
+    .spend-modal-content {
+      width: 480px;
+      max-width: 92%;
+      padding: 24px;
+    }
+
+    .spend-modal-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .spend-modal-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-amber);
+      font-size: 1.05rem;
+      flex-shrink: 0;
+    }
+
+    .spend-modal-title {
+      font-family: var(--font-sans);
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .spend-modal-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      margin-top: 2px;
+    }
+
+    .spend-modal-warn {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fcd34d;
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+    }
+
+    .spend-stream-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .spend-stream-line {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+    }
+
+    .spend-estimate {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      margin-bottom: 18px;
+    }
+
+    .spend-estimate-label {
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      margin-bottom: 4px;
+    }
+
+    .spend-estimate-big {
+      font-family: var(--font-sans);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent-amber);
+    }
+
+    .spend-modal-message {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+
+    .spend-modal-foot {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
     .evaluation-lock-indicator {
       display: flex;
       align-items: center;
@@ -1887,6 +1999,24 @@
           </div>
           <textarea class="pm-editor" id="pm-editor"></textarea>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spend Confirmation Modal -->
+  <div class="modal-overlay" id="spend-confirmation-modal" onclick="dismissSpendModalFromOverlay(event)">
+    <div class="modal-content spend-modal-content" onclick="event.stopPropagation()">
+      <div class="spend-modal-head">
+        <div class="spend-modal-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+        <div>
+          <h3 class="spend-modal-title" id="spend-modal-title"></h3>
+          <div class="spend-modal-subtitle" id="spend-modal-subtitle"></div>
+        </div>
+      </div>
+      <div id="spend-modal-body"></div>
+      <div class="spend-modal-foot">
+        <button class="btn btn-secondary" type="button" id="spend-modal-cancel">Cancel</button>
+        <button class="btn btn-spend" type="button" id="spend-modal-confirm"><i class="fa-solid fa-play"></i> Proceed</button>
       </div>
     </div>
   </div>
@@ -2499,6 +2629,118 @@
       // Enrichment no longer changes lane status (stays Accepted) — no polling needed.
     }
 
+    let spendModalResolver = null;
+    let spendModalKeyHandler = null;
+
+    function escapeSpendHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function cleanupSpendModal() {
+      const modal = document.getElementById('spend-confirmation-modal');
+      if (modal) modal.style.display = 'none';
+      if (spendModalKeyHandler) {
+        document.removeEventListener('keydown', spendModalKeyHandler);
+        spendModalKeyHandler = null;
+      }
+      spendModalResolver = null;
+    }
+
+    function finishSpendModal(confirmed) {
+      const resolve = spendModalResolver;
+      cleanupSpendModal();
+      if (resolve) resolve(confirmed);
+    }
+
+    function dismissSpendModalFromOverlay(e) {
+      const modal = document.getElementById('spend-confirmation-modal');
+      if (!modal || !spendModalResolver) return;
+      if (e && e.target === modal) finishSpendModal(false);
+    }
+
+    function buildApifySpendBodyHtml(actionLabel, streamLines, runs, costStr) {
+      const linesHtml = streamLines
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const text = line.replace(/^- /, '');
+          return `<div class="spend-stream-line">${escapeSpendHtml(text)}</div>`;
+        })
+        .join('');
+      const runLabel = `${runs} Apify run${runs > 1 ? 's' : ''}`;
+      return `
+        <div class="spend-modal-warn">
+          <i class="fa-solid fa-triangle-exclamation" style="margin-top:2px"></i>
+          <span>${escapeSpendHtml(actionLabel)} will fetch from LinkedIn via Apify and <b>spends real credits</b>.</span>
+        </div>
+        <div class="spend-stream-list">${linesHtml}</div>
+        <div class="spend-estimate">
+          <div class="spend-estimate-label">Estimated spend</div>
+          <div class="spend-estimate-big">${escapeSpendHtml(runLabel)} · estimated ${escapeSpendHtml(costStr)}</div>
+        </div>
+      `;
+    }
+
+    function openSpendModal({ title, subtitle, bodyHtml, confirmLabel, showCancel }) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('spend-confirmation-modal');
+        const titleEl = document.getElementById('spend-modal-title');
+        const subtitleEl = document.getElementById('spend-modal-subtitle');
+        const bodyEl = document.getElementById('spend-modal-body');
+        const cancelBtn = document.getElementById('spend-modal-cancel');
+        const confirmBtn = document.getElementById('spend-modal-confirm');
+        if (!modal || !titleEl || !subtitleEl || !bodyEl || !cancelBtn || !confirmBtn) {
+          resolve(false);
+          return;
+        }
+
+        spendModalResolver = resolve;
+        titleEl.textContent = title;
+        subtitleEl.textContent = subtitle || 'LinkedIn via Apify';
+        bodyEl.innerHTML = bodyHtml;
+        confirmBtn.innerHTML = `<i class="fa-solid fa-play"></i> ${escapeSpendHtml(confirmLabel || 'Proceed')}`;
+        cancelBtn.style.display = showCancel ? '' : 'none';
+
+        const onCancel = () => finishSpendModal(false);
+        const onConfirm = () => finishSpendModal(true);
+
+        cancelBtn.onclick = onCancel;
+        confirmBtn.onclick = onConfirm;
+
+        spendModalKeyHandler = (e) => {
+          if (e.key === 'Escape') finishSpendModal(false);
+        };
+        document.addEventListener('keydown', spendModalKeyHandler);
+
+        modal.style.display = 'flex';
+        (showCancel ? cancelBtn : confirmBtn).focus();
+      });
+    }
+
+    function showSpendConfirmModal({ title, subtitle, bodyHtml, confirmLabel }) {
+      return openSpendModal({
+        title,
+        subtitle,
+        bodyHtml,
+        confirmLabel: confirmLabel || 'Proceed',
+        showCancel: true,
+      });
+    }
+
+    function showSpendAckModal({ title, message, okLabel }) {
+      return openSpendModal({
+        title,
+        subtitle: '',
+        bodyHtml: `<div class="spend-modal-message">${escapeSpendHtml(message)}</div>`,
+        confirmLabel: okLabel || 'OK',
+        showCancel: false,
+      }).then(() => {});
+    }
+
     async function enrichJob(id) {
       const job = findJob(id);
       if (!job) return;
@@ -2512,9 +2754,12 @@
             .join('\n');
           const costStr = `~$${(cacheData.estimated_cost || 0).toFixed(2)}`;
           const runs = cacheData.estimated_runs;
-          const ok = confirm(
-            `Enrich Job will fetch from LinkedIn via Apify:\n\n${streamLines}\n\n${runs} Apify run${runs > 1 ? 's' : ''} · estimated ${costStr}\n\nProceed?`
-          );
+          const ok = await showSpendConfirmModal({
+            title: 'Enrich Job',
+            subtitle: 'LinkedIn via Apify',
+            bodyHtml: buildApifySpendBodyHtml('Enrich Job', streamLines, runs, costStr),
+            confirmLabel: 'Proceed',
+          });
           if (!ok) return;
         }
       }
@@ -2659,7 +2904,10 @@
         const preflightData = await preflightResp.json();
         if (preflightData.estimated_runs === 0) {
           const reason = preflightData.blocked_reason || 'unknown';
-          alert(LOAD_MORE_BLOCKED_MESSAGES[reason] || 'No streams available to fetch.');
+          await showSpendAckModal({
+            title: 'Cannot load more contacts',
+            message: LOAD_MORE_BLOCKED_MESSAGES[reason] || 'No streams available to fetch.',
+          });
           return;
         }
         const streamLines = (preflightData.billable_streams || [])
@@ -2667,9 +2915,12 @@
           .join('\n');
         const costStr = `~$${(preflightData.estimated_cost || 0).toFixed(2)}`;
         const runs = preflightData.estimated_runs;
-        const ok = confirm(
-          `Load More Contacts will fetch from LinkedIn via Apify:\n\n${streamLines}\n\n${runs} Apify run${runs > 1 ? 's' : ''} · estimated ${costStr}\n\nProceed?`
-        );
+        const ok = await showSpendConfirmModal({
+          title: 'Load More Contacts',
+          subtitle: 'LinkedIn via Apify',
+          bodyHtml: buildApifySpendBodyHtml('Load More Contacts', streamLines, runs, costStr),
+          confirmLabel: 'Proceed',
+        });
         if (!ok) return;
       }
 
@@ -3304,6 +3555,7 @@
       closeDrawer,
       closeProfileManager,
       copyDrawerOutreach,
+      dismissSpendModalFromOverlay,
       enrichJob,
       loadMoreContacts,
       moveJobStage,

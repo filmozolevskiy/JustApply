@@ -331,13 +331,15 @@ def test_dashboard_load_more_fetches_preflight():
 
 
 def test_dashboard_load_more_uses_blocked_reason():
-    """loadMoreContacts shows specific alert from blocked_reason, not generic cap message."""
+    """loadMoreContacts shows specific acknowledgement from blocked_reason, not generic cap message."""
     from kanban_js import read_dashboard_html
     content = read_dashboard_html()
     idx = content.find("loadMoreContacts")
     assert idx != -1
     nearby = content[idx:idx + 1200]
     assert "blocked_reason" in nearby
+    assert "showSpendAckModal(" in nearby
+    assert "alert(" not in nearby
     assert "at cap" not in nearby.lower()
 
 
