@@ -74,7 +74,7 @@ async def test_run_search_calls_evaluate_when_not_mock():
 
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=mock_jobs), \
          patch("src.pipelines.load_resume", return_value="# Resume content"), \
-         patch("src.pipelines.evaluate_jobs_batch", return_value=[mock_evaluation]) as mock_eval, \
+         patch("src.pipelines.submit_batch_evaluation", new=AsyncMock(return_value=[{"batchName": "batches/test"}])) as mock_submit, \
          patch("src.pipelines.database.init_db"), \
          patch("src.pipelines.database.job_exists", return_value=False), \
          patch("src.pipelines.database.add_job", return_value=42), \
@@ -82,11 +82,10 @@ async def test_run_search_calls_evaluate_when_not_mock():
 
         results = await run_search("QA", mock_eval=False, allowed_remote_types=["any"])
 
-        assert mock_eval.called
-        assert results[0]["matchScore"] == 88
-        assert results[0]["shouldProceed"] is True
-        assert results[0]["remoteType"] == "hybrid"
-        assert results[0]["description"] == "This is a concise summary of the QA Lead role."
+        assert mock_submit.called
+        assert len(results) == 1
+        assert results[0]["id"] == 42
+        assert results[0]["matchType"] == ""
 
 
 @pytest.mark.asyncio

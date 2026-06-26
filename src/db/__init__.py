@@ -19,3 +19,13 @@ from .jobs import (
     archive_job,
 )
 from .cache import get_contact_sample, set_contact_sample, delete_contact_sample
+from .batch_jobs import (
+    TERMINAL_STATES,
+    create_batch_job,
+    get_batch_job,
+    get_batch_job_by_name,
+    update_batch_job,
+    list_batch_jobs,
+    list_in_flight_batch_jobs,
+    get_in_flight_job_ids,
+)

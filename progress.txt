@@ -12,3 +12,10 @@
     - Kept synchronous `generate_text` for reassess and outreach pipelines.
     - Added `generate_text_from_pdf` multimodal path for future Resume Import (#99).
     - Added `tests/test_gemini_client.py`; fixed pre-existing test regressions from #87 status migration.
+- **Issue #89**: Submit-and-return search via chunked Batch Evaluation Jobs.
+    - Search pipeline saves all new jobs to Scraped (`matchType` empty) before any LLM work, then returns immediately.
+    - Added `submit_batch_evaluation` seam with JSONL keyed by `job_id`, `response_mime_type: application/json`, and 100-job chunking.
+    - Added `batch_jobs` table + CRUD (`src/db/batch_jobs.py`); skips jobs already covered by in-flight batches.
+    - Removed packed-prompt batch evaluation from `matcher.py` (backfill still uses sequential `evaluate_job` until #93).
+    - Added `tests/test_batch_jobs.py`, `tests/test_batch_evaluation.py`; updated `tests/test_search_pipeline.py`.
+    - pytest: 693 passed.

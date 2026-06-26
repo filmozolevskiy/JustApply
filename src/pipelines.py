@@ -4,6 +4,7 @@ import inspect
 from . import db as database
 from .core.scraper import scrape_linkedin_jobs
 from .core.matcher import load_resume, evaluate_job, evaluate_jobs_batch, check_recruiter_by_name
+from .core.batch_evaluation import submit_batch_evaluation
 from .core.enrichment import source_contacts, generate_outreach_templates, company_cache_slug
 from .core.enrichment.contact_sample import detect_country_from_location
 from .core.enrichment.coordinator import clear_enrichment_prior
@@ -13,10 +14,10 @@ from .core.enrichment.contact_sample import (
     _run_apify_for_russian_speakers,
 )
 from .core.attribute_gating import (
-    format_attribute_mismatch,
     is_unclassified,
     merge_job_attributes,
     passes_attribute_gate,
+    format_attribute_mismatch,
 )
 from .schemas import Job, OutreachSettings
 from .db.job_model import coerce_job
@@ -98,124 +99,57 @@ async def run_search_pipeline(
     await log(f"Deduplication complete: {len(new_jobs)} new jobs, {duplicates_count} duplicates skipped.")
 
     if not new_jobs:
-        await log("No new jobs to evaluate.", "summary")
+        await log("No new jobs to save.", "summary")
         return []
 
-    # 2. Batch Evaluate
-    BATCH_SIZE = 15
-    MAX_CONCURRENCY = 30
-    
-    evaluated_jobs = []
-    attribute_filtered_count = 0
-    evaluated_count = 0
     saved = []
+    jobs_to_submit = []
 
-    if mock_eval or not resume_content:
-        # Simple path for mock or no resume
-        for job in new_jobs:
-            job["resumeUsed"] = active_resume
-            if mock_eval:
-                job.setdefault("matchScore", 0)
-                job.setdefault("matchType", "")
-                job.setdefault("shouldProceed", False)
-                job.setdefault("strengths", [])
-                job.setdefault("gaps", [])
-                if check_recruiter_by_name(job.get("company", "")):
-                    job["isRecruiter"] = True
-                    job["gaps"].append("Posted by a recruiting agency/staffing firm")
-                else:
-                    job["isRecruiter"] = False
-            
-            job_id = database.add_job(job)
-            if job_id:
-                job["id"] = job_id
-                saved.append(job)
-                if job_saved_func:
-                    if inspect.iscoroutinefunction(job_saved_func):
-                        await job_saved_func(job)
-                    else:
-                        job_saved_func(job)
-    else:
-        # Parallel Batch Evaluation
-        chunks = [new_jobs[i:i + BATCH_SIZE] for i in range(0, len(new_jobs), BATCH_SIZE)]
-        semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+    for job in new_jobs:
+        job["resumeUsed"] = active_resume
+        job.setdefault("matchScore", 0)
+        job.setdefault("matchType", "")
+        job.setdefault("shouldProceed", False)
+        job.setdefault("strengths", [])
+        job.setdefault("gaps", [])
+        job["status"] = "scraped"
 
-        async def process_chunk(chunk):
-            async with semaphore:
-                await log(f"Evaluating batch of {len(chunk)} jobs...")
-                results = await evaluate_jobs_batch(chunk, resume_content, log_func)
-                return list(zip(chunk, results))
+        if mock_eval:
+            if check_recruiter_by_name(job.get("company", "")):
+                job["isRecruiter"] = True
+                job["gaps"].append("Posted by a recruiting agency/staffing firm")
+            else:
+                job["isRecruiter"] = False
 
-        tasks = [process_chunk(chunk) for chunk in chunks]
-        chunk_results = await asyncio.gather(*tasks)
-        
-        # Flatten results and process
-        for chunk_res in chunk_results:
-            for job, evaluation in chunk_res:
-                evaluated_count += 1
-                if not evaluation:
-                    # If evaluation failed completely even after fallback, mark as unclassified
-                    job["unclassified"] = True
-                else:
-                    job["matchScore"] = evaluation.get("matchScore", 0)
-                    job["matchType"] = evaluation.get("matchType", "")
-                    job["shouldProceed"] = evaluation.get("shouldProceed", False)
-                    job["strengths"] = evaluation.get("strengths", [])
-                    job["gaps"] = evaluation.get("gaps", [])
-                    if evaluation.get("summary"):
-                        job["description"] = evaluation["summary"]
-                    job["isRecruiter"] = evaluation.get("isRecruiter", False)
-                    if evaluation.get("salary"):
-                        job["salary"] = evaluation["salary"]
+        job_id = database.add_job(job)
+        if job_id is None:
+            continue
 
-                merged = merge_job_attributes(job, evaluation)
-                if not passes_attribute_gate(
-                    merged["remoteType"],
-                    merged["seniority"],
-                    allowed_remote_types,
-                    seniorities,
-                ):
-                    attribute_filtered_count += 1
-                    await log(
-                        format_attribute_mismatch(
-                            job.get("title", ""),
-                            job.get("company", ""),
-                            remote_type=merged["remoteType"],
-                            seniority=merged["seniority"],
-                            allowed_remote_types=allowed_remote_types,
-                            seniorities=seniorities,
-                        ),
-                        "info",
-                    )
-                    continue
+        job["id"] = job_id
+        saved.append(job)
+        if job_saved_func:
+            if inspect.iscoroutinefunction(job_saved_func):
+                await job_saved_func(job)
+            else:
+                job_saved_func(job)
 
-                job["remoteType"] = merged["remoteType"]
-                job["seniority"] = merged["seniority"]
-                if is_unclassified(evaluation):
-                    job["unclassified"] = True
+        if not mock_eval and resume_content:
+            jobs_to_submit.append(job)
 
-                job_id = database.add_job(job)
-                if job_id is not None:
-                    job["id"] = job_id
-                    saved.append(job)
-                    if job_saved_func:
-                        if inspect.iscoroutinefunction(job_saved_func):
-                            await job_saved_func(job)
-                        else:
-                            job_saved_func(job)
+    batches_submitted = 0
+    if jobs_to_submit:
+        created_batches = await submit_batch_evaluation(
+            jobs_to_submit,
+            resume_content,
+            kind="search",
+            log_func=log_func,
+        )
+        batches_submitted = len(created_batches)
 
     saved_count = len(saved)
     await log(
         f"Pipeline complete. Scraped: {scraped_count} | Duplicates skipped: {duplicates_count} | "
-        f"Attribute-filtered: {attribute_filtered_count} | Evaluated: {evaluated_count} | Saved: {saved_count}",
-        "summary",
-    )
-    return saved
-
-    saved_count = len(saved)
-    await log(
-        f"Pipeline complete. Scraped: {scraped_count} | Duplicates skipped: {duplicates_count} | "
-        f"Attribute-filtered: {attribute_filtered_count} | Evaluated: {evaluated_count} | Saved: {saved_count}",
+        f"Saved to Scraped: {saved_count} | Batch jobs submitted: {batches_submitted}",
         "summary",
     )
     return saved

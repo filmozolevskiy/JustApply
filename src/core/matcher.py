@@ -80,136 +80,14 @@ Rules:
 """
 
 
-_BATCH_DESC_LIMIT = 2000  # chars; keeps batch prompts under ~8k tokens to avoid timeouts
-
-
-def _build_batch_prompt(resume: str, jobs: list[dict]) -> str:
-    jobs_text = ""
-    for i, job in enumerate(jobs):
-        desc = (job.get("description") or "")[:_BATCH_DESC_LIMIT]
-        jobs_text += f"--- JOB {i} ---\n"
-        jobs_text += f"Title: {job.get('title', '')}\n"
-        jobs_text += f"Company: {job.get('company', '')}\n"
-        jobs_text += f"Description: {desc}\n\n"
-
-    return f"""You are a resume matcher. Compare the candidate's resume to the following {len(jobs)} job listings and evaluate compatibility for each.
-
-RESUME:
-{resume}
-
-LISTINGS:
-{jobs_text}
-
-Respond with a JSON array of objects (no markdown, no extra text). Each object must correspond to a job in the order provided and follow this exact format:
-{{
-  "index": <integer index of the job>,
-  "matchScore": <integer 0-100>,
-  "matchType": "<match|no-match>",
-  "strengths": ["<strength 1>", "<strength 2>"],
-  "gaps": ["<gap 1>", "<gap 2>"],
-  "shouldProceed": <true|false>,
-  "remoteType": "<remote|hybrid|in_office>",
-  "seniority": "<junior|mid|senior>",
-  "summary": "<concise 2-3 sentence summary of the job listing, including key tech stack/responsibilities>",
-  "isRecruiter": <true|false>,
-  "salary": "<extracted salary string or empty string>"
-}}
-
-Rules for each evaluation:
-- matchScore >= 75 means matchType is "match" and shouldProceed is true.
-- List 2-4 concrete strengths and 1-3 specific gaps.
-- Analyze the Job Title, Location, and Description to determine the job's remote status ("remoteType"). It must be exactly one of: "remote", "hybrid", "in_office".
-- Analyze the Job Title and Description to determine seniority level ("seniority"). It must be exactly one of: "junior", "mid", "senior".
-- Identify if the listing company is a recruiting/staffing/headhunting agency.
-  * If the job is posted by a recruiting/staffing firm: set "isRecruiter" to true, "shouldProceed" to false, add "Posted by a recruiting agency/staffing firm" to "gaps", and apply a penalty to "matchScore" (-15 points, max 70).
-- Extract salary details or return empty string.
-"""
-
-
 async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=None) -> list[dict]:
-    """
-    Evaluate a batch of jobs against a resume using the Gemini API.
-    Returns a list of evaluation results in the same order as the input jobs.
-    If the batch call fails, it falls back to sequential evaluation for each job.
-    """
-    async def log(msg, level="info"):
-        if log_func:
-            if inspect.iscoroutinefunction(log_func):
-                await log_func(msg, level)
-            else:
-                log_func(msg, level)
-
+    """Evaluate jobs sequentially (backfill path until Batch API migration in #93)."""
     if not jobs:
         return []
-
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        await log("GEMINI_API_KEY not set, skipping batch evaluation.", "warning")
-        return [{} for _ in jobs]
-
-    prompt = _build_batch_prompt(resume_content, jobs)
-    
-    max_retries = 4
-    for attempt in range(max_retries):
-        try:
-            text = await gemini_generate_text(prompt, timeout=90.0)
-            if text.startswith("```"):
-                lines = text.splitlines()
-                if lines and lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                text = "\n".join(lines).strip()
-
-            results = json.loads(text)
-            if not isinstance(results, list) or len(results) != len(jobs):
-                raise ValueError(f"Batch result size mismatch: expected {len(jobs)}, got {len(results) if isinstance(results, list) else 'non-list'}")
-
-            # Sort by index to ensure order if LLM shuffled them
-            results.sort(key=lambda x: x.get("index", 0))
-
-            # Post-process each result
-            final_results = []
-            for i, result in enumerate(results):
-                job = jobs[i]
-                company_name = job.get("company", "")
-                local_is_recruiter = check_recruiter_by_name(company_name)
-
-                if local_is_recruiter or result.get("isRecruiter"):
-                    result["isRecruiter"] = True
-                    result["shouldProceed"] = False
-                    if result.get("matchScore", 0) >= 75:
-                        result["matchScore"] = min(70, result["matchScore"] - 15)
-                    elif result.get("matchScore", 0) > 0:
-                        result["matchScore"] = max(0, result["matchScore"] - 15)
-                    result["matchType"] = "no-match"
-                    gaps = result.setdefault("gaps", [])
-                    if "Posted by a recruiting agency/staffing firm" not in gaps:
-                        gaps.append("Posted by a recruiting agency/staffing firm")
-                final_results.append(result)
-
-            return final_results
-
-        except Exception as e:
-            err_str = str(e)
-            is_rate_limit = "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower()
-            is_last = attempt == max_retries - 1
-            wait = 2.0 ** attempt  # 1, 2, 4, 8 seconds
-            if is_last:
-                await log(f"Batch evaluation attempt {attempt + 1} failed: {e}. Falling back to sequential.", "warning")
-                sequential_results = []
-                for job in jobs:
-                    res = await evaluate_job(job, resume_content, log_func)
-                    sequential_results.append(res)
-                return sequential_results
-            await log(
-                f"Batch evaluation attempt {attempt + 1} failed{' (rate limit)' if is_rate_limit else ''}: {e}. "
-                f"Retrying in {wait:.0f}s...",
-                "warning",
-            )
-            await asyncio.sleep(wait)
-
-    return [{} for _ in jobs]
+    results = []
+    for job in jobs:
+        results.append(await evaluate_job(job, resume_content, log_func))
+    return results
 
 
 async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:

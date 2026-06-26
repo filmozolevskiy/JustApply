@@ -136,6 +136,21 @@ def init_db(db_path=None, allow_seed=False):
         pass
 
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS batch_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batchName TEXT NOT NULL UNIQUE,
+            displayName TEXT NOT NULL,
+            state TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            submittedAt TEXT NOT NULL,
+            lastPolledAt TEXT,
+            resultFileName TEXT,
+            jobIds TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS outreach_settings (
             id INTEGER PRIMARY KEY,
             target_russian_speakers INTEGER NOT NULL DEFAULT 1,

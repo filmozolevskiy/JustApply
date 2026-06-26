@@ -183,55 +183,19 @@ async def test_evaluate_job_applies_recruiter_override():
 # --- evaluate_jobs_batch ---
 
 @pytest.mark.asyncio
-async def test_evaluate_jobs_batch_returns_list(mock_gemini_response, sample_job):
-    batch_result = [
-        {
-            "index": 0,
-            "matchScore": 89,
-            "matchType": "match",
-            "strengths": ["Python"],
-            "gaps": [],
-            "shouldProceed": True,
-            "remoteType": "remote",
-            "seniority": "senior",
-            "summary": "Summary 1",
-            "isRecruiter": False,
-            "salary": ""
-        }
-    ]
-    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(return_value=json.dumps(batch_result))):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
-            results = await evaluate_jobs_batch([sample_job], "resume content")
+async def test_evaluate_jobs_batch_evaluates_each_job_sequentially(mock_gemini_response, sample_job):
+    second_job = {
+        "title": "QA Analyst",
+        "company": "OtherCo",
+        "description": "Another role.",
+    }
+    mock_generate = AsyncMock(return_value=mock_gemini_response.text)
+    with patch("src.core.matcher.gemini_generate_text", mock_generate), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+        results = await evaluate_jobs_batch([sample_job, second_job], "resume content")
 
-    assert len(results) == 1
+    assert len(results) == 2
     assert results[0]["matchScore"] == 89
-    assert results[0]["index"] == 0
-
-
-@pytest.mark.asyncio
-async def test_evaluate_jobs_batch_falls_back_on_error(sample_job):
-    mock_eval_result = {"matchScore": 75}
-    # Batch fails (attempt 1), then batch fails again (attempt 2 - wrong format), then sequential fallback succeeds
-    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(side_effect=[
-        Exception("Batch error"),
-        "invalid json",
-        json.dumps(mock_eval_result),
-        Exception("Batch error"),
-        json.dumps(mock_eval_result),
-    ])), \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
-            results = await evaluate_jobs_batch([sample_job], "resume content")
-
-    assert len(results) == 1
-    assert results[0]["matchScore"] == 75
-
-
-def test_build_batch_prompt_formatting():
-    from src.core.matcher import _build_batch_prompt
-    jobs = [{"title": "Job 1", "company": "Co 1", "description": "Desc 1"}]
-    prompt = _build_batch_prompt("My Resume", jobs)
-    assert "--- JOB 0 ---" in prompt
-    assert "Job 1" in prompt
-    assert "JSON array of objects" in prompt
+    assert results[1]["matchScore"] == 89
+    assert mock_generate.call_count == 2
 
