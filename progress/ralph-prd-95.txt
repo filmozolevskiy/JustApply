@@ -6,7 +6,7 @@ Composed skills: tdd
 ## Iteration 1 — #100 Reusable Spend Confirmation modal + convert Apify dialogs
 
 Status: DONE
-Commit: (pending)
+Commit: 4f6cca9
 
 ### Summary
 - Added reusable `#spend-confirmation-modal` styled to match the Kanban Dashboard (amber spend accent, stream list, cost estimate).
