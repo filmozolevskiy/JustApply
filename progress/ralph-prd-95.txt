@@ -6,7 +6,10 @@ Composed skills: tdd
 ## Iteration 1 — #100 Reusable Spend Confirmation modal + convert Apify dialogs
 
 Status: DONE
-Commit: 4f6cca9 styled to match the Kanban Dashboard (amber spend accent, stream list, cost estimate).
+Commit: 4f6cca9
+
+### Summary
+- Added reusable `#spend-confirmation-modal` styled to match the Kanban Dashboard (amber spend accent, stream list, cost estimate).
 - `showSpendConfirmModal()` — promise-based confirm (true/false); dismiss via Cancel, backdrop, or Esc.
 - `showSpendAckModal()` — single-button acknowledgement variant (no Cancel) for blocked notices.
 - Converted **Enrich Job** cache-miss gate and **Load More Contacts** preflight confirm from native `confirm()` to the modal.
