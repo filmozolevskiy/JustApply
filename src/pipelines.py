@@ -3,8 +3,8 @@ import inspect
 
 from . import db as database
 from .core.scraper import scrape_linkedin_jobs
-from .core.matcher import load_resume, evaluate_job, evaluate_jobs_batch, check_recruiter_by_name
-from .core.batch_evaluation import submit_batch_evaluation
+from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
+from .core.batch_evaluation import submit_batch_evaluation, submit_backfill_batches
 from .core.enrichment import source_contacts, generate_outreach_templates, company_cache_slug
 from .core.enrichment.contact_sample import detect_country_from_location
 from .core.enrichment.coordinator import clear_enrichment_prior
@@ -161,17 +161,15 @@ async def run_backfill_pipeline(
     active_resume: str = "general_cv.md",
     allowed_remote_types: list = None,
     seniorities: str = "any",
+    wait: bool = False,
     log_func=None,
+    db_path=None,
 ) -> dict:
-    """Evaluate all jobs that were never sent through the LLM and apply preference filters.
+    """Submit Batch Evaluation Jobs for unevaluated jobs; poller writes results back.
 
     Jobs with empty matchType are fetched regardless of status or archive state.
-    After evaluation:
-    - ``scraped`` jobs that fail the remote/seniority gate → moved to ``rejected``.
-    - Already-``rejected`` jobs: scores updated; status left unchanged.
-    - Any job with a passing evaluation gets accurate scores written to the DB.
-
-    Returns a summary dict with counts.
+    Submission uses the shared batch path with an in-flight cap; the Batch Poller
+    moves passing jobs to Matched and gate failures to Rejected.
     """
 
     async def log(msg: str, level: str = "info"):
@@ -182,13 +180,13 @@ async def run_backfill_pipeline(
         else:
             log_func(msg, level)
 
-    database.init_db()
-    jobs = database.get_unevaluated_jobs()
+    database.init_db(db_path)
+    jobs = database.get_unevaluated_jobs(db_path=db_path)
     total = len(jobs)
 
     if not total:
         await log("No unevaluated jobs found — nothing to backfill.", "summary")
-        return {"total": 0, "evaluated": 0, "attribute_rejected": 0, "errors": 0}
+        return {"total": 0, "batches_submitted": 0, "jobs_submitted": 0}
 
     await log(f"Backfill: {total} unevaluated jobs found.")
 
@@ -199,97 +197,32 @@ async def run_backfill_pipeline(
         try:
             resume_content = load_resume("general_cv.md")
             active_resume = "general_cv.md"
-            await log(f"Resume '{active_resume}' not found, falling back to general_cv.md", "warning")
+            await log("Resume not found, falling back to general_cv.md", "warning")
         except FileNotFoundError:
             await log("No resume found — cannot backfill.", "error")
-            return {"total": total, "evaluated": 0, "attribute_rejected": 0, "errors": total}
-
-    BATCH_SIZE = 15
-    # 5 concurrent batches (75 simultaneous calls) is safe for Gemini rate limits.
-    # The search pipeline uses 30 for small fresh scrapes; backfill processes 3k+
-    # jobs and hammered the API into 87% errors at that concurrency.
-    MAX_CONCURRENCY = 5
-    evaluated = 0
-    attribute_rejected = 0
-    errors = 0
+            return {"total": total, "batches_submitted": 0, "jobs_submitted": 0}
 
     job_dicts = [j.model_dump() for j in jobs]
-    chunks = [job_dicts[i:i + BATCH_SIZE] for i in range(0, len(job_dicts), BATCH_SIZE)]
-    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
-
-    async def process_chunk(chunk):
-        async with semaphore:
-            await log(f"Evaluating batch of {len(chunk)} jobs...")
-            return await evaluate_jobs_batch(chunk, resume_content, log_func)
-
-    tasks = [process_chunk(chunk) for chunk in chunks]
-    chunk_results = await asyncio.gather(*tasks)
-
-    flat_results = []
-    for chunk, results in zip(chunks, chunk_results):
-        flat_results.extend(zip(chunk, results))
-
-    for job_dict, evaluation in flat_results:
-        job_id = job_dict["id"]
-        original_status = job_dict.get("status", "scraped")
-
-        if not evaluation:
-            errors += 1
-            await log(
-                f"Backfill failed for job id={job_id} '{job_dict.get('title', '')}' — no evaluation returned.",
-                "warning",
-            )
-            continue
-
-        evaluated += 1
-        merged = merge_job_attributes(job_dict, evaluation)
-        fields = {
-            "matchScore": evaluation.get("matchScore", 0),
-            "matchType": evaluation.get("matchType", ""),
-            "shouldProceed": evaluation.get("shouldProceed", False),
-            "resumeUsed": active_resume,
-            "strengths": evaluation.get("strengths", []),
-            "gaps": evaluation.get("gaps", []),
-            "description": evaluation.get("summary") or job_dict.get("description") or "",
-            "isRecruiter": evaluation.get("isRecruiter", False),
-            "salary": evaluation.get("salary") or job_dict.get("salary") or "",
-            "remoteType": merged["remoteType"],
-            "seniority": merged["seniority"],
-            "unclassified": is_unclassified(evaluation),
-        }
-        database.update_job_evaluation(job_id, fields)
-
-        if not passes_attribute_gate(
-            merged["remoteType"],
-            merged["seniority"],
-            allowed_remote_types,
-            seniorities,
-        ):
-            attribute_rejected += 1
-            await log(
-                format_attribute_mismatch(
-                    job_dict.get("title", ""),
-                    job_dict.get("company", ""),
-                    remote_type=merged["remoteType"],
-                    seniority=merged["seniority"],
-                    allowed_remote_types=allowed_remote_types,
-                    seniorities=seniorities,
-                ),
-                "info",
-            )
-            if original_status == "scraped":
-                database.update_job_status(job_id, "rejected")
+    submission = await submit_backfill_batches(
+        job_dicts,
+        resume_content,
+        wait=wait,
+        log_func=log_func,
+        db_path=db_path,
+        allowed_remote_types=allowed_remote_types,
+        seniorities=seniorities,
+    )
 
     await log(
-        f"Backfill complete. Total: {total} | Evaluated: {evaluated} | "
-        f"Attribute-rejected: {attribute_rejected} | Errors: {errors}",
+        f"Backfill complete. Total: {total} | Jobs submitted: {submission['jobs_submitted']} | "
+        f"Batches submitted: {submission['batches_submitted']}",
         "summary",
     )
     return {
         "total": total,
-        "evaluated": evaluated,
-        "attribute_rejected": attribute_rejected,
-        "errors": errors,
+        "batches_submitted": submission["batches_submitted"],
+        "jobs_submitted": submission["jobs_submitted"],
+        "chunks_remaining": submission.get("chunks_remaining", 0),
     }
 
 

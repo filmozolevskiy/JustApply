@@ -149,16 +149,20 @@ async def backfill_unevaluated_jobs(
     active_resume: str = "general_cv.md",
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
+    wait: bool = False,
     log_func=None,
+    db_path=None,
 ) -> dict:
-    """Evaluate all jobs that never went through the LLM, then apply preference filters."""
-    init_db()
-    assert_evaluation_lock_clear()
+    """Submit Batch Evaluation Jobs for unevaluated jobs; poller writes results back."""
+    init_db(db_path)
+    assert_evaluation_lock_clear(db_path=db_path)
     return await run_backfill_pipeline(
         active_resume=active_resume,
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
+        wait=wait,
         log_func=log_func,
+        db_path=db_path,
     )
 
 

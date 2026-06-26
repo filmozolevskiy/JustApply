@@ -39,3 +39,9 @@
     - Unclassified badge already present on Kanban card and drawer (hover tooltip).
     - Added poison-job tests in `tests/test_batch_poller.py` (retry counting, fallback, whole-batch failure).
     - pytest: 721 passed.
+- **Issue #93**: Backfill convergence + in-flight cap drip-feed.
+    - Rewrote `run_backfill_pipeline` to use `submit_backfill_batches` (shared batch path, no inline `evaluate_jobs_batch`).
+    - Added `MAX_IN_FLIGHT_BATCHES=15` cap; without `--wait` submits up to 15 chunks then returns; with `--wait` polls and drip-feeds remaining chunks as slots free.
+    - CLI: `--backfill --wait` blocks until all in-flight batches reach terminal state.
+    - Rewrote `tests/test_backfill_pipeline.py` for chunk counting, in-flight cap, and wait drip-feed.
+    - pytest: 720 passed.

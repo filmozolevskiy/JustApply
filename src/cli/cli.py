@@ -75,8 +75,8 @@ async def run_reassess(job_id: int | None = None, reassess_all: bool = False) ->
     return [updated]
 
 
-async def run_backfill() -> dict:
-    """Evaluate all un-evaluated jobs and apply remote-type preference filter."""
+async def run_backfill(wait: bool = False) -> dict:
+    """Submit Batch Evaluation Jobs for unevaluated jobs; poller writes results back."""
     print("Starting backfill evaluation pipeline...")
 
     def log_sync(msg: str, level: str = "info"):
@@ -85,6 +85,7 @@ async def run_backfill() -> dict:
     try:
         result = await backfill_unevaluated_jobs(
             allowed_remote_types=["remote"],
+            wait=wait,
             log_func=log_sync,
         )
     except EvaluationLockError as e:
@@ -93,8 +94,8 @@ async def run_backfill() -> dict:
 
     print(
         f"Backfill complete. "
-        f"Total: {result['total']} | Evaluated: {result['evaluated']} | "
-        f"Attribute-rejected: {result['attribute_rejected']} | Errors: {result['errors']}"
+        f"Total: {result['total']} | Jobs submitted: {result['jobs_submitted']} | "
+        f"Batches submitted: {result['batches_submitted']}"
     )
     return result
 
@@ -135,7 +136,8 @@ def main():
     parser.add_argument("--promote", action="store_true", help="Source contacts for jobs ready to proceed")
     parser.add_argument("--reassess", metavar="JOB_ID", type=int, help="Re-run Resume Matcher on a single job")
     parser.add_argument("--reassess-all", action="store_true", help="Re-run Resume Matcher on all active jobs")
-    parser.add_argument("--backfill", action="store_true", help="Evaluate all un-evaluated jobs and apply remote filter")
+    parser.add_argument("--backfill", action="store_true", help="Submit batch evaluation for un-evaluated jobs")
+    parser.add_argument("--wait", action="store_true", help="With --backfill, wait until all batches finish")
     parser.add_argument("--sites", help="Comma-separated list of job sites (unused, reserved for future use)")
     args = parser.parse_args()
 
@@ -147,7 +149,7 @@ def main():
         asyncio.run(run_promote())
     elif args.backfill:
         _snapshot_before("backfill")
-        asyncio.run(run_backfill())
+        asyncio.run(run_backfill(wait=args.wait))
     elif args.reassess is not None or args.reassess_all:
         asyncio.run(run_reassess(job_id=args.reassess, reassess_all=args.reassess_all))
     else:

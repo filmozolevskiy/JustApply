@@ -81,7 +81,7 @@ Rules:
 
 
 async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=None) -> list[dict]:
-    """Evaluate jobs sequentially (backfill path until Batch API migration in #93)."""
+    """Evaluate jobs sequentially (legacy helper; search/backfill use Batch API)."""
     if not jobs:
         return []
     results = []

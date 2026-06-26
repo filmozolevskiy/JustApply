@@ -1,12 +1,13 @@
 import os
 import sys
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src import db as database
+from src.core.batch_evaluation import BATCH_CHUNK_SIZE, MAX_IN_FLIGHT_BATCHES
 from src.pipelines import run_backfill_pipeline
 from src.service.just_apply import backfill_unevaluated_jobs
 
@@ -40,25 +41,10 @@ def _seed_unevaluated(db_path, status="scraped", **overrides):
     return database.add_job(job, db_path=str(db_path))
 
 
-def _make_evaluation(remote_type="remote", score=80, match_type="match"):
-    return {
-        "matchScore": score,
-        "matchType": match_type,
-        "shouldProceed": score >= 75,
-        "strengths": ["Python"],
-        "gaps": [],
-        "remoteType": remote_type,
-        "seniority": "mid",
-        "summary": "Strong QA background.",
-        "isRecruiter": False,
-        "salary": "",
-    }
-
-
 @pytest.mark.asyncio
 async def test_empty_db_returns_zero_counts(tmp_db):
-    result = await run_backfill_pipeline(log_func=None)
-    assert result == {"total": 0, "evaluated": 0, "attribute_rejected": 0, "errors": 0}
+    result = await run_backfill_pipeline(log_func=None, db_path=str(tmp_db))
+    assert result == {"total": 0, "batches_submitted": 0, "jobs_submitted": 0}
 
 
 @pytest.mark.asyncio
@@ -79,115 +65,162 @@ async def test_get_unevaluated_jobs_excludes_evaluated(tmp_db):
 
 
 @pytest.mark.asyncio
-async def test_remote_job_found_kept_as_found(tmp_db):
-    job_id = _seed_unevaluated(tmp_db, status="found")
-    evaluation = _make_evaluation(remote_type="remote", score=80)
-    logs = []
+async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
+    job_id = _seed_unevaluated(tmp_db, status="scraped")
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr(
+        "src.core.batch_evaluation._submit_jsonl_batch",
+        lambda *_args, **_kwargs: ("batches/backfill-1", "JOB_STATE_PENDING"),
+    )
 
-    with patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[evaluation])):
-        result = await run_backfill_pipeline(
-            allowed_remote_types=["remote"],
-            log_func=lambda msg, level="info": logs.append(msg),
+    result = await run_backfill_pipeline(
+        allowed_remote_types=["remote"],
+        log_func=None,
+        db_path=str(tmp_db),
+    )
+
+    assert result["total"] == 1
+    assert result["batches_submitted"] == 1
+    assert result["jobs_submitted"] == 1
+    batches = database.list_batch_jobs(db_path=str(tmp_db))
+    assert len(batches) == 1
+    assert batches[0]["kind"] == "backfill"
+    assert batches[0]["jobIds"] == [job_id]
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.matchType == ""
+    assert job.status == "scraped"
+
+
+@pytest.mark.asyncio
+async def test_backfill_chunks_at_100(tmp_db, monkeypatch):
+    for i in range(250):
+        _seed_unevaluated(
+            tmp_db,
+            title=f"Job {i}",
+            company=f"Co {i}",
+            link=f"https://example.com/{i}",
         )
 
-    assert result["evaluated"] == 1
-    assert result["attribute_rejected"] == 0
-    job = database.get_job(job_id, db_path=str(tmp_db))
-    assert job.status == "scraped"
-    assert job.matchScore == 80
-    assert job.matchType == "match"
-    assert job.remoteType == "remote"
+    submit_calls = []
+
+    def fake_submit(*_args, **_kwargs):
+        submit_calls.append(1)
+        return (f"batches/backfill-{len(submit_calls)}", "JOB_STATE_PENDING")
+
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr("src.core.batch_evaluation._submit_jsonl_batch", fake_submit)
+
+    result = await run_backfill_pipeline(db_path=str(tmp_db))
+
+    assert result["total"] == 250
+    assert result["batches_submitted"] == 3
+    assert result["jobs_submitted"] == 250
+    assert len(submit_calls) == 3
 
 
 @pytest.mark.asyncio
-async def test_non_remote_found_job_moved_to_rejected(tmp_db):
-    job_id = _seed_unevaluated(tmp_db, status="found")
-    evaluation = _make_evaluation(remote_type="in_office", score=85)
+async def test_backfill_in_flight_cap_without_wait(tmp_db, monkeypatch):
+    chunk_count = MAX_IN_FLIGHT_BATCHES + 1
+    jobs_per_chunk = BATCH_CHUNK_SIZE
+    total_jobs = chunk_count * jobs_per_chunk
+    for i in range(total_jobs):
+        _seed_unevaluated(
+            tmp_db,
+            title=f"Job {i}",
+            company=f"Co {i}",
+            link=f"https://example.com/{i}",
+        )
 
-    with patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[evaluation])):
-        result = await run_backfill_pipeline(allowed_remote_types=["remote"])
+    submit_calls = []
 
-    assert result["attribute_rejected"] == 1
-    job = database.get_job(job_id, db_path=str(tmp_db))
-    assert job.status == "rejected"
-    assert job.matchScore == 85
+    def fake_submit(*_args, **_kwargs):
+        submit_calls.append(1)
+        return (f"batches/backfill-{len(submit_calls)}", "JOB_STATE_PENDING")
 
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr("src.core.batch_evaluation._submit_jsonl_batch", fake_submit)
 
-@pytest.mark.asyncio
-async def test_non_remote_rejected_job_stays_rejected(tmp_db):
-    job_id = _seed_unevaluated(tmp_db, status="rejected")
-    evaluation = _make_evaluation(remote_type="hybrid", score=70)
+    result = await run_backfill_pipeline(db_path=str(tmp_db), wait=False)
 
-    with patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[evaluation])):
-        result = await run_backfill_pipeline(allowed_remote_types=["remote"])
-
-    assert result["attribute_rejected"] == 1
-    job = database.get_job(job_id, db_path=str(tmp_db))
-    assert job.status == "rejected"
-    assert job.matchScore == 70
-
-
-@pytest.mark.asyncio
-async def test_evaluation_failure_counted_as_error(tmp_db):
-    _seed_unevaluated(tmp_db, status="found")
-
-    with patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[None])):
-        result = await run_backfill_pipeline(allowed_remote_types=["remote"])
-
-    assert result["errors"] == 1
-    assert result["evaluated"] == 0
+    assert result["total"] == total_jobs
+    assert result["batches_submitted"] == MAX_IN_FLIGHT_BATCHES
+    assert result["jobs_submitted"] == MAX_IN_FLIGHT_BATCHES * jobs_per_chunk
+    assert result["chunks_remaining"] == 1
+    assert len(submit_calls) == MAX_IN_FLIGHT_BATCHES
 
 
 @pytest.mark.asyncio
-async def test_multiple_jobs_batched_correctly(tmp_db):
-    for i in range(20):
-        _seed_unevaluated(tmp_db, title=f"Job {i}", company=f"Co {i}", link=f"https://example.com/{i}")
+async def test_backfill_wait_submits_all_chunks(tmp_db, monkeypatch):
+    chunk_count = MAX_IN_FLIGHT_BATCHES + 1
+    jobs_per_chunk = BATCH_CHUNK_SIZE
+    total_jobs = chunk_count * jobs_per_chunk
+    for i in range(total_jobs):
+        _seed_unevaluated(
+            tmp_db,
+            title=f"Job {i}",
+            company=f"Co {i}",
+            link=f"https://example.com/{i}",
+        )
 
-    evaluations = [_make_evaluation(remote_type="remote", score=80)] * 20
-    batch_calls = []
+    batch_counter = {"n": 0}
 
-    async def fake_batch(jobs, resume, log_f):
-        batch_calls.append(len(jobs))
-        return evaluations[: len(jobs)]
+    def fake_submit(*_args, **_kwargs):
+        batch_counter["n"] += 1
+        return (f"batches/backfill-{batch_counter['n']}", "JOB_STATE_PENDING")
 
-    with patch("src.pipelines.evaluate_jobs_batch", side_effect=fake_batch):
-        result = await run_backfill_pipeline(allowed_remote_types=["remote"])
+    async def fake_collect(batch_row, **kwargs):
+        database.update_batch_job(
+            batch_row["id"],
+            {"state": "JOB_STATE_SUCCEEDED"},
+            db_path=str(tmp_db),
+        )
+        from src.core.batch_poller import CollectResult
+        return CollectResult(state="JOB_STATE_SUCCEEDED", terminal=True)
 
-    assert result["total"] == 20
-    assert result["evaluated"] == 20
-    assert len(batch_calls) == 2  # 15 + 5 with BATCH_SIZE=15
-    assert batch_calls[0] == 15
-    assert batch_calls[1] == 5
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr("src.core.batch_evaluation._submit_jsonl_batch", fake_submit)
+    monkeypatch.setattr("src.core.batch_evaluation.BACKFILL_POLL_SLEEP_SECONDS", 0)
+    monkeypatch.setattr("src.core.batch_poller.collect_batch_results", fake_collect)
+
+    result = await run_backfill_pipeline(db_path=str(tmp_db), wait=True)
+
+    assert result["batches_submitted"] == chunk_count
+    assert result["jobs_submitted"] == total_jobs
+    assert result["chunks_remaining"] == 0
+    assert batch_counter["n"] == chunk_count
 
 
 @pytest.mark.asyncio
-async def test_already_evaluated_jobs_not_included(tmp_db):
+async def test_already_evaluated_jobs_not_included(tmp_db, monkeypatch):
     _seed_unevaluated(tmp_db)
     database.add_job(
         {"title": "Dev", "company": "Corp", "matchType": "match", "matchScore": 90},
         db_path=str(tmp_db),
     )
 
-    batch_calls = []
+    submit_mock = MagicMock(return_value=("batches/x", "JOB_STATE_PENDING"))
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr("src.core.batch_evaluation._submit_jsonl_batch", submit_mock)
 
-    async def fake_batch(jobs, resume, log_f):
-        batch_calls.append([j["title"] for j in jobs])
-        return [_make_evaluation()] * len(jobs)
-
-    with patch("src.pipelines.evaluate_jobs_batch", side_effect=fake_batch):
-        result = await run_backfill_pipeline(allowed_remote_types=["remote"])
+    result = await run_backfill_pipeline(db_path=str(tmp_db))
 
     assert result["total"] == 1
-    assert all("QA Engineer" in call for call in batch_calls)
+    assert submit_mock.call_count == 1
 
 
 @pytest.mark.asyncio
-async def test_service_backfill_calls_pipeline(tmp_db):
-    _seed_unevaluated(tmp_db, status="found")
-    evaluation = _make_evaluation(remote_type="remote", score=80)
+async def test_service_backfill_calls_pipeline(tmp_db, monkeypatch):
+    _seed_unevaluated(tmp_db, status="scraped")
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr(
+        "src.core.batch_evaluation._submit_jsonl_batch",
+        lambda *_args, **_kwargs: ("batches/backfill-1", "JOB_STATE_PENDING"),
+    )
 
-    with patch("src.pipelines.evaluate_jobs_batch", new=AsyncMock(return_value=[evaluation])):
-        result = await backfill_unevaluated_jobs(allowed_remote_types=["remote"])
+    result = await backfill_unevaluated_jobs(
+        allowed_remote_types=["remote"],
+        db_path=str(tmp_db),
+    )
 
     assert result["total"] == 1
-    assert result["evaluated"] == 1
+    assert result["batches_submitted"] == 1
