@@ -148,7 +148,8 @@ def test_api_search_blocked_when_lock_active(monkeypatch):
 
     payload = {
         "query": "QA",
-        "location": "Remote",
+        "search_regions": [{"country": "US", "region": "California"}],
+        "per_region_limit": 200,
         "platform": "brightdata_linkedin",
         "active_resume": "general_cv.md",
         "mock_eval": False,

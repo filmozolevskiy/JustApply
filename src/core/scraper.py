@@ -231,18 +231,52 @@ async def _scrape_linkedin_jobs_mock(
         }
     ]
 
+def _build_brightdata_trigger_payload(
+    query: str,
+    search_regions: list[tuple[str, str]],
+    per_region_limit: int,
+    time_range: str,
+) -> list[dict]:
+    """Build one Bright Data input item per (country, Search Region)."""
+    from .regions import clamp_per_region_limit
+
+    limit = clamp_per_region_limit(per_region_limit)
+    payload = []
+    for country, region in search_regions:
+        item = {
+            "keyword": query,
+            "location": region,
+            "country": country.upper(),
+            "limit_per_input": limit,
+        }
+        if time_range and time_range.lower() not in ["any", "anytime"]:
+            time_range_mapping = {
+                "past 24 hours": "Past 24 hours",
+                "past week": "Past week",
+                "past month": "Past month",
+            }
+            normalized_key = time_range.lower().replace("_", " ")
+            item["time_range"] = time_range_mapping.get(normalized_key, time_range)
+        payload.append(item)
+    return payload
+
+
 async def _scrape_linkedin_jobs_real(
     query: str,
-    location: str,
-    countries: list,
+    search_regions: list[tuple[str, str]],
+    per_region_limit: int,
     time_range: str,
     api_key: str,
     scraper_id: str,
-    log: callable
+    log: callable,
 ) -> list:
     """Trigger and poll the Bright Data LinkedIn scraper API to retrieve job listings."""
-    await log(f"Initializing Bright Data scraping engine for query: '{query}' in '{location}'", "info")
-    
+    region_summary = ", ".join(f"{r} ({c})" for c, r in search_regions)
+    await log(
+        f"Initializing Bright Data scraping engine for query: '{query}' in [{region_summary}]",
+        "info",
+    )
+
     trigger_url = "https://api.brightdata.com/datasets/v3/trigger"
     params = {
         "dataset_id": scraper_id,
@@ -254,22 +288,9 @@ async def _scrape_linkedin_jobs_real(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    payload = []
-    for country in countries:
-        item = {
-            "keyword": query,
-            "location": location,
-            "country": country.upper()
-        }
-        if time_range and time_range.lower() not in ["any", "anytime"]:
-            time_range_mapping = {
-                "past 24 hours": "Past 24 hours",
-                "past week": "Past week",
-                "past month": "Past month"
-            }
-            normalized_key = time_range.lower().replace("_", " ")
-            item["time_range"] = time_range_mapping.get(normalized_key, time_range)
-        payload.append(item)
+    payload = _build_brightdata_trigger_payload(
+        query, search_regions, per_region_limit, time_range
+    )
 
     await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -415,15 +436,17 @@ async def _scrape_linkedin_jobs_real(
             raise e
 
 async def scrape_linkedin_jobs(
-    query: str, 
-    location: str, 
-    remote_types: list = None, 
-    seniorities: list = None, 
-    company_sizes: list = None, 
+    query: str,
+    location: str = "Remote",
+    search_regions: list[tuple[str, str]] | None = None,
+    per_region_limit: int = 200,
+    remote_types: list = None,
+    seniorities: list = None,
+    company_sizes: list = None,
     countries: list = None,
     time_range: str = "any",
     log_func = None,
-    force_mock: bool = False
+    force_mock: bool = False,
 ) -> list:
     """
     Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
@@ -462,18 +485,22 @@ async def scrape_linkedin_jobs(
     countries = countries or ["us"]
     time_range = time_range or "any"
 
+    if search_regions is None:
+        search_regions = [(c.upper(), location) for c in countries]
+
     if mock_scraper:
-        raw_jobs = await _scrape_linkedin_jobs_mock(query, location, log)
+        mock_location = search_regions[0][1] if search_regions else location
+        raw_jobs = await _scrape_linkedin_jobs_mock(query, mock_location, log)
     else:
         scraper_id = os.getenv("BRIGHTDATA_JOB_SCRAPER_ID", "gd_lpfll7v5hcqtkxl6l")
         raw_jobs = await _scrape_linkedin_jobs_real(
             query=query,
-            location=location,
-            countries=countries,
+            search_regions=search_regions,
+            per_region_limit=per_region_limit,
             time_range=time_range,
             api_key=api_key,
             scraper_id=scraper_id,
-            log=log
+            log=log,
         )
 
     # Post-filtering phase

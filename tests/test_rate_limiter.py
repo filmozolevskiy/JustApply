@@ -51,7 +51,9 @@ async def test_server_search_rate_limit(monkeypatch):
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     with patch("src.web.server.run_scraping_task"), patch("time.time") as mock_time:
         payload = {
-            "query": "QA Engineer", "location": "Remote",
+            "query": "QA Engineer",
+            "search_regions": [{"country": "US", "region": "California"}],
+            "per_region_limit": 200,
             "platform": "brightdata_linkedin", "active_resume": "qa.md",
             "mock_eval": False, "remote_type": "any",
             "seniority": "any", "salary": "", "company_size": "any",
@@ -88,7 +90,10 @@ async def test_mock_mode_bypasses_rate_limit(monkeypatch):
     monkeypatch.setenv("MOCK_SCRAPER", "true")
     with patch("src.web.server.run_scraping_task"), patch("time.time") as mock_time:
         payload = {
-            "query": "QA", "location": "Remote", "platform": "brightdata_linkedin",
+            "query": "QA",
+            "search_regions": [{"country": "US", "region": "California"}],
+            "per_region_limit": 200,
+            "platform": "brightdata_linkedin",
             "active_resume": "qa.md", "mock_eval": True, "remote_type": "any",
             "seniority": "any", "salary": "", "company_size": "any",
         }
@@ -135,7 +140,10 @@ async def test_cli_and_server_share_state(monkeypatch):
 
         mock_time.return_value = 1030.0
         payload = {
-            "query": "QA", "location": "Remote", "platform": "brightdata_linkedin",
+            "query": "QA",
+            "search_regions": [{"country": "US", "region": "California"}],
+            "per_region_limit": 200,
+            "platform": "brightdata_linkedin",
             "active_resume": "qa.md", "mock_eval": False, "remote_type": "any",
             "seniority": "any", "salary": "", "company_size": "any",
         }

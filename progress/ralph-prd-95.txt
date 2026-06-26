@@ -19,3 +19,19 @@ Commit: 4f6cca9
 
 ### Tests
 - 756 passed (full suite)
+
+## Iteration 2 — #102 Region-scoped scrape backend + Bright Data per-region payload
+
+Status: DONE
+Commit: a8de06b
+
+### Summary
+- `POST /api/search` now accepts structured `search_regions` (country + region pairs) and `per_region_limit` instead of free-text `location`.
+- Server validates ≥1 Search Region per selected country; rejects `"Remote"` and unknown regions with 422.
+- `per_region_limit` clamped to [25, 1000] server-side before scrape runs.
+- Bright Data trigger payload builds one input item per (country, region) with `location`, `country`, and `limit_per_input`.
+- Added `validate_search_regions`, `clamp_per_region_limit` in `src/core/regions.py`; refactored scraper payload builder.
+- New tests in `tests/test_region_scoped_search.py`; updated existing `/api/search` test payloads.
+
+### Tests
+- 766 passed (full suite)

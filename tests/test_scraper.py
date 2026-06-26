@@ -142,7 +142,8 @@ def test_api_search_and_sse_logs():
     # Call POST /api/search
     search_payload = {
         "query": "QA Engineer",
-        "location": "New York",
+        "search_regions": [{"country": "US", "region": "New York"}],
+        "per_region_limit": 200,
         "platform": "brightdata_linkedin",
         "active_resume": "qa.md",
         "mock_eval": True,

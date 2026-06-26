@@ -539,9 +539,15 @@ class TaskState:
         self.status = "running"
 
 
+class SearchRegionItem(BaseModel):
+    country: str
+    region: str
+
+
 class SearchRequest(BaseModel):
     query: str
-    location: str
+    search_regions: list[SearchRegionItem]
+    per_region_limit: int = 200
     platform: str = "brightdata_linkedin"
     active_resume: str = "general_cv.md"
     mock_eval: bool = True
@@ -579,7 +585,9 @@ async def run_scraping_task(task_id: str):
     try:
         state.jobs = await search_jobs(
             query=params["query"],
-            location=params["location"],
+            location=params.get("location", "Remote"),
+            search_regions=params.get("search_regions"),
+            per_region_limit=params.get("per_region_limit", 200),
             active_resume=params["active_resume"],
             mock_eval=params.get("mock_eval", True),
             mock_scraper=params.get("mock_scraper"),
@@ -606,12 +614,23 @@ async def run_scraping_task(task_id: str):
 
 @app.post("/api/search")
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
+    from ..core.regions import clamp_per_region_limit, validate_search_regions
+
     lock_status = get_evaluation_lock_status()
     if lock_status["active"]:
         return JSONResponse(
             status_code=409,
             content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
         )
+
+    country_list = [c.strip() for c in request.countries.split(",") if c.strip()]
+    region_pairs = [(item.country, item.region) for item in request.search_regions]
+    try:
+        normalized_regions = validate_search_regions(country_list, region_pairs)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+
+    clamped_limit = clamp_per_region_limit(request.per_region_limit)
 
     try:
         acquire_scrape_slot(request.mock_eval, request.mock_scraper)
@@ -622,7 +641,10 @@ async def trigger_search(request: SearchRequest, background_tasks: BackgroundTas
         )
 
     task_id = str(uuid.uuid4())
-    state = TaskState(request.model_dump())
+    params = request.model_dump()
+    params["search_regions"] = normalized_regions
+    params["per_region_limit"] = clamped_limit
+    state = TaskState(params)
     active_tasks[task_id] = state
     background_tasks.add_task(run_scraping_task, task_id)
     return {"status": "triggered", "task_id": task_id}

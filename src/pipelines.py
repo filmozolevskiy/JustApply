@@ -26,6 +26,8 @@ from .db.job_model import coerce_job
 async def run_search_pipeline(
     query: str,
     location: str = "Remote",
+    search_regions: list[tuple[str, str]] | None = None,
+    per_region_limit: int = 200,
     active_resume: str = "general_cv.md",
     mock_eval: bool = False,
     mock_scraper: bool = False,
@@ -55,6 +57,8 @@ async def run_search_pipeline(
     jobs = await scrape_linkedin_jobs(
         query=query,
         location=location,
+        search_regions=search_regions,
+        per_region_limit=per_region_limit,
         remote_types=allowed_remote_types,
         seniorities=seniorities,
         company_sizes=company_sizes,

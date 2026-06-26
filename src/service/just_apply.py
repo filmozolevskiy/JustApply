@@ -54,6 +54,8 @@ async def search_jobs(
     *,
     query: str,
     location: str = "Remote",
+    search_regions: list[tuple[str, str]] | None = None,
+    per_region_limit: int = 200,
     active_resume: str = "general_cv.md",
     mock_eval: bool = False,
     mock_scraper: bool | None = None,
@@ -73,6 +75,8 @@ async def search_jobs(
     return await run_search_pipeline(
         query=query,
         location=location,
+        search_regions=search_regions,
+        per_region_limit=per_region_limit,
         active_resume=active_resume,
         mock_eval=mock_eval,
         mock_scraper=scraper_will_mock(mock_eval, mock_scraper),
