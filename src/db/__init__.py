@@ -14,6 +14,7 @@ from .jobs import (
     enrich_job,
     job_exists,
     update_job_evaluation,
+    increment_batch_attempts,
     update_outreach_template,
     log_activity,
     archive_job,

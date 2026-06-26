@@ -10,7 +10,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src import db as database
 from src.core.batch_poller import (
+    POISON_MAX_ATTEMPTS,
+    apply_unclassified_fallback,
     collect_batch_results,
+    handle_poison_job_failure,
     is_due_for_poll,
     poll_cadence_seconds,
     write_back_job_evaluation,
@@ -267,4 +270,102 @@ async def test_collect_batch_results_terminal_failure_leaves_jobs_scraped(tmp_db
     assert result.terminal is True
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.status == "scraped"
+    assert job.batchAttempts == 1
     assert any("JOB_STATE_FAILED" in msg for msg in logs)
+
+
+def _malformed_result_line(job_id: int) -> str:
+    return json.dumps({"key": str(job_id), "error": {"message": "bad response"}}) + "\n"
+
+
+@pytest.mark.asyncio
+async def test_malformed_result_increments_batch_attempts(tmp_db):
+    job_id = _seed_scraped_job(tmp_db)
+    batch_row = batch_jobs.create_batch_job(
+        batch_name="batches/test-malformed",
+        display_name="test",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        db_path=str(tmp_db),
+    )
+    client = _build_fake_client(_malformed_result_line(job_id))
+
+    await collect_batch_results(batch_row, client=client, db_path=str(tmp_db))
+
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "scraped"
+    assert job.batchAttempts == 1
+
+
+@pytest.mark.asyncio
+async def test_poison_job_unclassified_fallback_after_max_attempts(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, remoteType="remote", seniority="mid")
+    batch_row = batch_jobs.create_batch_job(
+        batch_name="batches/test-poison",
+        display_name="test",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        db_path=str(tmp_db),
+    )
+    client = _build_fake_client(_malformed_result_line(job_id))
+
+    for attempt in range(1, POISON_MAX_ATTEMPTS):
+        await collect_batch_results(batch_row, client=client, db_path=str(tmp_db))
+        job = database.get_job(job_id, db_path=str(tmp_db))
+        assert job.status == "scraped"
+        assert job.batchAttempts == attempt
+
+    result = await collect_batch_results(batch_row, client=client, db_path=str(tmp_db))
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "matched"
+    assert job.unclassified is True
+    assert job.batchAttempts == POISON_MAX_ATTEMPTS
+    assert job.matchType == "no-match"
+    assert result.unclassified == 1
+
+
+def test_apply_unclassified_fallback_uses_scraper_attributes(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, remoteType="remote", seniority="senior")
+    outcome = apply_unclassified_fallback(
+        job_id,
+        allowed_remote_types=["remote"],
+        seniorities="senior",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "matched"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.unclassified is True
+    assert job.remoteType == "remote"
+    assert job.seniority == "senior"
+
+
+def test_handle_poison_job_failure_retries_before_fallback(tmp_db):
+    job_id = _seed_scraped_job(tmp_db)
+    for attempt in range(1, POISON_MAX_ATTEMPTS):
+        outcome = handle_poison_job_failure(
+            job_id,
+            allowed_remote_types=["remote"],
+            seniorities="any",
+            db_path=str(tmp_db),
+        )
+        assert outcome == "retry"
+        job = database.get_job(job_id, db_path=str(tmp_db))
+        assert job.status == "scraped"
+        assert job.batchAttempts == attempt
+
+    outcome = handle_poison_job_failure(
+        job_id,
+        allowed_remote_types=["remote"],
+        seniorities="any",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "matched"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.unclassified is True
+    assert job.status == "matched"

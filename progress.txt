@@ -32,3 +32,10 @@
     - CLI: `--search` and `--backfill` refuse with clear message when lock active.
     - Added `tests/test_evaluation_lock.py` (lock query, cancel, API 409, CLI refusal, dashboard HTML scan).
     - pytest: 717 passed.
+- **Issue #92**: Poison-job handling (batchAttempts → Unclassified fallback).
+    - Added `jobs.batchAttempts` column (INTEGER, default 0) and `increment_batch_attempts()` DB helper.
+    - Batch Poller increments attempts on malformed/failed per-request lines and whole-batch terminal failures; jobs stay in Scraped until 3 attempts.
+    - After 3 failures: `apply_unclassified_fallback()` uses scraper `remoteType`/`seniority`, marks job Unclassified, moves to Matched (or Rejected on gate fail).
+    - Unclassified badge already present on Kanban card and drawer (hover tooltip).
+    - Added poison-job tests in `tests/test_batch_poller.py` (retry counting, fallback, whole-batch failure).
+    - pytest: 721 passed.

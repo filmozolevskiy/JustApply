@@ -26,6 +26,8 @@ TERMINAL_FAILURE_STATES = frozenset({
     "JOB_STATE_EXPIRED",
 })
 
+POISON_MAX_ATTEMPTS = 3
+
 
 def poll_cadence_seconds(age_seconds: float) -> int:
     """Return poll interval in seconds for a batch of the given age."""
@@ -173,7 +175,75 @@ class CollectResult:
     matched: int = 0
     rejected: int = 0
     failed: int = 0
+    unclassified: int = 0
     terminal: bool = False
+
+
+def apply_unclassified_fallback(
+    job_id: int,
+    *,
+    allowed_remote_types: list[str] | None,
+    seniorities: str,
+    db_path=None,
+) -> str:
+    """Fall back to scraper attributes after poison retries are exhausted."""
+    job = database.get_job(job_id, db_path=db_path)
+    if not job:
+        return "skipped"
+
+    job_dict = job.model_dump() if hasattr(job, "model_dump") else dict(job)
+    if job_dict.get("status") != "scraped":
+        return "skipped"
+
+    remote_type = job_dict.get("remoteType") or ""
+    seniority = job_dict.get("seniority") or ""
+    fields = {
+        "matchScore": 0,
+        "matchType": "no-match",
+        "shouldProceed": False,
+        "resumeUsed": job_dict.get("resumeUsed") or "",
+        "strengths": [],
+        "gaps": [],
+        "description": job_dict.get("description") or "",
+        "isRecruiter": bool(job_dict.get("isRecruiter")),
+        "salary": job_dict.get("salary") or "",
+        "remoteType": remote_type,
+        "seniority": seniority,
+        "unclassified": True,
+    }
+    database.update_job_evaluation(job_id, fields, db_path=db_path)
+
+    if passes_attribute_gate(
+        remote_type,
+        seniority,
+        allowed_remote_types,
+        seniorities,
+    ):
+        database.update_job_status(job_id, "matched", db_path=db_path)
+        return "matched"
+
+    database.update_job_status(job_id, "rejected", db_path=db_path)
+    return "rejected"
+
+
+def handle_poison_job_failure(
+    job_id: int,
+    *,
+    allowed_remote_types: list[str] | None,
+    seniorities: str,
+    db_path=None,
+) -> str:
+    """Increment batchAttempts; Unclassified fallback after POISON_MAX_ATTEMPTS."""
+    attempts = database.increment_batch_attempts(job_id, db_path=db_path)
+    if attempts < POISON_MAX_ATTEMPTS:
+        return "retry"
+
+    return apply_unclassified_fallback(
+        job_id,
+        allowed_remote_types=allowed_remote_types,
+        seniorities=seniorities,
+        db_path=db_path,
+    )
 
 
 def write_back_job_evaluation(
@@ -280,19 +350,19 @@ async def collect_batch_results(
 
         raw_content = await asyncio.to_thread(gemini_client.files.download, file=result_file)
         result_lines = _parse_result_jsonl(raw_content)
-        matched = rejected = failed = 0
+        matched = rejected = failed = unclassified = 0
+        handled_job_ids: set[int] = set()
 
         for line in result_lines:
             key = line.get("key")
             if key is None:
-                failed += 1
                 continue
             try:
                 job_id = int(key)
             except (TypeError, ValueError):
-                failed += 1
                 continue
 
+            handled_job_ids.add(job_id)
             job = database.get_job(job_id, db_path=db_path)
             company = ""
             if job:
@@ -300,12 +370,44 @@ async def collect_batch_results(
 
             text = _extract_response_text(line)
             if not text:
-                failed += 1
+                outcome = handle_poison_job_failure(
+                    job_id,
+                    allowed_remote_types=gate_remote,
+                    seniorities=gate_seniorities,
+                    db_path=db_path,
+                )
+                if outcome == "retry":
+                    failed += 1
+                elif outcome == "matched":
+                    unclassified += 1
+                    await log(
+                        f"Unclassified fallback: job id={job_id} moved to Matched after "
+                        f"{POISON_MAX_ATTEMPTS} failed batch attempts.",
+                        "warning",
+                    )
+                elif outcome == "rejected":
+                    rejected += 1
                 continue
 
             evaluation = parse_evaluation_text(text, company_name=company)
             if not evaluation:
-                failed += 1
+                outcome = handle_poison_job_failure(
+                    job_id,
+                    allowed_remote_types=gate_remote,
+                    seniorities=gate_seniorities,
+                    db_path=db_path,
+                )
+                if outcome == "retry":
+                    failed += 1
+                elif outcome == "matched":
+                    unclassified += 1
+                    await log(
+                        f"Unclassified fallback: job id={job_id} moved to Matched after "
+                        f"{POISON_MAX_ATTEMPTS} failed batch attempts.",
+                        "warning",
+                    )
+                elif outcome == "rejected":
+                    rejected += 1
                 continue
 
             outcome = write_back_job_evaluation(
@@ -339,8 +441,36 @@ async def collect_batch_results(
             else:
                 failed += 1
 
+        for job_id in batch_row.get("jobIds") or []:
+            if job_id in handled_job_ids:
+                continue
+            job = database.get_job(job_id, db_path=db_path)
+            if not job:
+                continue
+            status = job.status if hasattr(job, "status") else job.get("status")
+            if status != "scraped":
+                continue
+            outcome = handle_poison_job_failure(
+                job_id,
+                allowed_remote_types=gate_remote,
+                seniorities=gate_seniorities,
+                db_path=db_path,
+            )
+            if outcome == "retry":
+                failed += 1
+            elif outcome == "matched":
+                unclassified += 1
+                await log(
+                    f"Unclassified fallback: job id={job_id} moved to Matched after "
+                    f"{POISON_MAX_ATTEMPTS} failed batch attempts.",
+                    "warning",
+                )
+            elif outcome == "rejected":
+                rejected += 1
+
         await log(
-            f"Batch chunk completed: {matched} matched, {rejected} rejected, {failed} failed.",
+            f"Batch chunk completed: {matched} matched, {rejected} rejected, "
+            f"{failed} failed, {unclassified} unclassified.",
             "summary",
         )
         return CollectResult(
@@ -348,12 +478,51 @@ async def collect_batch_results(
             matched=matched,
             rejected=rejected,
             failed=failed,
+            unclassified=unclassified,
             terminal=True,
         )
 
     if state in TERMINAL_FAILURE_STATES:
         await log(f"Batch {batch_name} ended with state {state}.", "warning")
-        return CollectResult(state=state, terminal=True)
+        matched = rejected = failed = unclassified = 0
+        for job_id in batch_row.get("jobIds") or []:
+            job = database.get_job(job_id, db_path=db_path)
+            if not job:
+                continue
+            status = job.status if hasattr(job, "status") else job.get("status")
+            if status != "scraped":
+                continue
+            outcome = handle_poison_job_failure(
+                job_id,
+                allowed_remote_types=gate_remote,
+                seniorities=gate_seniorities,
+                db_path=db_path,
+            )
+            if outcome == "retry":
+                failed += 1
+            elif outcome == "matched":
+                unclassified += 1
+                await log(
+                    f"Unclassified fallback: job id={job_id} moved to Matched after "
+                    f"{POISON_MAX_ATTEMPTS} failed batch attempts.",
+                    "warning",
+                )
+            elif outcome == "rejected":
+                rejected += 1
+        if failed or unclassified or rejected:
+            await log(
+                f"Batch failure handled: {failed} retrying, {unclassified} unclassified, "
+                f"{rejected} rejected.",
+                "summary",
+            )
+        return CollectResult(
+            state=state,
+            matched=matched,
+            rejected=rejected,
+            failed=failed,
+            unclassified=unclassified,
+            terminal=True,
+        )
 
     return CollectResult(state=state, terminal=False)
 

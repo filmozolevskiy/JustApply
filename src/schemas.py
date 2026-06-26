@@ -59,6 +59,7 @@ class Job(BaseModel):
     comment: str = ""
     isRecruiter: bool = False
     unclassified: bool = False
+    batchAttempts: int = 0
     enrichmentNote: str = ""
     enrichmentNoteKind: str = ""
     activityLog: list[ActivityLogEntry] = []

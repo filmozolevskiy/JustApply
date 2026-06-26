@@ -36,6 +36,7 @@ def parse_job_row(row) -> Job:
     job["shouldProceed"] = bool(job["shouldProceed"])
     job["isRecruiter"] = bool(job.get("isRecruiter", 0))
     job["unclassified"] = bool(job.get("unclassified", 0))
+    job["batchAttempts"] = int(job.get("batchAttempts") or 0)
     job["enrichmentNote"] = job.get("enrichmentNote") or ""
     job["enrichmentNoteKind"] = job.get("enrichmentNoteKind") or ""
     job["recruiterOutreachTemplate"] = job.get("recruiterOutreachTemplate") or ""

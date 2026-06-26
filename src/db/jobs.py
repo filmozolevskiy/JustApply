@@ -494,3 +494,20 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
     updated = cursor.fetchone()
     conn.close()
     return parse_job_row(updated) if updated else None
+
+
+def increment_batch_attempts(job_id: int, db_path=None) -> int:
+    """Increment poison-job counter; returns the new attempt count."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE jobs SET batchAttempts = COALESCE(batchAttempts, 0) + 1 WHERE id = ?",
+        (job_id,),
+    )
+    cursor.execute("SELECT batchAttempts FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return int(row[0]) if row else 0

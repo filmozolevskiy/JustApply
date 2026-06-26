@@ -135,6 +135,12 @@ def init_db(db_path=None, allow_seed=False):
     except sqlite3.OperationalError:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN batchAttempts INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS batch_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
