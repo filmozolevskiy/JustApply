@@ -11,6 +11,7 @@ from ..schemas import Job
 from ..db import get_job, get_jobs, init_db
 from ..pipelines import run_backfill_pipeline, run_enrichment_pipeline, run_search_pipeline, run_reassess_pipeline
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
+from ..core.evaluation_lock import assert_evaluation_lock_clear
 from ..rate_limiter import RateLimitError, scrape_limiter
 
 LogFunc = Callable[[str, str], None] | Callable[[str, str], Awaitable[None]]
@@ -65,6 +66,7 @@ async def search_jobs(
     rate_limit: bool = True,
 ) -> list:
     """Run Search & Evaluation Pipeline with shared rate-limit gating."""
+    assert_evaluation_lock_clear()
     if rate_limit:
         acquire_scrape_slot(mock_eval, mock_scraper)
     return await run_search_pipeline(
@@ -151,6 +153,7 @@ async def backfill_unevaluated_jobs(
 ) -> dict:
     """Evaluate all jobs that never went through the LLM, then apply preference filters."""
     init_db()
+    assert_evaluation_lock_clear()
     return await run_backfill_pipeline(
         active_resume=active_resume,
         allowed_remote_types=allowed_remote_types,

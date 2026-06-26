@@ -1341,6 +1341,27 @@
       border-radius: 8px;
     }
 
+    .evaluation-lock-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fbbf24;
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+
+    .evaluation-lock-indicator[hidden] {
+      display: none !important;
+    }
+
+    .evaluation-lock-indicator .fa-spinner {
+      color: #fbbf24;
+    }
+
   </style>
 </head>
 <body>
@@ -1377,7 +1398,12 @@
             <i class="fa-solid fa-magnifying-glass"></i>
             <span>Job Search Settings</span>
           </div>
-          <div class="panel-header-right">
+          <div class="panel-header-right" style="display: flex; align-items: center; gap: 12px;">
+            <div id="evaluation-lock-indicator" class="evaluation-lock-indicator" hidden>
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <span id="evaluation-lock-text">Assessing 0 jobs…</span>
+              <button class="btn btn-secondary" id="evaluation-lock-cancel" style="padding: 4px 10px; font-size: 0.75rem;" onclick="cancelEvaluation()">Cancel</button>
+            </div>
             <button class="btn btn-secondary" onclick="toggleJobSearchSettings()" id="job-search-settings-toggle">
               <i class="fa-solid fa-chevron-down" id="settings-chevron" style="transition: transform var(--transition-fast);"></i> Show
             </button>
@@ -2283,12 +2309,91 @@
     function resetScrapeButtons() {
       const btnPanel = document.getElementById('kb-scrape-btn-panel');
       if (btnPanel) {
+        if (evaluationLockActive) {
+          btnPanel.disabled = true;
+          btnPanel.innerHTML = '<i class="fa-solid fa-lock"></i> Assessment in progress';
+        } else {
+          btnPanel.disabled = false;
+          btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
+        }
+      }
+    }
+
+    let evaluationLockActive = false;
+    let evaluationLockPollTimer = null;
+
+    function applyEvaluationLockUI(status) {
+      evaluationLockActive = Boolean(status && status.active);
+      const indicator = document.getElementById('evaluation-lock-indicator');
+      const textEl = document.getElementById('evaluation-lock-text');
+      const cancelBtn = document.getElementById('evaluation-lock-cancel');
+      const jobCount = status && status.jobCount ? status.jobCount : 0;
+
+      if (indicator) {
+        indicator.hidden = !evaluationLockActive;
+      }
+      if (textEl) {
+        textEl.textContent = `Assessing ${jobCount} job${jobCount === 1 ? '' : 's'}…`;
+      }
+      if (cancelBtn) {
+        cancelBtn.disabled = false;
+      }
+
+      const btnPanel = document.getElementById('kb-scrape-btn-panel');
+      if (btnPanel && evaluationLockActive) {
+        btnPanel.disabled = true;
+        btnPanel.innerHTML = '<i class="fa-solid fa-lock"></i> Assessment in progress';
+      } else if (btnPanel && !btnPanel.innerHTML.includes('Running')) {
         btnPanel.disabled = false;
         btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
       }
     }
 
+    async function refreshEvaluationLockStatus() {
+      try {
+        const response = await fetch('/api/evaluation-lock');
+        if (!response.ok) return;
+        const status = await response.json();
+        applyEvaluationLockUI(status);
+      } catch (_err) {
+        // Backend may be offline during local dev; ignore.
+      }
+    }
+
+    function initEvaluationLockPolling() {
+      refreshEvaluationLockStatus();
+      if (evaluationLockPollTimer) {
+        clearInterval(evaluationLockPollTimer);
+      }
+      evaluationLockPollTimer = setInterval(refreshEvaluationLockStatus, 15000);
+    }
+
+    async function cancelEvaluation() {
+      const cancelBtn = document.getElementById('evaluation-lock-cancel');
+      if (cancelBtn) {
+        cancelBtn.disabled = true;
+      }
+      addLogLine('Cancelling in-flight batch evaluation jobs…', 'warning');
+      try {
+        const response = await fetch('/api/evaluation-lock/cancel', { method: 'POST' });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.message || `HTTP ${response.status}`);
+        }
+        addLogLine(`Cancelled ${body.cancelled || 0} batch job(s). Jobs remain in Scraped.`, 'success');
+        applyEvaluationLockUI(body.active === false ? { active: false, jobCount: 0 } : body);
+        await refreshEvaluationLockStatus();
+      } catch (err) {
+        addLogLine(`Failed to cancel evaluation: ${err.message}`, 'error');
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+    }
+
     function triggerScrapeRun() {
+      if (evaluationLockActive) {
+        addLogLine('Cannot start scrape: batch evaluation is in progress. Cancel or wait for completion.', 'warning');
+        return;
+      }
       let query = "QA Engineer";
       let location = "Remote";
       let remote_type = "any";
@@ -2762,6 +2867,7 @@
 
     Object.assign(window, {
       archiveJob,
+      cancelEvaluation,
       changeActiveResume,
       changeJobStage,
       clearBoardSearch,
@@ -2799,6 +2905,7 @@
     initLogsConsoleState();
     initJobSearchSettingsState();
     initOutreachSettingsTooltips();
+    initEvaluationLockPolling();
     restoreSessionLogs();
     loadResumes();
     loadOutreachSettings();

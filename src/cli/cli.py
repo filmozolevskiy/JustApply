@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .. import db as database
+from ..core.evaluation_lock import EvaluationLockError
 from ..service import (
     RateLimitError,
     backfill_unevaluated_jobs,
@@ -47,6 +48,9 @@ async def run_search(
     except RateLimitError as e:
         print(f"Warning: Rate limit active. Please wait {e.wait_seconds} seconds.", file=sys.stderr)
         sys.exit(1)
+    except EvaluationLockError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Search complete. {len(saved)} jobs saved to database.")
     return saved
@@ -78,10 +82,14 @@ async def run_backfill() -> dict:
     def log_sync(msg: str, level: str = "info"):
         print(f"  [{level.upper()}] {msg}", file=sys.stderr)
 
-    result = await backfill_unevaluated_jobs(
-        allowed_remote_types=["remote"],
-        log_func=log_sync,
-    )
+    try:
+        result = await backfill_unevaluated_jobs(
+            allowed_remote_types=["remote"],
+            log_func=log_sync,
+        )
+    except EvaluationLockError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(
         f"Backfill complete. "

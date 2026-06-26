@@ -23,6 +23,7 @@ from ..service import (
 )
 from ..pipelines import run_reclassify_pipeline, run_load_more_contacts_pipeline
 from ..core.batch_poller import poll_in_flight_batches
+from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
 from ..db import batch_jobs as batch_jobs_db
 
 # Initialize SQLite database
@@ -94,6 +95,20 @@ async def stop_batch_poller():
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "message": "FastAPI backend online"}
+
+
+@app.get("/api/evaluation-lock")
+async def evaluation_lock_status():
+    return get_evaluation_lock_status()
+
+
+@app.post("/api/evaluation-lock/cancel")
+async def evaluation_lock_cancel():
+    status = get_evaluation_lock_status()
+    if not status["active"]:
+        return {"cancelled": 0, "active": False}
+    cancelled = await cancel_in_flight_batches(log_func=_emit_batch_poller_log)
+    return {"cancelled": cancelled, "active": get_evaluation_lock_status()["active"]}
 
 
 @app.get("/api/regions")
@@ -452,6 +467,13 @@ async def run_scraping_task(task_id: str):
 
 @app.post("/api/search")
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
+    lock_status = get_evaluation_lock_status()
+    if lock_status["active"]:
+        return JSONResponse(
+            status_code=409,
+            content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
+        )
+
     try:
         acquire_scrape_slot(request.mock_eval, request.mock_scraper)
     except RateLimitError as e:
@@ -483,6 +505,13 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
+    lock_status = get_evaluation_lock_status()
+    if lock_status["active"]:
+        return JSONResponse(
+            status_code=409,
+            content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
+        )
+
     try:
         acquire_scrape_slot(mock_eval, mock_scraper)
     except RateLimitError as e:

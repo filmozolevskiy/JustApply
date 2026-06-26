@@ -26,3 +26,9 @@
     - Persisted search preferences on `batch_jobs` (`searchRemoteTypes`, `searchSeniorities`) for attribute gating at write-back.
     - Added `tests/test_batch_poller.py` (cadence table, fake-client write-back, terminal failure).
     - pytest: 708 passed.
+- **Issue #91**: Evaluation Lock + Cancel (dashboard + CLI).
+    - Added `src/core/evaluation_lock.py` with derived lock status from non-terminal `batch_jobs` rows, `EvaluationLockError`, and `cancel_in_flight_batches()` (calls `batches.cancel()`, marks rows `JOB_STATE_CANCELLED`, jobs stay in Scraped).
+    - Dashboard: `GET /api/evaluation-lock`, `POST /api/evaluation-lock/cancel`; search/scrape return 409 when lock active; "Assessing N jobs…" indicator with Cancel control; scrape button disabled while locked.
+    - CLI: `--search` and `--backfill` refuse with clear message when lock active.
+    - Added `tests/test_evaluation_lock.py` (lock query, cancel, API 409, CLI refusal, dashboard HTML scan).
+    - pytest: 717 passed.
