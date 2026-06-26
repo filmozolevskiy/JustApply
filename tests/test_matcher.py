@@ -213,9 +213,11 @@ async def test_evaluate_jobs_batch_falls_back_on_error(sample_job):
     mock_eval_result = {"matchScore": 75}
     # Batch fails (attempt 1), then batch fails again (attempt 2 - wrong format), then sequential fallback succeeds
     with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(side_effect=[
-        Exception("Batch error"), 
-        "invalid json", 
-        json.dumps(mock_eval_result)
+        Exception("Batch error"),
+        "invalid json",
+        json.dumps(mock_eval_result),
+        Exception("Batch error"),
+        json.dumps(mock_eval_result),
     ])), \
          patch("asyncio.sleep", new_callable=AsyncMock):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):

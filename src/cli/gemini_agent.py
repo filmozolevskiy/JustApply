@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import os
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 def main():
@@ -32,11 +32,13 @@ def main():
         print("Error: No prompt provided", file=sys.stderr)
         sys.exit(1)
 
-    genai.configure(api_key=api_key, transport="rest")
-    model = genai.GenerativeModel(model_name)
+    client = genai.Client(api_key=api_key, http_options={'api_version': 'v1beta'})
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+        )
         print(response.text)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

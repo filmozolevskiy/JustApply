@@ -1,0 +1,14 @@
+# Ralph Loop Progress Log
+
+## PRD #86: Gemini Batch API Evaluation & Scraped/Matched Lanes
+- **Issue #87**: Implemented Scraped & Matched lanes + status migration.
+    - Updated database schema and migration logic to map `found` to `scraped` (unscored) or `matched` (scored).
+    - Updated frontend Kanban board with new lanes and styles.
+    - Updated backend pipelines, schemas, and service logic to use the new status model.
+    - Updated all relevant tests to align with the new status model.
+- **Issue #88**: Migrated Gemini client to google.genai SDK.
+    - Replaced `google-generativeai` with `google-genai` in requirements.txt.
+    - Rewrote `gemini_client.py` and `gemini_agent.py` to use `google.genai.Client`.
+    - Kept synchronous `generate_text` for reassess and outreach pipelines.
+    - Added `generate_text_from_pdf` multimodal path for future Resume Import (#99).
+    - Added `tests/test_gemini_client.py`; fixed pre-existing test regressions from #87 status migration.
