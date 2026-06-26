@@ -38,6 +38,8 @@ def create_batch_job(
     kind: str,
     job_ids: list[int],
     submitted_at: str | None = None,
+    search_remote_types: list[str] | None = None,
+    search_seniorities: str = "any",
     db_path=None,
 ) -> dict:
     if db_path is None:
@@ -45,11 +47,13 @@ def create_batch_job(
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
     submitted_at = submitted_at or _now_iso()
+    remote_types_json = json.dumps(search_remote_types) if search_remote_types is not None else None
     cursor.execute(
         """
         INSERT INTO batch_jobs (
-            batchName, displayName, state, kind, submittedAt, lastPolledAt, resultFileName, jobIds
-        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)
+            batchName, displayName, state, kind, submittedAt, lastPolledAt, resultFileName, jobIds,
+            searchRemoteTypes, searchSeniorities
+        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
         """,
         (
             batch_name,
@@ -58,6 +62,8 @@ def create_batch_job(
             kind,
             submitted_at,
             json.dumps(job_ids),
+            remote_types_json,
+            search_seniorities,
         ),
     )
     batch_id = cursor.lastrowid
@@ -93,13 +99,18 @@ def get_batch_job_by_name(batch_name: str, db_path=None) -> dict | None:
 def update_batch_job(batch_id: int, fields: dict, db_path=None) -> dict | None:
     if db_path is None:
         db_path = connection.DB_PATH
-    allowed = {"displayName", "state", "lastPolledAt", "resultFileName", "jobIds"}
+    allowed = {
+        "displayName", "state", "lastPolledAt", "resultFileName", "jobIds",
+        "searchRemoteTypes", "searchSeniorities",
+    }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return get_batch_job(batch_id, db_path=db_path)
 
     if "jobIds" in updates:
         updates["jobIds"] = json.dumps(updates["jobIds"])
+    if "searchRemoteTypes" in updates and isinstance(updates["searchRemoteTypes"], list):
+        updates["searchRemoteTypes"] = json.dumps(updates["searchRemoteTypes"])
 
     set_clause = ", ".join(f"{column} = ?" for column in updates)
     values = list(updates.values()) + [batch_id]

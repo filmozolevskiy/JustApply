@@ -94,6 +94,8 @@ async def submit_batch_evaluation(
     client=None,
     log_func=None,
     db_path=None,
+    allowed_remote_types: list[str] | None = None,
+    seniorities: str = "any",
 ) -> list[dict]:
     """Submit chunked Batch Evaluation Jobs and persist batch_jobs rows."""
 
@@ -141,6 +143,8 @@ async def submit_batch_evaluation(
             state=state,
             kind=kind,
             job_ids=job_ids,
+            search_remote_types=allowed_remote_types,
+            search_seniorities=seniorities,
             db_path=db_path,
         )
         created.append(row)

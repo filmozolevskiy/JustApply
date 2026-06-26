@@ -143,6 +143,8 @@ async def run_search_pipeline(
             resume_content,
             kind="search",
             log_func=log_func,
+            allowed_remote_types=allowed_remote_types,
+            seniorities=seniorities,
         )
         batches_submitted = len(created_batches)
 

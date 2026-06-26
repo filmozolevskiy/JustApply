@@ -22,6 +22,8 @@ from ..service import (
     search_jobs,
 )
 from ..pipelines import run_reclassify_pipeline, run_load_more_contacts_pipeline
+from ..core.batch_poller import poll_in_flight_batches
+from ..db import batch_jobs as batch_jobs_db
 
 # Initialize SQLite database
 init_db()
@@ -37,6 +39,56 @@ if os.path.isdir(STATIC_DIR):
 
 # In-memory storage for active scraping sessions
 active_tasks = {}
+
+batch_poller_logs: list[dict] = []
+batch_poller_queue: asyncio.Queue | None = None
+_batch_poller_task: asyncio.Task | None = None
+
+
+async def _emit_batch_poller_log(message: str, level: str = "info"):
+    global batch_poller_queue
+    event = {"type": "log", "level": level, "message": message}
+    batch_poller_logs.append({"level": level, "message": message})
+    if batch_poller_queue is not None:
+        await batch_poller_queue.put(event)
+
+
+async def run_batch_poller_loop():
+    while True:
+        try:
+            in_flight = batch_jobs_db.list_in_flight_batch_jobs()
+            if not in_flight:
+                await asyncio.sleep(60)
+                continue
+            await poll_in_flight_batches(log_func=_emit_batch_poller_log)
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await _emit_batch_poller_log(f"Batch poller error: {exc}", "error")
+            await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def start_batch_poller():
+    global batch_poller_queue, _batch_poller_task
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    batch_poller_queue = asyncio.Queue()
+    _batch_poller_task = asyncio.create_task(run_batch_poller_loop())
+
+
+@app.on_event("shutdown")
+async def stop_batch_poller():
+    global batch_poller_queue, _batch_poller_task
+    if _batch_poller_task is not None:
+        _batch_poller_task.cancel()
+        try:
+            await _batch_poller_task
+        except asyncio.CancelledError:
+            pass
+        _batch_poller_task = None
+    batch_poller_queue = None
 
 
 @app.get("/api/health")
@@ -529,5 +581,33 @@ async def logs_stream(task_id: str, skip: int = 0):
 
         except asyncio.CancelledError:
             pass
+
+    return EventSourceResponse(event_generator())
+
+
+@app.get("/api/batch-poller/logs")
+async def batch_poller_logs_stream(skip: int = 0):
+    if skip < 0:
+        skip = 0
+
+    async def event_generator():
+        for log in batch_poller_logs[skip:]:
+            yield {
+                "data": json.dumps({
+                    "type": "log",
+                    "level": log["level"],
+                    "message": log["message"],
+                })
+            }
+
+        queue = batch_poller_queue
+        if queue is None:
+            return
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield {"data": json.dumps(item)}
 
     return EventSourceResponse(event_generator())

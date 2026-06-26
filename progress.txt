@@ -19,3 +19,10 @@
     - Removed packed-prompt batch evaluation from `matcher.py` (backfill still uses sequential `evaluate_job` until #93).
     - Added `tests/test_batch_jobs.py`, `tests/test_batch_evaluation.py`; updated `tests/test_search_pipeline.py`.
     - pytest: 693 passed.
+- **Issue #90**: Batch Poller write-back (Scraped → Matched/Rejected) + resume + cadence.
+    - Added `src/core/batch_poller.py` with `poll_cadence_seconds`, `is_due_for_poll`, `collect_batch_results`, and `write_back_job_evaluation`.
+    - On `JOB_STATE_SUCCEEDED`, parses JSONL results keyed by `job_id`, writes scores via `update_job_evaluation`, moves passing jobs to **Matched** and gate failures to **Rejected**.
+    - Dashboard starts a background poller on startup (resumes in-flight `batch_jobs`; never auto-submits); `/api/batch-poller/logs` SSE for event-only Task Logs.
+    - Persisted search preferences on `batch_jobs` (`searchRemoteTypes`, `searchSeniorities`) for attribute gating at write-back.
+    - Added `tests/test_batch_poller.py` (cadence table, fake-client write-back, terminal failure).
+    - pytest: 708 passed.

@@ -145,10 +145,25 @@ def init_db(db_path=None, allow_seed=False):
             submittedAt TEXT NOT NULL,
             lastPolledAt TEXT,
             resultFileName TEXT,
-            jobIds TEXT NOT NULL
+            jobIds TEXT NOT NULL,
+            searchRemoteTypes TEXT,
+            searchSeniorities TEXT
         )
     """)
     conn.commit()
+
+    for column, ddl in (
+        ("searchRemoteTypes", "ALTER TABLE batch_jobs ADD COLUMN searchRemoteTypes TEXT"),
+        ("searchSeniorities", "ALTER TABLE batch_jobs ADD COLUMN searchSeniorities TEXT"),
+    ):
+        cursor.execute("PRAGMA table_info(batch_jobs)")
+        batch_cols = {row[1] for row in cursor.fetchall()}
+        if column not in batch_cols:
+            try:
+                cursor.execute(ddl)
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS outreach_settings (
