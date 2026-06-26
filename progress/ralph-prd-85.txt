@@ -1,0 +1,10 @@
+# Ralph Loop Progress — PRD #85
+
+## Iteration 1 — #96 Profile Manager modal foundation (browse + active selection)
+- Added Manage Profiles button (top-right nav) opening two-pane Profile Manager modal
+- Lists profiles from GET /api/resumes; selecting shows markdown in read-only editor
+- Active badge + Set active; persists to localStorage (ACTIVE_RESUME_KEY)
+- resolveActiveResume falls back to first profile when stored value missing/invalid
+- Removed toolbar Active Profile dropdown and read-only View modal
+- Tests: tests/test_dashboard_profile_manager.py (9 static HTML/JS scan tests)
+- Full suite: 733 passed

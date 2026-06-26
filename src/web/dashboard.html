@@ -151,6 +151,21 @@
       border-color: #22d3ee;
     }
 
+    .btn-rose {
+      background: rgba(244, 63, 94, 0.1);
+      border-color: rgba(244, 63, 94, 0.3);
+      color: #fb7185;
+    }
+    .btn-rose:hover {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: #fb7185;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -241,12 +256,6 @@
       display: flex;
       align-items: center;
       gap: 20px;
-    }
-
-    .resume-select-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     select {
@@ -1286,7 +1295,147 @@
       color: var(--text-primary);
     }
 
-    /* Resume Preview Modal */
+    /* Profile Manager modal */
+    .pm-modal-content {
+      width: 1000px;
+      max-width: 94vw;
+      height: 78vh;
+      padding: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+
+    .pm-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .pm-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pm-title .pill {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .pm-body {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      min-height: 0;
+    }
+
+    .pm-list {
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .pm-list-actions {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .pm-list-scroll {
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .pm-li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 12px;
+      border-radius: 9px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .pm-li:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .pm-li.sel {
+      background: rgba(6, 182, 212, 0.1);
+      border-color: rgba(6, 182, 212, 0.3);
+    }
+
+    .pm-li .pm-doc {
+      color: var(--text-muted);
+    }
+
+    .pm-li .pm-nm {
+      flex: 1;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .active-chip {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 2px 7px;
+      border-radius: 999px;
+    }
+
+    .pm-detail {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 18px 22px;
+      gap: 14px;
+    }
+
+    .pm-detail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    textarea.pm-editor {
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 10px;
+      padding: 16px;
+      resize: none;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.6;
+      outline: none;
+    }
+
+    textarea.pm-editor:focus {
+      border-color: var(--accent-cyan);
+    }
+
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -1331,16 +1480,6 @@
     }
     .modal-close:hover { color: var(--text-primary); }
 
-    .resume-body {
-      font-family: var(--font-body);
-      font-size: 0.95rem;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      background: rgba(0,0,0,0.2);
-      padding: 16px;
-      border-radius: 8px;
-    }
-
     .evaluation-lock-indicator {
       display: flex;
       align-items: center;
@@ -1373,14 +1512,7 @@
       <span>JustApply</span>
     </div>
     <div class="nav-actions">
-      <!-- Resume Select Profile -->
-      <div class="resume-select-container">
-        <label style="font-size: 0.85rem; color: var(--text-secondary); font-family: var(--font-sans);" for="active-resume-select">Active Profile:</label>
-        <select id="active-resume-select" onchange="changeActiveResume(this.value)">
-          <option value="general_cv.md">general_cv.md (Delivery, QA & Data)</option>
-        </select>
-        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="viewResumeProfile()"><i class="fa-regular fa-eye"></i> View</button>
-      </div>
+      <button class="btn btn-cyan" id="manage-profiles-btn" onclick="openProfileManager()"><i class="fa-regular fa-id-badge"></i> Manage Profiles</button>
     </div>
   </header>
 
@@ -1694,15 +1826,32 @@
     </div>
   </div>
 
-  <!-- Resume View Modal -->
-  <div class="modal-overlay" id="resume-modal" onclick="closeModal(event)">
-    <div class="modal-content" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="resume-modal-title">Resume Profile</h3>
-        <button class="modal-close" onclick="closeModal(null)"><i class="fa-solid fa-xmark"></i></button>
+  <!-- Profile Manager Modal -->
+  <div class="modal-overlay" id="profile-manager-modal" onclick="closeProfileManager(event)">
+    <div class="modal-content pm-modal-content" onclick="event.stopPropagation()">
+      <div class="pm-head">
+        <div class="pm-title"><span class="pill">Profiles</span><h3>Manage Profiles</h3></div>
+        <button class="modal-close" onclick="closeProfileManager(null)"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <div class="resume-body" id="resume-modal-body">
-        <!-- Loaded dynamically -->
+      <div class="pm-body">
+        <div class="pm-list">
+          <div class="pm-list-actions">
+            <button class="btn btn-primary btn-sm" id="pm-import-btn" type="button" disabled><i class="fa-solid fa-file-arrow-up"></i> Import PDF</button>
+            <button class="btn btn-secondary btn-sm" id="pm-new-btn" type="button" disabled><i class="fa-solid fa-plus"></i> New</button>
+          </div>
+          <div class="pm-list-scroll" id="pm-list-scroll"></div>
+        </div>
+        <div class="pm-detail">
+          <div class="pm-detail-head">
+            <h3 id="pm-detail-title" style="font-size:1.05rem"></h3>
+            <div style="display:flex; gap:8px">
+              <button class="btn btn-cyan btn-sm" id="pm-set-active-btn" type="button" onclick="setActiveProfileManagerProfile()"><i class="fa-solid fa-star"></i> Set active</button>
+              <button class="btn btn-rose btn-sm" id="pm-delete-btn" type="button" disabled><i class="fa-solid fa-trash"></i></button>
+              <button class="btn btn-primary btn-sm" id="pm-save-btn" type="button" disabled><i class="fa-solid fa-floppy-disk"></i> Save</button>
+            </div>
+          </div>
+          <textarea class="pm-editor" id="pm-editor" readonly></textarea>
+        </div>
       </div>
     </div>
   </div>
@@ -1732,8 +1881,12 @@
 
     let mockResumes = {};
 
+    const ACTIVE_RESUME_KEY = 'activeResumeProfile';
+
     // Active configuration state
-    let activeResume = "general_cv.md";
+    let activeResume = null;
+    let profileManagerProfiles = [];
+    let profileManagerSelectedName = null;
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
@@ -2024,32 +2177,90 @@
     // ----------------------------------------------------
     // USER ACTIONS & INTERACTIVITY
     // ----------------------------------------------------
-    function changeActiveResume(val) {
-      activeResume = val;
-      addLogLine(`Switched active resume profile configuration to: ${val}`, 'warning');
+    function resolveActiveResume(profiles, storedName) {
+      if (!profiles || profiles.length === 0) return null;
+      const names = profiles.map(p => p.name);
+      if (storedName && names.includes(storedName)) return storedName;
+      return profiles[0].name;
+    }
+
+    function persistActiveResume(name) {
+      if (name) {
+        localStorage.setItem(ACTIVE_RESUME_KEY, name);
+      }
+    }
+
+    function openProfileManager() {
+      const modal = document.getElementById('profile-manager-modal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      renderProfileManager();
+    }
+
+    function closeProfileManager(e) {
+      const modal = document.getElementById('profile-manager-modal');
+      if (!modal) return;
+      if (!e || e.target === modal || e.target.classList.contains('modal-close') || e.target.closest('.modal-close')) {
+        modal.style.display = 'none';
+      }
+    }
+
+    function renderProfileManager() {
+      const listEl = document.getElementById('pm-list-scroll');
+      const titleEl = document.getElementById('pm-detail-title');
+      const editorEl = document.getElementById('pm-editor');
+      const setActiveBtn = document.getElementById('pm-set-active-btn');
+      if (!listEl) return;
+
+      if (profileManagerProfiles.length === 0) {
+        listEl.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No profiles found.</div>';
+        if (titleEl) titleEl.textContent = '';
+        if (editorEl) editorEl.value = '';
+        if (setActiveBtn) setActiveBtn.disabled = true;
+        return;
+      }
+
+      if (!profileManagerSelectedName || !profileManagerProfiles.find(p => p.name === profileManagerSelectedName)) {
+        profileManagerSelectedName = profileManagerProfiles[0].name;
+      }
+
+      const selected = profileManagerProfiles.find(p => p.name === profileManagerSelectedName);
+
+      listEl.innerHTML = profileManagerProfiles.map(p => `
+        <div class="pm-li ${p.name === profileManagerSelectedName ? 'sel' : ''}" data-name="${p.name}" onclick="selectProfileManagerProfile(this.dataset.name)">
+          <i class="fa-regular fa-file-lines pm-doc"></i>
+          <span class="pm-nm">${p.name}</span>
+          ${p.name === activeResume ? '<span class="active-chip">Active</span>' : ''}
+        </div>
+      `).join('');
+
+      if (titleEl) titleEl.textContent = selected.name;
+      if (editorEl) editorEl.value = selected.content;
+      if (setActiveBtn) {
+        setActiveBtn.disabled = selected.name === activeResume;
+        setActiveBtn.innerHTML = selected.name === activeResume
+          ? '<i class="fa-solid fa-star"></i> Active'
+          : '<i class="fa-solid fa-star"></i> Set active';
+      }
+    }
+
+    function selectProfileManagerProfile(name) {
+      profileManagerSelectedName = name;
+      renderProfileManager();
+    }
+
+    function setActiveProfileManagerProfile() {
+      if (!profileManagerSelectedName) return;
+      activeResume = profileManagerSelectedName;
+      persistActiveResume(activeResume);
+      addLogLine(`Active resume profile set to: ${activeResume}`, 'success');
       getJobs().forEach(job => {
         if (job.status === 'scraped' || job.status === 'matched') {
-          job.resumeUsed = val;
+          job.resumeUsed = activeResume;
         }
       });
+      renderProfileManager();
       renderActiveVariant();
-    }
-
-    function viewResumeProfile() {
-      const modal = document.getElementById('resume-modal');
-      const title = document.getElementById('resume-modal-title');
-      const body = document.getElementById('resume-modal-body');
-
-      title.textContent = `Resume Profile: ${activeResume}`;
-      body.textContent = mockResumes[activeResume] || "Resume content not found.";
-      
-      modal.style.display = 'flex';
-    }
-
-    function closeModal(e) {
-      if (!e || e.target === document.getElementById('resume-modal') || e.target.classList.contains('modal-close') || e.target.closest('.modal-close')) {
-        document.getElementById('resume-modal').style.display = 'none';
-      }
     }
 
     let enrichPollingInterval = null;
@@ -2628,31 +2839,20 @@
         .then(data => {
           if (data && data.length > 0) {
             mockResumes = {};
-            const selectEl = document.getElementById('active-resume-select');
-            selectEl.innerHTML = '';
-            
             data.forEach((resume) => {
               mockResumes[resume.name] = resume.content;
-              const option = document.createElement('option');
-              option.value = resume.name;
-              
-              let displayName = resume.name;
-              if (resume.name === 'general_cv.md') displayName += ' (Delivery, QA & Data)';
-              else if (resume.name === 'qa.md') displayName += ' (QA Engineer)';
-              else if (resume.name === 'project_manager.md') displayName += ' (Delivery Manager)';
-              else if (resume.name === 'data_analyst.md') displayName += ' (Data Analyst)';
-              option.textContent = displayName;
-              selectEl.appendChild(option);
             });
-            
-            // Set the active resume to the first retrieved resume
-            activeResume = data[0].name;
-            selectEl.value = activeResume;
+            profileManagerProfiles = data;
+            const stored = localStorage.getItem(ACTIVE_RESUME_KEY);
+            activeResume = resolveActiveResume(data, stored);
+            if (activeResume) {
+              persistActiveResume(activeResume);
+            }
             addLogLine(`Loaded ${data.length} resume profiles dynamically from /api/resumes`, 'success');
           }
         })
         .catch(err => {
-          addLogLine("Could not fetch resumes from backend. Using static fallback profiles.", 'info');
+          addLogLine("Could not fetch resumes from backend.", 'warning');
         });
     }
 
@@ -2868,18 +3068,18 @@
     Object.assign(window, {
       archiveJob,
       cancelEvaluation,
-      changeActiveResume,
       changeJobStage,
       clearBoardSearch,
       clearLogs,
       closeDrawer,
-      closeModal,
+      closeProfileManager,
       copyDrawerOutreach,
       enrichJob,
       loadMoreContacts,
       moveJobStage,
       navigateDrawerJob,
       onBoardSearchInput,
+      openProfileManager,
       reclassifyJob,
       openContactedElsewhereJob,
       openJobDetailsDrawer,
@@ -2887,6 +3087,8 @@
       resetKbFilters,
       saveOutreachSettings,
       selectActiveContact,
+      selectProfileManagerProfile,
+      setActiveProfileManagerProfile,
       toggleActivityLog,
       toggleContacted,
       toggleJobSearchSettings,
@@ -2895,7 +3097,6 @@
       triggerScrapeRun,
       updateArchiveVisibility,
       updateBoardFiltersAndSort,
-      viewResumeProfile,
     });
 
     // Initialize
