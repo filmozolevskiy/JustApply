@@ -548,3 +548,114 @@ async def poll_in_flight_batches(
         )
         results.append(result)
     return results
+
+
+def seconds_until_next_poll(
+    batch_rows: list[dict],
+    *,
+    now: datetime | None = None,
+) -> int:
+    """Seconds until the earliest in-flight batch is due for another poll."""
+    now = now or datetime.now(timezone.utc)
+    if not batch_rows:
+        return 0
+
+    waits: list[int] = []
+    for batch_row in batch_rows:
+        submitted = _parse_iso(batch_row.get("submittedAt"))
+        if submitted is None:
+            waits.append(1)
+            continue
+        if submitted.tzinfo is None:
+            submitted = submitted.replace(tzinfo=timezone.utc)
+
+        last_polled = _parse_iso(batch_row.get("lastPolledAt"))
+        if last_polled and last_polled.tzinfo is None:
+            last_polled = last_polled.replace(tzinfo=timezone.utc)
+
+        reference = last_polled or submitted
+        age_seconds = max(0.0, (now - submitted).total_seconds())
+        interval = poll_cadence_seconds(age_seconds)
+        elapsed = (now - reference).total_seconds()
+        waits.append(max(1, int(interval - elapsed)))
+    return min(waits)
+
+
+def _summarize_collect_results(
+    results: list[CollectResult],
+    *,
+    db_path=None,
+) -> dict:
+    return {
+        "batches_polled": len(results),
+        "matched": sum(result.matched for result in results),
+        "rejected": sum(result.rejected for result in results),
+        "failed": sum(result.failed for result in results),
+        "unclassified": sum(result.unclassified for result in results),
+        "in_flight_remaining": len(
+            batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path)
+        ),
+    }
+
+
+async def collect_in_flight_batches_once(
+    *,
+    client=None,
+    db_path=None,
+    log_func=None,
+) -> dict:
+    """One-shot poll of all in-flight batches; ignores poll cadence."""
+    results = []
+    for batch_row in batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
+        result = await collect_batch_results(
+            batch_row,
+            client=client,
+            db_path=db_path,
+            log_func=log_func,
+        )
+        results.append(result)
+    return _summarize_collect_results(results, db_path=db_path)
+
+
+async def wait_for_in_flight_collection(
+    *,
+    client=None,
+    db_path=None,
+    log_func=None,
+) -> dict:
+    """Poll on cadence until every in-flight batch reaches a terminal state."""
+    results: list[CollectResult] = []
+    while batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
+        results.extend(
+            await poll_in_flight_batches(
+                client=client,
+                db_path=db_path,
+                log_func=log_func,
+            )
+        )
+        in_flight = batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path)
+        if not in_flight:
+            break
+        await asyncio.sleep(seconds_until_next_poll(in_flight))
+    return _summarize_collect_results(results, db_path=db_path)
+
+
+async def run_batch_collection(
+    *,
+    wait: bool = False,
+    client=None,
+    db_path=None,
+    log_func=None,
+) -> dict:
+    """Headless batch result collection; never submits new batches."""
+    if wait:
+        return await wait_for_in_flight_collection(
+            client=client,
+            db_path=db_path,
+            log_func=log_func,
+        )
+    return await collect_in_flight_batches_once(
+        client=client,
+        db_path=db_path,
+        log_func=log_func,
+    )

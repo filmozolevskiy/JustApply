@@ -9,6 +9,7 @@ from typing import Awaitable, Callable
 from ..schemas import Job
 
 from ..db import get_job, get_jobs, init_db
+from ..core.batch_poller import run_batch_collection
 from ..pipelines import run_backfill_pipeline, run_enrichment_pipeline, run_search_pipeline, run_reassess_pipeline
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..core.evaluation_lock import assert_evaluation_lock_clear
@@ -144,6 +145,21 @@ async def reassess_all_jobs(
     return updated
 
 
+async def collect_batch_evaluation_results(
+    *,
+    wait: bool = False,
+    log_func=None,
+    db_path=None,
+) -> dict:
+    """Poll in-flight Batch Evaluation Jobs and write back completed results."""
+    init_db(db_path)
+    return await run_batch_collection(
+        wait=wait,
+        db_path=db_path,
+        log_func=log_func,
+    )
+
+
 async def backfill_unevaluated_jobs(
     *,
     active_resume: str = "general_cv.md",
@@ -189,6 +205,7 @@ __all__ = [
     "RateLimitError",
     "acquire_scrape_slot",
     "backfill_unevaluated_jobs",
+    "collect_batch_evaluation_results",
     "begin_enrichment",
     "complete_enrichment",
     "parse_remote_types",

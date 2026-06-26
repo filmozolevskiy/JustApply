@@ -45,3 +45,10 @@
     - CLI: `--backfill --wait` blocks until all in-flight batches reach terminal state.
     - Rewrote `tests/test_backfill_pipeline.py` for chunk counting, in-flight cap, and wait drip-feed.
     - pytest: 720 passed.
+- **Issue #94**: --collect / --collect --wait CLI for headless collection.
+    - Added `run_batch_collection`, `collect_in_flight_batches_once`, and `wait_for_in_flight_collection` in `src/core/batch_poller.py`.
+    - `--collect` one-shot polls all in-flight batches (ignores cadence); `--collect --wait` loops on poll cadence until terminal.
+    - Neither variant submits batches; both allowed while Evaluation Lock is active.
+    - CLI: `run_collect` + `--collect` / `--wait` flags in `src/cli/cli.py`; service seam `collect_batch_evaluation_results`.
+    - Added `tests/test_collect_cli.py` (write-back, lock-active, wait loop, no-op).
+    - pytest: 724 passed.

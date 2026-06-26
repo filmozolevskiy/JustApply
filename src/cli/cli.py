@@ -12,6 +12,7 @@ from ..core.evaluation_lock import EvaluationLockError
 from ..service import (
     RateLimitError,
     backfill_unevaluated_jobs,
+    collect_batch_evaluation_results,
     promote_sourced_jobs,
     reassess_all_jobs,
     reassess_job,
@@ -100,6 +101,25 @@ async def run_backfill(wait: bool = False) -> dict:
     return result
 
 
+async def run_collect(wait: bool = False) -> dict:
+    """Poll in-flight Batch Evaluation Jobs and write back completed results."""
+    print("Collecting batch evaluation results...")
+
+    def log_sync(msg: str, level: str = "info"):
+        print(f"  [{level.upper()}] {msg}", file=sys.stderr)
+
+    result = await collect_batch_evaluation_results(wait=wait, log_func=log_sync)
+
+    print(
+        f"Collect complete. "
+        f"Batches polled: {result['batches_polled']} | "
+        f"Matched: {result['matched']} | Rejected: {result['rejected']} | "
+        f"Failed: {result['failed']} | Unclassified: {result['unclassified']} | "
+        f"In-flight remaining: {result['in_flight_remaining']}"
+    )
+    return result
+
+
 async def run_promote() -> list:
     """Enrich jobs ready for outreach: source contacts and generate messages."""
     print("Starting promote pipeline...")
@@ -137,7 +157,16 @@ def main():
     parser.add_argument("--reassess", metavar="JOB_ID", type=int, help="Re-run Resume Matcher on a single job")
     parser.add_argument("--reassess-all", action="store_true", help="Re-run Resume Matcher on all active jobs")
     parser.add_argument("--backfill", action="store_true", help="Submit batch evaluation for un-evaluated jobs")
-    parser.add_argument("--wait", action="store_true", help="With --backfill, wait until all batches finish")
+    parser.add_argument(
+        "--collect",
+        action="store_true",
+        help="Poll in-flight batch jobs once and write back completed results",
+    )
+    parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="With --backfill or --collect, wait until all batches finish",
+    )
     parser.add_argument("--sites", help="Comma-separated list of job sites (unused, reserved for future use)")
     args = parser.parse_args()
 
@@ -150,6 +179,8 @@ def main():
     elif args.backfill:
         _snapshot_before("backfill")
         asyncio.run(run_backfill(wait=args.wait))
+    elif args.collect:
+        asyncio.run(run_collect(wait=args.wait))
     elif args.reassess is not None or args.reassess_all:
         asyncio.run(run_reassess(job_id=args.reassess, reassess_all=args.reassess_all))
     else:
