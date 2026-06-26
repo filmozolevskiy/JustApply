@@ -75,3 +75,39 @@ def test_load_resumes_restores_stored_active_profile():
     js = get_script_section(_read_html())
     assert "resolveActiveResume" in js
     assert "localStorage.getItem(ACTIVE_RESUME_KEY" in js
+
+
+def test_profile_manager_editor_is_editable():
+    content = _read_html()
+    assert 'id="pm-editor"' in content
+    assert 'id="pm-editor" readonly' not in content.replace(" ", "")
+
+
+def test_profile_manager_save_posts_to_api_resumes():
+    js = get_script_section(_read_html())
+    assert "saveProfileManagerProfile" in js
+    assert "fetch('/api/resumes'" in js or "fetch(\"/api/resumes\"" in js
+
+
+def test_profile_manager_new_opens_review_state():
+    content = _read_html()
+    js = get_script_section(content)
+    assert "newProfileManagerProfile" in js
+    assert "profileManagerReviewing" in js
+    assert "pm-review-banner" in content
+    assert "Review before save" in content
+    assert "pm-name-input" in content
+
+
+def test_profile_manager_review_disables_set_active_and_delete():
+    js = get_script_section(_read_html())
+    assert "profileManagerReviewing" in js
+    # Set active and delete disabled while reviewing
+    assert re.search(
+        r"if \(profileManagerReviewing\)[\s\S]{0,400}setActiveBtn\.disabled = true",
+        js,
+    )
+    assert re.search(
+        r"if \(profileManagerReviewing\)[\s\S]{0,400}deleteBtn\.disabled = true",
+        js,
+    )

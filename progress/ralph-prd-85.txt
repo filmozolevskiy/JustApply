@@ -8,3 +8,11 @@
 - Removed toolbar Active Profile dropdown and read-only View modal
 - Tests: tests/test_dashboard_profile_manager.py (9 static HTML/JS scan tests)
 - Full suite: 733 passed
+
+## Iteration 2 — #97 Author Resume Profiles (edit existing + create blank + save)
+- POST /api/resumes: update existing by filename (verbatim) or create new with sanitized snake_case name
+- Collision on new profile appends timestamp suffix (e.g. qa_<timestamp>.md); original untouched
+- Profile Manager: editable textarea, Save wired to API, New opens review state with name input + banner
+- Set active / Delete disabled during review; editor sync preserves in-progress edits on re-render
+- Tests: tests/test_dashboard_resumes.py (+3 backend), test_dashboard_profile_manager.py (+4 static)
+- Full suite: 740 passed

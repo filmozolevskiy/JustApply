@@ -3,7 +3,9 @@ import sys
 import uuid
 import json
 import asyncio
-from fastapi import FastAPI, BackgroundTasks, Query
+import re
+import time
+from fastapi import FastAPI, BackgroundTasks, Query, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -132,6 +134,61 @@ async def get_resumes():
             except Exception:
                 pass
     return resumes
+
+
+class ResumeSaveRequest(BaseModel):
+    content: str
+    filename: str | None = None
+    name: str | None = None
+
+
+def _sanitize_resume_filename(name: str) -> str:
+    base = name.strip()
+    if base.lower().endswith(".md"):
+        base = base[:-3]
+    base = re.sub(r"[^a-zA-Z0-9]+", "_", base).strip("_").lower()
+    if not base:
+        base = "profile"
+    return f"{base}.md"
+
+
+def _safe_resume_path(filename: str) -> str:
+    if not filename.endswith(".md"):
+        raise HTTPException(status_code=422, detail="Resume filename must end with .md")
+    if filename != os.path.basename(filename) or ".." in filename:
+        raise HTTPException(status_code=422, detail="Invalid resume filename")
+    return os.path.join(RESUMES_DIR, filename)
+
+
+def _unique_resume_filename(base_name: str) -> str:
+    sanitized = _sanitize_resume_filename(base_name)
+    filepath = os.path.join(RESUMES_DIR, sanitized)
+    if not os.path.exists(filepath):
+        return sanitized
+    stem = sanitized[:-3]
+    return f"{stem}_{int(time.time())}.md"
+
+
+@app.post("/api/resumes")
+async def save_resume(body: ResumeSaveRequest):
+    os.makedirs(RESUMES_DIR, exist_ok=True)
+
+    if body.filename:
+        filepath = _safe_resume_path(body.filename)
+        if not os.path.isfile(filepath):
+            raise HTTPException(status_code=404, detail="Resume profile not found")
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(body.content)
+        return {"name": body.filename, "content": body.content}
+
+    if not body.name or not body.name.strip():
+        raise HTTPException(status_code=422, detail="Profile name is required for new resumes")
+
+    filename = _unique_resume_filename(body.name)
+    filepath = os.path.join(RESUMES_DIR, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(body.content)
+    return {"name": filename, "content": body.content}
 
 
 @app.get("/api/settings/outreach", response_model=OutreachSettings)

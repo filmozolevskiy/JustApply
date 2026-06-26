@@ -1436,6 +1436,34 @@
       border-color: var(--accent-cyan);
     }
 
+    .pm-name-input {
+      background: var(--bg-surface-opaque);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 9px 12px;
+      border-radius: 8px;
+      outline: none;
+      font-family: var(--font-sans);
+      width: 240px;
+      font-size: 1.05rem;
+    }
+
+    .pm-name-input:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    .pm-review-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+      font-size: 0.85rem;
+    }
+
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -1837,20 +1865,24 @@
         <div class="pm-list">
           <div class="pm-list-actions">
             <button class="btn btn-primary btn-sm" id="pm-import-btn" type="button" disabled><i class="fa-solid fa-file-arrow-up"></i> Import PDF</button>
-            <button class="btn btn-secondary btn-sm" id="pm-new-btn" type="button" disabled><i class="fa-solid fa-plus"></i> New</button>
+            <button class="btn btn-secondary btn-sm" id="pm-new-btn" type="button" onclick="newProfileManagerProfile()"><i class="fa-solid fa-plus"></i> New</button>
           </div>
           <div class="pm-list-scroll" id="pm-list-scroll"></div>
         </div>
         <div class="pm-detail">
           <div class="pm-detail-head">
-            <h3 id="pm-detail-title" style="font-size:1.05rem"></h3>
+            <div id="pm-detail-title-wrap"></div>
             <div style="display:flex; gap:8px">
               <button class="btn btn-cyan btn-sm" id="pm-set-active-btn" type="button" onclick="setActiveProfileManagerProfile()"><i class="fa-solid fa-star"></i> Set active</button>
               <button class="btn btn-rose btn-sm" id="pm-delete-btn" type="button" disabled><i class="fa-solid fa-trash"></i></button>
-              <button class="btn btn-primary btn-sm" id="pm-save-btn" type="button" disabled><i class="fa-solid fa-floppy-disk"></i> Save</button>
+              <button class="btn btn-primary btn-sm" id="pm-save-btn" type="button" onclick="saveProfileManagerProfile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
             </div>
           </div>
-          <textarea class="pm-editor" id="pm-editor" readonly></textarea>
+          <div class="pm-review-banner" id="pm-review-banner" hidden>
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Review before save — nothing written yet.
+          </div>
+          <textarea class="pm-editor" id="pm-editor"></textarea>
         </div>
       </div>
     </div>
@@ -1887,6 +1919,8 @@
     let activeResume = null;
     let profileManagerProfiles = [];
     let profileManagerSelectedName = null;
+    let profileManagerReviewing = false;
+    let profileManagerLastRenderedKey = null;
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
@@ -2207,45 +2241,139 @@
 
     function renderProfileManager() {
       const listEl = document.getElementById('pm-list-scroll');
-      const titleEl = document.getElementById('pm-detail-title');
+      const titleWrap = document.getElementById('pm-detail-title-wrap');
       const editorEl = document.getElementById('pm-editor');
       const setActiveBtn = document.getElementById('pm-set-active-btn');
+      const deleteBtn = document.getElementById('pm-delete-btn');
+      const saveBtn = document.getElementById('pm-save-btn');
+      const reviewBanner = document.getElementById('pm-review-banner');
       if (!listEl) return;
 
-      if (profileManagerProfiles.length === 0) {
+      if (profileManagerProfiles.length === 0 && !profileManagerReviewing) {
         listEl.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No profiles found.</div>';
-        if (titleEl) titleEl.textContent = '';
+        if (titleWrap) titleWrap.innerHTML = '';
         if (editorEl) editorEl.value = '';
         if (setActiveBtn) setActiveBtn.disabled = true;
+        if (deleteBtn) deleteBtn.disabled = true;
+        if (saveBtn) saveBtn.disabled = true;
+        if (reviewBanner) reviewBanner.hidden = true;
         return;
       }
 
-      if (!profileManagerSelectedName || !profileManagerProfiles.find(p => p.name === profileManagerSelectedName)) {
-        profileManagerSelectedName = profileManagerProfiles[0].name;
+      if (!profileManagerReviewing) {
+        if (!profileManagerSelectedName || !profileManagerProfiles.find(p => p.name === profileManagerSelectedName)) {
+          profileManagerSelectedName = profileManagerProfiles[0]?.name ?? null;
+        }
       }
 
       const selected = profileManagerProfiles.find(p => p.name === profileManagerSelectedName);
 
       listEl.innerHTML = profileManagerProfiles.map(p => `
-        <div class="pm-li ${p.name === profileManagerSelectedName ? 'sel' : ''}" data-name="${p.name}" onclick="selectProfileManagerProfile(this.dataset.name)">
+        <div class="pm-li ${p.name === profileManagerSelectedName && !profileManagerReviewing ? 'sel' : ''}" data-name="${p.name}" onclick="selectProfileManagerProfile(this.dataset.name)">
           <i class="fa-regular fa-file-lines pm-doc"></i>
           <span class="pm-nm">${p.name}</span>
           ${p.name === activeResume ? '<span class="active-chip">Active</span>' : ''}
         </div>
       `).join('');
 
-      if (titleEl) titleEl.textContent = selected.name;
-      if (editorEl) editorEl.value = selected.content;
-      if (setActiveBtn) {
-        setActiveBtn.disabled = selected.name === activeResume;
-        setActiveBtn.innerHTML = selected.name === activeResume
-          ? '<i class="fa-solid fa-star"></i> Active'
-          : '<i class="fa-solid fa-star"></i> Set active';
+      if (profileManagerReviewing) {
+        if (titleWrap) {
+          titleWrap.innerHTML = '<input class="pm-name-input" id="pm-name-input" type="text" placeholder="Profile name (e.g. senior_qa)" />';
+        }
+        if (reviewBanner) reviewBanner.hidden = false;
+        if (setActiveBtn) setActiveBtn.disabled = true;
+        if (deleteBtn) deleteBtn.disabled = true;
+        if (saveBtn) saveBtn.disabled = false;
+      } else {
+        if (titleWrap) {
+          titleWrap.innerHTML = `<h3 style="font-size:1.05rem">${selected?.name ?? ''}</h3>`;
+        }
+        if (reviewBanner) reviewBanner.hidden = true;
+        if (setActiveBtn) {
+          setActiveBtn.disabled = !selected || selected.name === activeResume;
+          setActiveBtn.innerHTML = selected && selected.name === activeResume
+            ? '<i class="fa-solid fa-star"></i> Active'
+            : '<i class="fa-solid fa-star"></i> Set active';
+        }
+        if (deleteBtn) deleteBtn.disabled = true;
+        if (saveBtn) saveBtn.disabled = !selected;
+      }
+
+      const renderKey = profileManagerReviewing ? 'review' : (profileManagerSelectedName || 'none');
+      if (editorEl && renderKey !== profileManagerLastRenderedKey) {
+        if (profileManagerReviewing) {
+          editorEl.value = '';
+        } else if (selected) {
+          editorEl.value = selected.content;
+        }
+        profileManagerLastRenderedKey = renderKey;
+      }
+    }
+
+    function newProfileManagerProfile() {
+      profileManagerReviewing = true;
+      profileManagerSelectedName = null;
+      profileManagerLastRenderedKey = null;
+      renderProfileManager();
+    }
+
+    async function saveProfileManagerProfile() {
+      const editorEl = document.getElementById('pm-editor');
+      const content = editorEl?.value ?? '';
+
+      try {
+        let response;
+        if (profileManagerReviewing) {
+          const nameInput = document.getElementById('pm-name-input');
+          const name = nameInput?.value?.trim();
+          if (!name) {
+            addLogLine('Profile name is required before save.', 'warning');
+            return;
+          }
+          response = await fetch('/api/resumes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, content }),
+          });
+        } else if (profileManagerSelectedName) {
+          response = await fetch('/api/resumes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: profileManagerSelectedName, content }),
+          });
+        } else {
+          return;
+        }
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          addLogLine(err.detail || 'Failed to save resume profile.', 'error');
+          return;
+        }
+
+        const saved = await response.json();
+        mockResumes[saved.name] = saved.content;
+        const existingIdx = profileManagerProfiles.findIndex(p => p.name === saved.name);
+        if (existingIdx >= 0) {
+          profileManagerProfiles[existingIdx] = saved;
+        } else {
+          profileManagerProfiles.push(saved);
+          profileManagerProfiles.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        profileManagerReviewing = false;
+        profileManagerSelectedName = saved.name;
+        profileManagerLastRenderedKey = null;
+        addLogLine(`Saved resume profile: ${saved.name}`, 'success');
+        renderProfileManager();
+      } catch (err) {
+        addLogLine(`Failed to save resume profile: ${err}`, 'error');
       }
     }
 
     function selectProfileManagerProfile(name) {
+      profileManagerReviewing = false;
       profileManagerSelectedName = name;
+      profileManagerLastRenderedKey = null;
       renderProfileManager();
     }
 
@@ -3079,6 +3207,7 @@
       moveJobStage,
       navigateDrawerJob,
       onBoardSearchInput,
+      newProfileManagerProfile,
       openProfileManager,
       reclassifyJob,
       openContactedElsewhereJob,
@@ -3087,6 +3216,7 @@
       resetKbFilters,
       saveOutreachSettings,
       selectActiveContact,
+      saveProfileManagerProfile,
       selectProfileManagerProfile,
       setActiveProfileManagerProfile,
       toggleActivityLog,
