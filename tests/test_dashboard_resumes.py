@@ -106,3 +106,64 @@ def test_save_resume_collision_appends_timestamp_suffix(tmp_path, monkeypatch):
     assert data["name"] != "qa.md"
     assert existing.read_text() == "original"
     assert (resumes_dir / data["name"]).read_text() == "new copy"
+
+
+def test_delete_resume_removes_file(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    qa_file = resumes_dir / "qa.md"
+    qa_file.write_text("# QA")
+    pm_file = resumes_dir / "project_manager.md"
+    pm_file.write_text("# PM")
+
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    response = client.delete(
+        "/api/resumes/project_manager.md",
+        params={"active_resume": "qa.md"},
+    )
+    assert response.status_code == 200
+    assert not pm_file.exists()
+    assert qa_file.exists()
+
+    list_response = client.get("/api/resumes")
+    names = [r["name"] for r in list_response.json()]
+    assert "project_manager.md" not in names
+    assert "qa.md" in names
+
+
+def test_delete_active_resume_rejected(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    qa_file = resumes_dir / "qa.md"
+    qa_file.write_text("# QA")
+    pm_file = resumes_dir / "project_manager.md"
+    pm_file.write_text("# PM")
+
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    response = client.delete(
+        "/api/resumes/qa.md",
+        params={"active_resume": "qa.md"},
+    )
+    assert response.status_code == 409
+    assert "Active Resume Profile" in response.json()["detail"]
+    assert qa_file.exists()
+    assert pm_file.exists()
+
+
+def test_delete_last_remaining_resume_rejected(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    only_file = resumes_dir / "qa.md"
+    only_file.write_text("# QA")
+
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    response = client.delete(
+        "/api/resumes/qa.md",
+        params={"active_resume": "other.md"},
+    )
+    assert response.status_code == 409
+    assert "last remaining" in response.json()["detail"].lower()
+    assert only_file.exists()

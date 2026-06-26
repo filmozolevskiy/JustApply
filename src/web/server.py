@@ -191,6 +191,37 @@ async def save_resume(body: ResumeSaveRequest):
     return {"name": filename, "content": body.content}
 
 
+def _list_resume_filenames() -> list[str]:
+    if not os.path.exists(RESUMES_DIR):
+        return []
+    return sorted(
+        f for f in os.listdir(RESUMES_DIR) if f.endswith(".md") and os.path.isfile(os.path.join(RESUMES_DIR, f))
+    )
+
+
+@app.delete("/api/resumes/{filename}")
+async def delete_resume(filename: str, active_resume: str = Query(...)):
+    filepath = _safe_resume_path(filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Resume profile not found")
+
+    remaining = _list_resume_filenames()
+    if len(remaining) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete the last remaining resume profile.",
+        )
+
+    if filename == active_resume:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete the Active Resume Profile. Set another profile active first.",
+        )
+
+    os.remove(filepath)
+    return {"name": filename, "deleted": True}
+
+
 @app.get("/api/settings/outreach", response_model=OutreachSettings)
 async def get_settings_outreach():
     return get_outreach_settings()

@@ -1874,7 +1874,7 @@
             <div id="pm-detail-title-wrap"></div>
             <div style="display:flex; gap:8px">
               <button class="btn btn-cyan btn-sm" id="pm-set-active-btn" type="button" onclick="setActiveProfileManagerProfile()"><i class="fa-solid fa-star"></i> Set active</button>
-              <button class="btn btn-rose btn-sm" id="pm-delete-btn" type="button" disabled><i class="fa-solid fa-trash"></i></button>
+              <button class="btn btn-rose btn-sm" id="pm-delete-btn" type="button" onclick="deleteProfileManagerProfile()" disabled><i class="fa-solid fa-trash"></i></button>
               <button class="btn btn-primary btn-sm" id="pm-save-btn" type="button" onclick="saveProfileManagerProfile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
             </div>
           </div>
@@ -2295,7 +2295,12 @@
             ? '<i class="fa-solid fa-star"></i> Active'
             : '<i class="fa-solid fa-star"></i> Set active';
         }
-        if (deleteBtn) deleteBtn.disabled = true;
+        if (deleteBtn) {
+          const canDelete = selected
+            && selected.name !== activeResume
+            && profileManagerProfiles.length > 1;
+          deleteBtn.disabled = !canDelete;
+        }
         if (saveBtn) saveBtn.disabled = !selected;
       }
 
@@ -2389,6 +2394,42 @@
       });
       renderProfileManager();
       renderActiveVariant();
+    }
+
+    async function deleteProfileManagerProfile() {
+      if (!profileManagerSelectedName || profileManagerReviewing) return;
+      const target = profileManagerSelectedName;
+      if (target === activeResume) {
+        addLogLine('Cannot delete the Active Resume Profile. Set another profile active first.', 'warning');
+        return;
+      }
+      if (profileManagerProfiles.length <= 1) {
+        addLogLine('Cannot delete the last remaining resume profile.', 'warning');
+        return;
+      }
+      const ok = confirm(`Delete resume profile "${target}"? This cannot be undone.`);
+      if (!ok) return;
+
+      try {
+        const response = await fetch(
+          `/api/resumes/${encodeURIComponent(target)}?active_resume=${encodeURIComponent(activeResume || '')}`,
+          { method: 'DELETE' },
+        );
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          addLogLine(err.detail || 'Failed to delete resume profile.', 'error');
+          return;
+        }
+
+        delete mockResumes[target];
+        profileManagerProfiles = profileManagerProfiles.filter(p => p.name !== target);
+        profileManagerSelectedName = profileManagerProfiles[0]?.name ?? null;
+        profileManagerLastRenderedKey = null;
+        addLogLine(`Deleted resume profile: ${target}`, 'success');
+        renderProfileManager();
+      } catch (err) {
+        addLogLine(`Failed to delete resume profile: ${err}`, 'error');
+      }
     }
 
     let enrichPollingInterval = null;
@@ -3218,6 +3259,7 @@
       selectActiveContact,
       saveProfileManagerProfile,
       selectProfileManagerProfile,
+      deleteProfileManagerProfile,
       setActiveProfileManagerProfile,
       toggleActivityLog,
       toggleContacted,

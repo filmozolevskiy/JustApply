@@ -16,3 +16,11 @@
 - Set active / Delete disabled during review; editor sync preserves in-progress edits on re-render
 - Tests: tests/test_dashboard_resumes.py (+3 backend), test_dashboard_profile_manager.py (+4 static)
 - Full suite: 740 passed
+
+## Iteration 3 — #98 Delete Resume Profiles (guarded against active / last remaining)
+- DELETE /api/resumes/{filename}?active_resume=… removes non-active profile .md file
+- Rejects delete of Active Resume Profile (409) and last remaining profile (409)
+- Profile Manager: delete button with confirm(); enabled only when deletable
+- Client guards mirror server; row removed from list on success
+- Tests: tests/test_dashboard_resumes.py (+3 backend), test_dashboard_profile_manager.py (+2 static)
+- Full suite: 745 passed

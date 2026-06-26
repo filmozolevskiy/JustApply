@@ -111,3 +111,28 @@ def test_profile_manager_review_disables_set_active_and_delete():
         r"if \(profileManagerReviewing\)[\s\S]{0,400}deleteBtn\.disabled = true",
         js,
     )
+
+
+def test_profile_manager_delete_calls_api_with_confirmation():
+    js = get_script_section(_read_html())
+    fn_match = re.search(
+        r"async function deleteProfileManagerProfile\(\)\s*\{([\s\S]*?)\n    \}",
+        js,
+    )
+    assert fn_match, "deleteProfileManagerProfile function not found"
+    fn_body = fn_match.group(1)
+    assert "confirm(" in fn_body
+    assert "method: 'DELETE'" in fn_body or 'method: "DELETE"' in fn_body
+    assert "active_resume" in fn_body
+
+
+def test_profile_manager_delete_disabled_for_active_or_last_profile():
+    js = get_script_section(_read_html())
+    assert re.search(
+        r"canDelete[\s\S]{0,120}activeResume",
+        js,
+    )
+    assert re.search(
+        r"profileManagerProfiles\.length\s*>\s*1",
+        js,
+    )
