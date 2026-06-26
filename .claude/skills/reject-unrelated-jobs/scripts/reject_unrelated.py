@@ -27,7 +27,7 @@ def get_unrelated_jobs(all_active=False):
     if all_active:
         c.execute("SELECT id, title, company, status FROM jobs WHERE status != 'rejected'")
     else:
-        c.execute("SELECT id, title, company, status FROM jobs WHERE status = 'found'")
+        c.execute("SELECT id, title, company, status FROM jobs WHERE status = 'scraped'")
         
     jobs = c.fetchall()
     conn.close()
@@ -86,7 +86,7 @@ def main():
         
     else:
         # Default: list jobs
-        scope = "all active" if args.all_active else "'found'"
+        scope = "all active" if args.all_active else "'scraped'"
         print(f"Found {len(unrelated)} unrelated jobs in {scope} status:")
         print("-" * 80)
         print(f"{'ID':<6} | {'Title':<45} | {'Company':<25}")

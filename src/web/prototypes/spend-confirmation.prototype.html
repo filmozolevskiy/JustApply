@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway. Delete or fold the winner into dashboard.html.
+  Question: "What should the Spend Confirmation modal (scrape variant) look like?"
+  Three variants of the scrape Spend Confirmation, switchable via ?variant= and the
+  floating bottom bar, rendered over a dimmed mock of the Kanban Dashboard.
+  Run: open src/web/prototypes/spend-confirmation.prototype.html
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PROTOTYPE — Spend Confirmation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* ---- tokens lifted from dashboard.html ---- */
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #161e38 0%, #0a0e1a 100%);
+      --bg-surface: rgba(20, 26, 48, 0.45);
+      --bg-surface-opaque: #141a30;
+      --border-color: rgba(255, 255, 255, 0.07);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-cyan: #06b6d4;
+      --accent-indigo: #6366f1;
+      --accent-violet: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --transition-fast: 0.15s ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      background-image: var(--bg-gradient);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    h1,h2,h3,h4 { font-family: var(--font-sans); font-weight: 600; letter-spacing: -0.02em; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+    .glass-panel {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px 0 rgba(0,0,0,0.3);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: 8px; font-family: var(--font-sans);
+      font-weight: 500; font-size: 0.95rem; cursor: pointer;
+      transition: all var(--transition-fast); border: 1px solid transparent; outline: none;
+    }
+    .btn-secondary { background: rgba(255,255,255,0.05); border-color: var(--border-color); color: var(--text-primary); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: var(--border-hover); }
+    /* spend-accented primary action (amber) — distinct from the indigo create buttons */
+    .btn-spend {
+      background: linear-gradient(135deg, var(--accent-amber), #d97706);
+      color: #1a1206; box-shadow: 0 4px 14px rgba(245,158,11,0.3); font-weight: 600;
+    }
+    .btn-spend:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(245,158,11,0.45); }
+
+    /* ---- dimmed dashboard backdrop (so the modal has real density behind it) ---- */
+    .backdrop-app { padding: 20px 24px; filter: saturate(0.9); }
+    .mock-topbar {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+      font-family: var(--font-sans); font-weight: 700; font-size: 1.2rem;
+    }
+    .mock-topbar .logo { color: var(--accent-cyan); }
+    .mock-panel { padding: 14px 18px; margin-bottom: 16px; color: var(--text-secondary); font-size: 0.85rem; }
+    .mock-lanes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .mock-lane { padding: 12px; min-height: 320px; }
+    .mock-lane h4 { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .mock-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+    .mock-card .t { font-weight: 600; font-size: 0.82rem; }
+    .mock-card .c { color: var(--text-muted); font-size: 0.72rem; }
+    .mock-bar { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.06); margin-top: 8px; }
+
+    /* ---- modal shell (shared) ---- */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(5, 8, 18, 0.72);
+      backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center;
+      padding: 24px; z-index: 50;
+    }
+    .variant[hidden] { display: none; }
+    .modal {
+      background: var(--bg-surface-opaque);
+      border: 1px solid var(--border-hover);
+      border-radius: 16px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.55);
+      width: 100%;
+      animation: pop 0.18s cubic-bezier(0.4,0,0.2,1);
+    }
+    @keyframes pop { from { transform: translateY(8px) scale(0.985); opacity: 0; } to { transform: none; opacity: 1; } }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 12px; }
+    .kw { color: var(--accent-cyan); font-weight: 600; }
+    .rg { color: #fcd34d; font-weight: 600; }
+    .muted { color: var(--text-muted); }
+    .sub { color: var(--text-secondary); font-size: 0.85rem; }
+
+    /* region chip */
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+      border-radius: 999px; font-size: 0.78rem; font-weight: 500;
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc;
+    }
+    .country-head { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 10px 0 6px; }
+
+    /* ============ VARIANT A — Classic dialog ============ */
+    #v-A .modal { max-width: 480px; padding: 24px; }
+    .a-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .a-head .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+      background: rgba(245,158,11,0.15); color: var(--accent-amber); font-size: 1.05rem; }
+    .a-warn {
+      display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+      background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #fcd34d;
+      font-size: 0.85rem; margin-bottom: 16px;
+    }
+    .a-row { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 0.88rem; }
+    .a-row:last-of-type { border-bottom: none; }
+    .a-row .lbl { color: var(--text-secondary); }
+    .a-row .val { text-align: right; }
+    .a-estimate { margin: 14px 0 18px; padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); }
+    .a-estimate .big { font-family: var(--font-sans); font-size: 1.35rem; font-weight: 700; }
+
+    /* ============ VARIANT B — Checkout receipt (split) ============ */
+    #v-B .modal { max-width: 740px; padding: 0; overflow: hidden; }
+    .b-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; }
+    .b-left { padding: 24px; }
+    .b-right { padding: 24px; background: rgba(245,158,11,0.06); border-left: 1px solid var(--border-color); }
+    .b-title { font-size: 1.15rem; margin-bottom: 4px; }
+    .b-receipt-line { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 7px 0; color: var(--text-secondary); }
+    .b-receipt-line .v { color: var(--text-primary); font-family: var(--font-mono); }
+    .b-divider { height: 1px; background: var(--border-color); margin: 8px 0; }
+    .b-total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
+    .b-total .amt { font-family: var(--font-sans); font-size: 1.8rem; font-weight: 700; color: var(--accent-amber); }
+    .b-foot { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px; grid-column: 1 / -1; }
+    .b-limit-line { align-items: center; }
+    .b-stepper { display: inline-flex; align-items: center; gap: 0; }
+    .b-stepper button {
+      width: 24px; height: 24px; border-radius: 6px; cursor: pointer;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border-color);
+      color: var(--text-primary); font-size: 0.95rem; line-height: 1; display: grid; place-items: center;
+    }
+    .b-stepper button:hover { background: rgba(245,158,11,0.18); border-color: rgba(245,158,11,0.4); }
+    .b-stepper input {
+      width: 58px; text-align: center; margin: 0 6px; padding: 4px 0;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 6px;
+      color: var(--text-primary); font-family: var(--font-mono); font-size: 0.85rem;
+    }
+    .b-stepper input::-webkit-outer-spin-button, .b-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .b-stepper input { -moz-appearance: textfield; }
+
+    /* ============ VARIANT C — Warning hero (prose) ============ */
+    #v-C .modal { max-width: 540px; padding: 0; overflow: hidden; }
+    .c-hero {
+      background: linear-gradient(135deg, rgba(245,158,11,0.22), rgba(217,119,6,0.1));
+      border-bottom: 1px solid rgba(245,158,11,0.3);
+      padding: 22px 24px; display: flex; gap: 14px; align-items: center;
+    }
+    .c-hero .ic { font-size: 1.8rem; color: var(--accent-amber); }
+    .c-hero h2 { font-size: 1.15rem; }
+    .c-hero p { font-size: 0.82rem; color: #fcd34d; margin-top: 2px; }
+    .c-body { padding: 22px 24px; }
+    .c-sentence { font-size: 1.02rem; line-height: 1.7; }
+    .c-estchip {
+      display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 8px 14px;
+      border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color);
+      font-family: var(--font-sans); font-weight: 600;
+    }
+    .c-estchip .dot { color: var(--accent-amber); }
+    .c-foot { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px; }
+
+    /* ---- floating prototype switcher ---- */
+    .switcher {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 4px; z-index: 100;
+      background: #0b1020; border: 1px solid var(--accent-cyan);
+      border-radius: 999px; padding: 6px 8px; box-shadow: 0 8px 30px rgba(6,182,212,0.25);
+      font-family: var(--font-mono);
+    }
+    .switcher button {
+      background: transparent; border: none; color: var(--accent-cyan); cursor: pointer;
+      width: 30px; height: 30px; border-radius: 50%; font-size: 0.9rem;
+    }
+    .switcher button:hover { background: rgba(6,182,212,0.15); }
+    .switcher .lbl { font-size: 0.8rem; color: var(--text-primary); padding: 0 8px; min-width: 180px; text-align: center; }
+    .switcher .lbl b { color: var(--accent-cyan); }
+  </style>
+</head>
+<body>
+  <!-- dimmed dashboard backdrop -->
+  <div class="backdrop-app" aria-hidden="true">
+    <div class="mock-topbar"><span class="logo"><i class="fa-solid fa-paper-plane"></i></span> JustApply</div>
+    <div class="mock-panel glass-panel"><i class="fa-solid fa-magnifying-glass"></i> &nbsp;Job Search Settings — Canada · United States &nbsp;·&nbsp; <span class="muted">keyword: QA</span></div>
+    <div class="mock-lanes">
+      <div class="mock-lane glass-panel"><h4>Found · 7</h4>
+        <div class="mock-card"><div class="t">QA Automation Engineer</div><div class="c">Shopify · Ontario</div><div class="mock-bar"></div></div>
+        <div class="mock-card"><div class="t">Senior QA Analyst</div><div class="c">Lightspeed · Quebec</div><div class="mock-bar"></div></div>
+        <div class="mock-card"><div class="t">SDET</div><div class="c">Wealthsimple · BC</div><div class="mock-bar"></div></div>
+      </div>
+      <div class="mock-lane glass-panel"><h4>Accepted · 3</h4>
+        <div class="mock-card"><div class="t">QA Lead</div><div class="c">Hootsuite · BC</div><div class="mock-bar"></div></div>
+      </div>
+      <div class="mock-lane glass-panel"><h4>Applied · 2</h4>
+        <div class="mock-card"><div class="t">Test Engineer</div><div class="c">Clio · Ontario</div><div class="mock-bar"></div></div>
+      </div>
+      <div class="mock-lane glass-panel"><h4>Interviewing · 1</h4></div>
+    </div>
+  </div>
+
+  <!-- =================== VARIANT A =================== -->
+  <div id="v-A" class="variant overlay" hidden>
+    <div class="modal glass-panel">
+      <div class="a-head">
+        <div class="ic"><i class="fa-solid fa-satellite-dish"></i></div>
+        <div>
+          <h3>Run live LinkedIn scrape?</h3>
+          <div class="sub">Bright Data · LinkedIn jobs</div>
+        </div>
+      </div>
+      <div class="a-warn">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-top:2px"></i>
+        <span>This runs a real scrape and <b>spends real Bright Data credits</b>.</span>
+      </div>
+      <div class="a-row"><span class="lbl">Keyword</span><span class="val"><span class="kw">QA</span> <span class="muted">in title / description</span></span></div>
+      <div class="a-row"><span class="lbl">Canada</span><span class="val rg">Ontario, British Columbia</span></div>
+      <div class="a-row"><span class="lbl">United States</span><span class="val rg">California, New York</span></div>
+      <div class="a-row"><span class="lbl">Time range</span><span class="val">Past week</span></div>
+      <div class="a-row"><span class="lbl">Per region cap</span><span class="val">200 postings</span></div>
+      <div class="a-estimate">
+        <div class="sub">Estimated maximum spend</div>
+        <div class="big">up to ~$1.20</div>
+        <div class="sub muted">4 regions × 200 postings · actual cost depends on how many postings match</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary">Cancel</button>
+        <button class="btn btn-spend"><i class="fa-solid fa-play"></i> Run scraper</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== VARIANT B =================== -->
+  <div id="v-B" class="variant overlay" hidden>
+    <div class="modal">
+      <div class="b-grid">
+        <div class="b-left">
+          <h3 class="b-title">Run live LinkedIn scrape?</h3>
+          <div class="sub" style="margin-bottom:16px">Searching <span class="kw">QA</span> in title / description · posted in the <b>past week</b>.</div>
+
+          <div class="country-head">Canada</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <span class="chip">Ontario</span><span class="chip">British Columbia</span>
+          </div>
+          <div class="country-head">United States</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <span class="chip">California</span><span class="chip">New York</span>
+          </div>
+        </div>
+        <div class="b-right">
+          <div class="sub" style="display:flex;align-items:center;gap:8px;color:#fcd34d;margin-bottom:12px">
+            <i class="fa-solid fa-triangle-exclamation"></i> Spends real Bright Data credits
+          </div>
+          <div class="b-receipt-line"><span>Search regions</span><span class="v" id="b-regions">4</span></div>
+          <div class="b-receipt-line b-limit-line">
+            <span>Per-region limit</span>
+            <span class="b-stepper">
+              <button type="button" id="b-limit-dec" aria-label="Decrease">&minus;</button>
+              <input id="b-limit" type="number" min="25" max="1000" step="25" value="200" aria-label="Jobs per region">
+              <button type="button" id="b-limit-inc" aria-label="Increase">+</button>
+            </span>
+          </div>
+          <div class="b-receipt-line"><span>Max postings</span><span class="v" id="b-maxpostings">800</span></div>
+          <div class="b-receipt-line"><span>Cost per record</span><span class="v">× $0.0015</span></div>
+          <div class="b-divider"></div>
+          <div class="b-total"><span class="sub">Max spend</span><span class="amt" id="b-maxspend">~$1.20</span></div>
+          <div class="sub muted" style="margin-top:10px">Actual cost depends on how many postings match — this is the ceiling.</div>
+        </div>
+        <div class="b-foot">
+          <button class="btn btn-secondary">Cancel</button>
+          <button class="btn btn-spend"><i class="fa-solid fa-play"></i> Run scraper</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== VARIANT C =================== -->
+  <div id="v-C" class="variant overlay" hidden>
+    <div class="modal">
+      <div class="c-hero">
+        <i class="fa-solid fa-triangle-exclamation ic"></i>
+        <div>
+          <h2>This spends real money</h2>
+          <p>A live Bright Data scrape will run and bill your account.</p>
+        </div>
+      </div>
+      <div class="c-body">
+        <div class="c-sentence">
+          Scrape <span class="kw">QA</span> postings across
+          <span class="rg">Ontario</span>, <span class="rg">British Columbia</span>,
+          <span class="rg">California</span> and <span class="rg">New York</span> —
+          up to <b>200 per region</b>, posted in the <b>past week</b>.
+        </div>
+        <div class="c-estchip">
+          <span class="dot"><i class="fa-solid fa-coins"></i></span>
+          ≤ 800 postings · ≤ ~$1.20
+        </div>
+      </div>
+      <div class="c-foot">
+        <button class="btn btn-secondary">Cancel</button>
+        <button class="btn btn-spend"><i class="fa-solid fa-play"></i> Run scraper</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- floating switcher -->
+  <div class="switcher" role="group" aria-label="Prototype variant switcher">
+    <button id="prev" title="Previous (←)"><i class="fa-solid fa-chevron-left"></i></button>
+    <span class="lbl" id="lbl"></span>
+    <button id="next" title="Next (→)"><i class="fa-solid fa-chevron-right"></i></button>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      { key: 'A', name: 'Classic dialog' },
+      { key: 'B', name: 'Checkout receipt' },
+      { key: 'C', name: 'Warning hero' },
+    ];
+    function currentKey() {
+      const p = new URLSearchParams(location.search).get('variant');
+      return VARIANTS.some(v => v.key === p) ? p : 'A';
+    }
+    function render() {
+      const key = currentKey();
+      VARIANTS.forEach(v => {
+        document.getElementById('v-' + v.key).hidden = (v.key !== key);
+      });
+      const v = VARIANTS.find(x => x.key === key);
+      document.getElementById('lbl').innerHTML = `<b>${v.key}</b> — ${v.name}`;
+    }
+    function go(delta) {
+      const i = VARIANTS.findIndex(v => v.key === currentKey());
+      const next = VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length].key;
+      const url = new URL(location);
+      url.searchParams.set('variant', next);
+      history.replaceState({}, '', url);
+      render();
+    }
+    document.getElementById('prev').onclick = () => go(-1);
+    document.getElementById('next').onclick = () => go(1);
+
+    // ---- B variant: live Per-Region Limit recompute ----
+    const REGIONS = 4;            // sample: Ontario, BC, California, New York
+    const COST_PER_RECORD = 0.0015;
+    const LIMIT_MIN = 25, LIMIT_MAX = 1000, LIMIT_STEP = 25;
+    const bLimit = document.getElementById('b-limit');
+    function clampLimit(n) {
+      if (isNaN(n)) n = 200;
+      n = Math.round(n / LIMIT_STEP) * LIMIT_STEP;
+      return Math.min(LIMIT_MAX, Math.max(LIMIT_MIN, n));
+    }
+    function recomputeB() {
+      const limit = clampLimit(parseInt(bLimit.value, 10));
+      const maxPostings = REGIONS * limit;
+      const maxSpend = maxPostings * COST_PER_RECORD;
+      document.getElementById('b-regions').textContent = REGIONS;
+      document.getElementById('b-maxpostings').textContent = maxPostings.toLocaleString();
+      document.getElementById('b-maxspend').textContent = '~$' + maxSpend.toFixed(2);
+    }
+    bLimit.addEventListener('input', recomputeB);
+    bLimit.addEventListener('change', () => { bLimit.value = clampLimit(parseInt(bLimit.value, 10)); recomputeB(); });
+    document.getElementById('b-limit-dec').onclick = () => { bLimit.value = clampLimit(parseInt(bLimit.value, 10) - LIMIT_STEP); recomputeB(); };
+    document.getElementById('b-limit-inc').onclick = () => { bLimit.value = clampLimit(parseInt(bLimit.value, 10) + LIMIT_STEP); recomputeB(); };
+    recomputeB();
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') go(-1);
+      if (e.key === 'ArrowRight') go(1);
+    });
+    render();
+  </script>
+</body>
+</html>

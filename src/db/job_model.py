@@ -76,7 +76,7 @@ def normalize_add_job_input(job: dict) -> dict:
         "remoteType": job.get("remoteType") or "",
         "matchScore": job.get("matchScore") or 0,
         "matchType": job.get("matchType") or "",
-        "status": job.get("status") or "found",
+        "status": job.get("status") or "scraped",
         "resumeUsed": job.get("resumeUsed") or "",
         "strengths": job.get("strengths") or [],
         "gaps": job.get("gaps") or [],

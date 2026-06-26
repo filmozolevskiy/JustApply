@@ -8,8 +8,7 @@ class OutreachSettings(BaseModel):
     short_connection_note: bool = True
 
 JobStatus = Literal[
-    "found", "accepted",
-    "accepted",
+    "scraped", "matched", "accepted",
     "applied", "interviewing", "rejected",
 ]
 

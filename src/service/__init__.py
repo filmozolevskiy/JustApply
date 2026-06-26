@@ -1,6 +1,7 @@
 from .just_apply import (
     RateLimitError,
     acquire_scrape_slot,
+    backfill_unevaluated_jobs,
     begin_enrichment,
     complete_enrichment,
     parse_remote_types,
@@ -14,6 +15,7 @@ from .just_apply import (
 __all__ = [
     "RateLimitError",
     "acquire_scrape_slot",
+    "backfill_unevaluated_jobs",
     "begin_enrichment",
     "complete_enrichment",
     "parse_remote_types",

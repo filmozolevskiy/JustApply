@@ -9,7 +9,7 @@ from typing import Awaitable, Callable
 from ..schemas import Job
 
 from ..db import get_job, get_jobs, init_db
-from ..pipelines import run_enrichment_pipeline, run_search_pipeline, run_reassess_pipeline
+from ..pipelines import run_backfill_pipeline, run_enrichment_pipeline, run_search_pipeline, run_reassess_pipeline
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..rate_limiter import RateLimitError, scrape_limiter
 
@@ -142,12 +142,29 @@ async def reassess_all_jobs(
     return updated
 
 
+async def backfill_unevaluated_jobs(
+    *,
+    active_resume: str = "general_cv.md",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    log_func=None,
+) -> dict:
+    """Evaluate all jobs that never went through the LLM, then apply preference filters."""
+    init_db()
+    return await run_backfill_pipeline(
+        active_resume=active_resume,
+        allowed_remote_types=allowed_remote_types,
+        seniorities=seniorities,
+        log_func=log_func,
+    )
+
+
 async def promote_sourced_jobs(log_func=None) -> list:
     """Enrich all Found jobs that passed Resume Matcher."""
     init_db()
     to_promote = [
         j for j in get_jobs()
-        if j.shouldProceed and j.status == "found"
+        if j.shouldProceed and j.status == "scraped"
     ]
 
     promoted = []
@@ -164,6 +181,7 @@ async def promote_sourced_jobs(log_func=None) -> list:
 __all__ = [
     "RateLimitError",
     "acquire_scrape_slot",
+    "backfill_unevaluated_jobs",
     "begin_enrichment",
     "complete_enrichment",
     "parse_remote_types",

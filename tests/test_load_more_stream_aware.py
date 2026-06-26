@@ -30,7 +30,7 @@ def _make_accepted_job(db, contacts=None, company_url="https://www.linkedin.com/
         "title": "QA Engineer",
         "company": "Acme",
         "companyUrl": company_url,
-        "status": "found",
+        "status": "scraped",
     }, db_path=db)
     begin_enrichment(job_id, db)
     enrich_job(

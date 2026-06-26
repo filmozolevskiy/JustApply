@@ -44,7 +44,7 @@ def test_database_lifecycle(tmp_path):
     new_job_data = {
         "title": "Staff Engineer",
         "company": "Google",
-        "status": "found",
+        "status": "scraped",
         "strengths": ["Testing", "Scaling"],
         "shouldProceed": True
     }
@@ -57,7 +57,7 @@ def test_database_lifecycle(tmp_path):
     added_job = next(j for j in jobs_after_add if j.id == new_id)
     assert added_job.title == "Staff Engineer"
     assert added_job.company == "Google"
-    assert added_job.status == "found"
+    assert added_job.status == "scraped"
     assert added_job.strengths == ["Testing", "Scaling"]
     assert added_job.shouldProceed is True
 
@@ -130,7 +130,7 @@ def test_update_job_status_invalid_status(tmp_path):
     # Job status must be unchanged
     jobs = get_jobs(db_str)
     job1 = next(j for j in jobs if j.id == 1)
-    assert job1.status == "found"
+    assert job1.status == "matched"
 
 
 def test_get_jobs_json_roundtrip(tmp_path):

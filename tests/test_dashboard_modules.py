@@ -65,12 +65,12 @@ def test_job_store_integrates_incoming_search_jobs():
           getJobs, setJobs, findJob, integrateIncomingJobs,
         } from './src/web/static/js/jobStore.js';
 
-        setJobs([{ id: 1, title: 'QA', company: 'Acme', status: 'found' }]);
+        setJobs([{ id: 1, title: 'QA', company: 'Acme', status: 'scraped' }]);
 
         const added = integrateIncomingJobs([
-          { id: 1, title: 'QA', company: 'Acme', status: 'found' },
-          { id: 2, title: 'PM', company: 'Beta', status: 'found' },
-          { title: 'PM', company: 'Beta', status: 'found' },
+          { id: 1, title: 'QA', company: 'Acme', status: 'scraped' },
+          { id: 2, title: 'PM', company: 'Beta', status: 'scraped' },
+          { title: 'PM', company: 'Beta', status: 'scraped' },
         ]);
         if (added !== 1) process.exit(1);
         if (getJobs().length !== 2) process.exit(2);
@@ -213,9 +213,9 @@ def test_board_renderer_job_order_follows_lanes_and_sort():
         import { getBoardJobOrder } from './src/web/static/js/boardRenderer.js';
 
         const jobs = [
-          { id: 1, status: 'found', matchScore: 60 },
+          { id: 1, status: 'scraped', matchScore: 60 },
           { id: 2, status: 'accepted', matchScore: 90 },
-          { id: 3, status: 'found', matchScore: 80 },
+          { id: 3, status: 'scraped', matchScore: 80 },
           { id: 4, status: 'rejected', matchScore: 50 },
         ];
 

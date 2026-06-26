@@ -29,7 +29,7 @@ def db(tmp_path, monkeypatch):
 def _make_accepted_job(db, company="Acme", company_url="https://www.linkedin.com/company/acme/"):
     from src.db.jobs import add_job
     from src.core.enrichment.coordinator import begin_enrichment
-    job_id = add_job({"title": "QA", "company": company, "companyUrl": company_url, "status": "found"}, db_path=db)
+    job_id = add_job({"title": "QA", "company": company, "companyUrl": company_url, "status": "scraped"}, db_path=db)
     begin_enrichment(job_id, db)
     return job_id
 

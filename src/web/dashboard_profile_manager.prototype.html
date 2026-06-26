@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — Profile Manager modal — THROWAWAY, DO NOT SHIP.
+  Visual spec for PRD #85. Variant A (master / detail, two-pane) won on 2026-06-26;
+  variants B/C and the switcher were removed. Mock data only, no backend, no persistence.
+  Run: open src/web/dashboard_profile_manager.prototype.html in a browser.
+  When PRD #85 is implemented, fold this into dashboard.html (rewritten properly) and delete this file.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PROTOTYPE — Profile Manager (Variant A)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #161e38 0%, #0a0e1a 100%);
+      --bg-surface: rgba(20, 26, 48, 0.45);
+      --bg-surface-opaque: #141a30;
+      --border-color: rgba(255, 255, 255, 0.07);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-cyan: #06b6d4;
+      --accent-indigo: #6366f1;
+      --accent-violet: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-amber: #f59e0b;
+      --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      --transition-fast: 0.15s ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      background-image: var(--bg-gradient);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    h1,h2,h3,h4,h5,h6 { font-family: var(--font-sans); font-weight: 600; letter-spacing: -0.02em; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(10,14,26,0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: 8px; font-family: var(--font-sans);
+      font-weight: 500; font-size: 0.95rem; cursor: pointer;
+      transition: all var(--transition-fast); border: 1px solid transparent;
+      text-decoration: none; color: var(--text-primary); background: none;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet)); color: #fff; box-shadow: 0 4px 14px rgba(99,102,241,0.3); }
+    .btn-primary:hover { transform: translateY(-1px); }
+    .btn-secondary { background: rgba(255,255,255,0.05); border-color: var(--border-color); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: var(--border-hover); }
+    .btn-cyan { background: rgba(6,182,212,0.1); border-color: rgba(6,182,212,0.3); color: #22d3ee; }
+    .btn-cyan:hover { background: rgba(6,182,212,0.2); border-color: #22d3ee; }
+    .btn-rose { background: rgba(244,63,94,0.1); border-color: rgba(244,63,94,0.3); color: #fb7185; }
+    .btn-rose:hover { background: rgba(244,63,94,0.2); border-color: #fb7185; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ---- Faux dashboard backdrop (so the modal butts up against real density) ---- */
+    .top-navbar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 18px 40px; border-bottom: 1px solid var(--border-color);
+      background: rgba(10,14,26,0.5); backdrop-filter: blur(10px);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 1.5rem; font-weight: 700;
+      background: linear-gradient(135deg,#22d3ee,#818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand i { background: linear-gradient(135deg,#22d3ee,#818cf8); color:#fff; padding:8px; border-radius:8px; font-size:1.1rem; -webkit-text-fill-color: initial; }
+    .nav-actions { display: flex; align-items: center; gap: 14px; }
+    .faux-board { padding: 24px 40px; display: grid; grid-template-columns: repeat(5,1fr); gap: 16px; filter: blur(1.5px); opacity: 0.5; pointer-events: none; }
+    .faux-lane { background: var(--bg-surface); border:1px solid var(--border-color); border-radius: 14px; padding: 12px; min-height: 320px; }
+    .faux-lane h4 { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+    .faux-card { background: var(--bg-surface-opaque); border:1px solid var(--border-color); border-radius: 10px; height: 64px; margin-bottom: 10px; }
+
+    /* ---- Modal shell ---- */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(5,7,12,0.85); backdrop-filter: blur(8px); z-index: 110; display: flex; align-items: center; justify-content: center; }
+    .modal-close { background: none; border: none; color: var(--text-secondary); font-size: 1.3rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text-primary); }
+    .pm-title { display: flex; align-items: center; gap: 10px; }
+    .pm-title .pill { font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(99,102,241,.15); color:#a5b4fc; border:1px solid rgba(99,102,241,.3); }
+    textarea.pm-editor {
+      width: 100%; background: rgba(0,0,0,0.28); border:1px solid var(--border-color);
+      color: var(--text-primary); border-radius: 10px; padding: 16px; resize: none;
+      font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.6; outline: none;
+    }
+    textarea.pm-editor:focus { border-color: var(--accent-cyan); }
+    .name-input { background: var(--bg-surface-opaque); border:1px solid var(--border-color); color: var(--text-primary); padding: 9px 12px; border-radius: 8px; outline: none; font-family: var(--font-sans); }
+    .name-input:focus { border-color: var(--accent-cyan); }
+    .active-chip { font-size:.62rem; font-weight:700; text-transform: uppercase; letter-spacing:.06em; color:#34d399; background: rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3); padding: 2px 7px; border-radius: 999px; }
+    .review-banner { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; background: rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); color:#fbbf24; font-size:.85rem; }
+    .muted { color: var(--text-muted); }
+
+    /* ---- Variant A — master / detail (two-pane) ---- */
+    .vA .modal-content { width: 1000px; max-width: 94vw; height: 78vh; background: var(--bg-surface-opaque); border:1px solid var(--border-color); border-radius: 16px; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+    .vA .pm-head { display:flex; justify-content: space-between; align-items:center; padding: 18px 22px; border-bottom: 1px solid var(--border-color); }
+    .vA .pm-body { display: grid; grid-template-columns: 290px 1fr; min-height: 0; }
+    .vA .pm-list { border-right: 1px solid var(--border-color); display:flex; flex-direction: column; min-height: 0; }
+    .vA .pm-list-actions { display:flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border-color); }
+    .vA .pm-list-scroll { overflow-y: auto; padding: 8px; }
+    .vA .li { display:flex; align-items:center; gap:10px; padding: 11px 12px; border-radius: 9px; cursor: pointer; border:1px solid transparent; }
+    .vA .li:hover { background: rgba(255,255,255,0.04); }
+    .vA .li.sel { background: rgba(6,182,212,0.1); border-color: rgba(6,182,212,0.3); }
+    .vA .li i.doc { color: var(--text-muted); }
+    .vA .li .nm { flex:1; font-family: var(--font-sans); font-size:.9rem; overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vA .pm-detail { display:flex; flex-direction: column; min-height: 0; padding: 18px 22px; gap: 14px; }
+    .vA .pm-detail-head { display:flex; align-items:center; justify-content: space-between; gap: 12px; }
+    .vA .pm-detail textarea { flex: 1; }
+
+    .proto-tag { position: fixed; top: 10px; left: 10px; z-index: 999; font-size:.65rem; font-weight:700; letter-spacing:.1em; text-transform: uppercase; color:#fbbf24; background: rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.4); padding: 4px 9px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="proto-tag">Prototype · Variant A · throwaway</div>
+
+  <!-- Faux dashboard chrome behind the modal -->
+  <header class="top-navbar">
+    <div class="brand"><i class="fa-solid fa-crosshairs"></i><span>JustApply</span></div>
+    <div class="nav-actions">
+      <button class="btn btn-cyan"><i class="fa-regular fa-id-badge"></i> Manage Profiles</button>
+    </div>
+  </header>
+  <div class="faux-board">
+    <div class="faux-lane"><h4>Found</h4><div class="faux-card"></div><div class="faux-card"></div><div class="faux-card"></div></div>
+    <div class="faux-lane"><h4>Accepted</h4><div class="faux-card"></div><div class="faux-card"></div></div>
+    <div class="faux-lane"><h4>Applied</h4><div class="faux-card"></div></div>
+    <div class="faux-lane"><h4>Interviewing</h4><div class="faux-card"></div></div>
+    <div class="faux-lane"><h4>Rejected</h4><div class="faux-card"></div><div class="faux-card"></div></div>
+  </div>
+
+  <div id="mount"></div>
+
+  <script>
+    // ---- Mock data (in-memory, no persistence) ----
+    const PROFILES = [
+      { name: "general_cv.md", label: "Delivery, QA & Data", active: true,
+        content: "# General Profile\n\n**SUMMARY**\n8+ years across delivery management, QA automation, and data analytics. Ships outcomes, not tickets.\n\n**KEY SKILLS**\n- Delivery: Agile, Scrum, stakeholder mgmt\n- QA: Selenium, Playwright, API testing\n- Data: SQL, Python, dashboards" },
+      { name: "qa.md", label: "QA Engineer", active: false,
+        content: "# QA Engineer / Automation Specialist Profile\n\n**SUMMARY**\nQA automation specialist with deep Playwright + CI experience.\n\n**KEY SKILLS**\n- Automation: Playwright, Selenium, Cypress\n- CI: GitHub Actions, Docker\n- Languages: Python, TypeScript" },
+      { name: "project_manager.md", label: "Delivery Manager", active: false,
+        content: "# Technical Project & Delivery Manager Profile\n\n**SUMMARY**\nDelivery manager bridging engineering and stakeholders across distributed teams.\n\n**KEY SKILLS**\n- Delivery: Scrum, SAFe, roadmapping\n- Tools: Jira, Linear\n- Comms: stakeholder reporting" },
+      { name: "data_analyst.md", label: "Data Analyst", active: false,
+        content: "# Data & BI Analyst Profile\n\n**SUMMARY**\nBI analyst turning messy data into decisions.\n\n**KEY SKILLS**\n- SQL, dbt, Python\n- Viz: Tableau, Looker\n- Stats: A/B testing" },
+    ];
+    const CONVERTED_SAMPLE = "# Senior QA Profile\n\n**SUMMARY**\n[converted from PDF — review me]\nSenior QA engineer, 7 yrs, automation-first.\n\n**KEY SKILLS**\n- Playwright, REST Assured, k6\n- CI/CD: Jenkins, GitHub Actions\n\n**EXPERIENCE**\n- **QA Lead @ Acme (2021–now)**: built the automation suite from zero.";
+
+    function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderA() {
+      let sel = PROFILES[0];
+      let reviewing = false;
+      const wrap = document.createElement('div');
+      wrap.className = 'modal-overlay vA';
+      function paint() {
+        wrap.innerHTML = `
+          <div class="modal-content">
+            <div class="pm-head">
+              <div class="pm-title"><span class="pill">Profiles</span><h3>Manage Profiles</h3></div>
+              <button class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="pm-body">
+              <div class="pm-list">
+                <div class="pm-list-actions">
+                  <button class="btn btn-primary btn-sm" data-act="import"><i class="fa-solid fa-file-arrow-up"></i> Import PDF</button>
+                  <button class="btn btn-secondary btn-sm" data-act="new"><i class="fa-solid fa-plus"></i> New</button>
+                </div>
+                <div class="pm-list-scroll">
+                  ${PROFILES.map((p,i)=>`
+                    <div class="li ${p===sel?'sel':''}" data-i="${i}">
+                      <i class="fa-regular fa-file-lines doc"></i>
+                      <span class="nm">${p.name}</span>
+                      ${p.active?'<span class="active-chip">Active</span>':''}
+                    </div>`).join('')}
+                </div>
+              </div>
+              <div class="pm-detail">
+                <div class="pm-detail-head">
+                  <div>
+                    ${reviewing
+                      ? `<input class="name-input" placeholder="Profile name (e.g. senior_qa)" style="width:240px" />`
+                      : `<h3 style="font-size:1.05rem">${sel.name}</h3><div class="muted" style="font-size:.78rem">${sel.label}</div>`}
+                  </div>
+                  <div style="display:flex; gap:8px">
+                    <button class="btn btn-cyan btn-sm" data-act="active" ${sel.active||reviewing?'disabled':''}><i class="fa-solid fa-star"></i> ${sel.active?'Active':'Set active'}</button>
+                    <button class="btn btn-rose btn-sm" data-act="delete" ${sel.active||reviewing?'disabled':''}><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-primary btn-sm" data-act="save"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                  </div>
+                </div>
+                ${reviewing?'<div class="review-banner"><i class="fa-solid fa-triangle-exclamation"></i> Converted from PDF. Review and name it, then Save — nothing is written yet.</div>':''}
+                <textarea class="pm-editor">${esc(sel.content)}</textarea>
+              </div>
+            </div>
+          </div>`;
+        wrap.querySelectorAll('.li').forEach(el=>el.onclick=()=>{ sel=PROFILES[+el.dataset.i]; reviewing=false; paint(); });
+        wrap.querySelector('.modal-close').onclick = () => alert('(prototype) closes modal');
+        wrap.querySelector('[data-act="import"]').onclick = (e)=>{
+          const b=e.currentTarget, old=b.innerHTML; b.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Converting…'; b.disabled=true;
+          setTimeout(()=>{ sel={ name:'(unsaved)', label:'', active:false, content:CONVERTED_SAMPLE }; reviewing=true; paint(); }, 1100);
+        };
+        wrap.querySelector('[data-act="new"]').onclick = ()=>{ sel={ name:'(unsaved)', label:'', active:false, content:'' }; reviewing=true; paint(); };
+        wrap.querySelector('[data-act="save"]').onclick = ()=>alert('(prototype) saves verbatim → POST /api/resumes (sanitize name, timestamp suffix on collision)');
+        const a=wrap.querySelector('[data-act="active"]'); if(a&&!a.disabled) a.onclick=()=>alert('(prototype) sets Active Resume Profile (localStorage)');
+        const d=wrap.querySelector('[data-act="delete"]'); if(d&&!d.disabled) d.onclick=()=>alert('(prototype) confirm + delete (guarded vs active / last remaining)');
+      }
+      paint();
+      return wrap;
+    }
+
+    document.getElementById('mount').appendChild(renderA());
+  </script>
+</body>
+</html>

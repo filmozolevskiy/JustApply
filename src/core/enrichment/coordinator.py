@@ -2,7 +2,7 @@
 
 from ... import db as database
 
-ENRICHMENT_SOURCE_STATUSES = frozenset({"found", "accepted"})
+ENRICHMENT_SOURCE_STATUSES = frozenset({"scraped", "matched", "accepted"})
 
 # Prior lane to restore when enrichment aborts before completion.
 _enrichment_prior_status: dict[int, str] = {}

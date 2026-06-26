@@ -169,7 +169,7 @@ def normalize_brightdata_job(job: dict) -> dict:
         "seniority": seniority,
         "salary": salary,
         "description": description,
-        "status": "found",
+        "status": "scraped",
         "contacts": contacts
     }
 

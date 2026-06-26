@@ -6,7 +6,7 @@ from .contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
 from .job_model import normalize_add_job_input, parse_job_row
 
 VALID_STATUSES = frozenset({
-    "found",     "accepted",
+    "scraped", "matched", "accepted",
     "applied", "interviewing", "rejected",
 })
 
@@ -336,6 +336,20 @@ def archive_job(job_id: int, db_path=None):
     updated = cursor.fetchone()
     conn.close()
     return parse_job_row(updated) if updated else None
+
+
+def get_unevaluated_jobs(db_path=None):
+    """Return all jobs (any status, any archive state) where matchType is empty."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM jobs WHERE matchType = '' OR matchType IS NULL ORDER BY id ASC"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [parse_job_row(r) for r in rows]
 
 
 def job_exists(title, company, link=None, db_path=None):

@@ -46,8 +46,8 @@ def test_archived_job_status_update_preserves_archived(tmp_path):
     assert job.archived is True
 
     # Simulate drag to found (what the dashboard does via PUT /api/jobs/{id}/status)
-    updated = update_job_status(job_id, "found", db_str)
-    assert updated.status == "found"
+    updated = update_job_status(job_id, "scraped", db_str)
+    assert updated.status == "scraped"
     assert updated.archived is True, "archived flag must survive a status update"
 
 
@@ -64,14 +64,14 @@ def test_archived_job_can_move_to_applied(tmp_path):
 
 
 def test_archived_moved_job_absent_from_active_board(tmp_path):
-    """After drag to found, archived card still hidden in active view."""
+    """After drag to scraped, archived card still hidden in active view."""
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "Acme", "status": "rejected"}, db_str)
     update_job_status(job_id, "rejected", db_str)
     archive_job(job_id, db_str)
 
-    update_job_status(job_id, "found", db_str)
+    update_job_status(job_id, "scraped", db_str)
     active_jobs = get_jobs(db_str, archived_filter="active")
     ids = [j.id for j in active_jobs]
     assert job_id not in ids, "archived job must remain hidden in active board after status move"
@@ -84,7 +84,7 @@ def test_archived_moved_job_visible_in_archived_view(tmp_path):
     update_job_status(job_id, "rejected", db_str)
     archive_job(job_id, db_str)
 
-    update_job_status(job_id, "found", db_str)
+    update_job_status(job_id, "scraped", db_str)
     archived_jobs = get_jobs(db_str, archived_filter="archived")
     ids = [j.id for j in archived_jobs]
     assert job_id in ids, "archived job must appear in archived view after status move"
@@ -112,10 +112,10 @@ def test_api_status_update_archived_job_preserves_archived(tmp_path):
     conn_mod.DB_PATH = db_str
     try:
         client = TestClient(app)
-        resp = client.put(f"/api/jobs/{job_id}/status", json={"status": "found"})
+        resp = client.put(f"/api/jobs/{job_id}/status", json={"status": "scraped"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "found"
+        assert data["status"] == "scraped"
         assert data["archived"] is True
     finally:
         conn_mod.DB_PATH = original_path

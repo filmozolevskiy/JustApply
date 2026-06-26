@@ -87,7 +87,7 @@ def _make_accepted_job_with_cache(db):
         "title": "QA Engineer",
         "company": "Acme",
         "companyUrl": "https://www.linkedin.com/company/acme/",
-        "status": "found",
+        "status": "scraped",
     }, db_path=db)
     begin_enrichment(job_id, db)
     enrich_job(

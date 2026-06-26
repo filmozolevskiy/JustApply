@@ -23,7 +23,7 @@ async def test_run_search_calls_scraper_and_saves_to_db():
             "seniority": "senior",
             "salary": "$130k",
             "description": "Need a QA engineer.",
-            "status": "found",
+            "status": "scraped",
             "contacts": [],
         }
     ]
@@ -56,7 +56,7 @@ async def test_run_search_calls_evaluate_when_not_mock():
             "seniority": "senior",
             "salary": "$120k",
             "description": "QA Lead role.",
-            "status": "found",
+            "status": "scraped",
             "contacts": [],
         }
     ]
@@ -92,8 +92,8 @@ async def test_run_search_calls_evaluate_when_not_mock():
 @pytest.mark.asyncio
 async def test_run_promote_reads_found_jobs_and_sources_contacts():
     seeded_jobs = [
-        Job(id=1, title="QA Engineer", company="Docker", shouldProceed=True, status="found"),
-        Job(id=2, title="PM", company="Google", shouldProceed=False, status="found"),
+        Job(id=1, title="QA Engineer", company="Docker", shouldProceed=True, status="scraped"),
+        Job(id=2, title="PM", company="Google", shouldProceed=False, status="scraped"),
         Job(id=3, title="QA Lead", company="ACME", shouldProceed=True, status="applied"),
     ]
 
@@ -117,7 +117,7 @@ async def test_run_promote_reads_found_jobs_and_sources_contacts():
 @pytest.mark.asyncio
 async def test_run_promote_handles_no_contacts_gracefully():
     seeded_jobs = [
-        Job(id=5, title="QA Analyst", company="Startup", shouldProceed=True, status="found"),
+        Job(id=5, title="QA Analyst", company="Startup", shouldProceed=True, status="scraped"),
     ]
 
     enriched_job = Job(**{**seeded_jobs[0].model_dump(), "status": "accepted"})

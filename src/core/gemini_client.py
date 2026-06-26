@@ -10,7 +10,7 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
 

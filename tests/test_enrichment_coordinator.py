@@ -16,12 +16,12 @@ def _fresh_db(tmp_path):
     return db_str
 
 
-def test_begin_enrichment_found_job_moves_to_accepted(tmp_path):
+def test_begin_enrichment_scraped_job_moves_to_accepted(tmp_path):
     """begin_enrichment on a Found job moves it to Accepted."""
     from src.core.enrichment.coordinator import begin_enrichment
 
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "scraped"}, db_str)
 
     result = begin_enrichment(job_id, db_str)
     assert result is not None
@@ -34,7 +34,7 @@ def test_begin_enrichment_accepted_job_stays_accepted(tmp_path):
     from src.db import update_job_status
 
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "scraped"}, db_str)
     update_job_status(job_id, "accepted", db_str)
 
     result = begin_enrichment(job_id, db_str)
@@ -47,7 +47,7 @@ def test_begin_enrichment_is_idempotent_no_duplicate_activity_log(tmp_path):
     from src.core.enrichment.coordinator import begin_enrichment
 
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "scraped"}, db_str)
 
     begin_enrichment(job_id, db_str)
     log_len_after_first = len(get_job(job_id, db_str).activityLog)
@@ -61,7 +61,7 @@ def test_abort_enrichment_leaves_job_accepted(tmp_path):
     from src.core.enrichment.coordinator import begin_enrichment, abort_enrichment
 
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA", "company": "Acme", "status": "scraped"}, db_str)
 
     begin_enrichment(job_id, db_str)
     reverted = abort_enrichment(job_id, db_str)

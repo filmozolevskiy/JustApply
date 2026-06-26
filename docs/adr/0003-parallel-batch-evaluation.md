@@ -1,7 +1,7 @@
 # ADR 0003: Parallel Batch Evaluation for Search Pipeline
 
 ## Status
-Accepted
+Superseded by ADR 0010 (Gemini Batch API for Job Evaluation). The "Prompt Packing" strategy described below (15 jobs per prompt, up to 30 parallel live HTTP calls) has been replaced by an asynchronous Batch Evaluation Job. Retained for historical context.
 
 ## Context
 The job search pipeline was previously evaluating jobs sequentially (one-by-one). As the number of scraped jobs increased (often 100-500+ per search), the evaluation phase became a significant bottleneck, taking several minutes to complete. 

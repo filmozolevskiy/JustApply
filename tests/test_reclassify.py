@@ -41,7 +41,7 @@ def _make_accepted_job_with_contacts(db):
         "title": "QA Engineer",
         "company": "Acme",
         "companyUrl": "https://www.linkedin.com/company/acme/",
-        "status": "found",
+        "status": "scraped",
     }, db_path=db)
     begin_enrichment(job_id, db)
     enrich_job(
@@ -179,7 +179,7 @@ async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
         "title": "QA Engineer",
         "company": "Acme",
         "companyUrl": "https://www.linkedin.com/company/acme/",
-        "status": "found",
+        "status": "scraped",
     }, db_path=db)
     begin_enrichment(job_id, db)
     enrich_job(
@@ -287,7 +287,7 @@ def test_reclassify_returns_422_for_non_accepted_job(db):
     job_id = add_job({
         "title": "Dev",
         "company": "TechCo",
-        "status": "found",
+        "status": "scraped",
     }, db_path=db)
     resp = client.post(f"/api/jobs/{job_id}/reclassify")
     assert resp.status_code == 422

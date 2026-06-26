@@ -26,7 +26,7 @@ def test_schema_adds_archived_columns(tmp_path):
 def test_new_job_defaults_not_archived(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
-    job_id = add_job({"title": "Dev", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "Dev", "company": "Acme", "status": "scraped"}, db_str)
     job = get_job(job_id, db_str)
     assert job.archived is False
     assert job.rejectedAt == ""
@@ -65,7 +65,7 @@ def test_rejected_at_not_overwritten_on_later_rejection(tmp_path):
     first_ts = first.rejectedAt
     assert first_ts
 
-    update_job_status(job_id, "found", db_str)
+    update_job_status(job_id, "scraped", db_str)
     second = update_job_status(job_id, "rejected", db_str)
     assert second.rejectedAt == first_ts, "rejectedAt must not change on re-rejection"
 
@@ -74,7 +74,7 @@ def test_rejected_at_not_set_for_non_rejected_status(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     job_id = add_job({"title": "Dev", "company": "X"}, db_str)
-    updated = update_job_status(job_id, "found", db_str)
+    updated = update_job_status(job_id, "scraped", db_str)
     assert updated.rejectedAt == ""
 
 
@@ -112,7 +112,7 @@ def test_archive_logs_archived_to_activity_log(tmp_path):
 def test_archive_non_rejected_job_returns_none(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
-    sourced_id = next(j.id for j in get_jobs(db_str) if j.status == "found")
+    sourced_id = next(j.id for j in get_jobs(db_str) if j.status == "matched")
     result = archive_job(sourced_id, db_str)
     assert result is None
 
@@ -183,7 +183,7 @@ def test_archive_endpoint_rejects_non_rejected_job(tmp_path):
     client = TestClient(app)
 
     jobs = client.get("/api/jobs").json()
-    sourced = next(j for j in jobs if j["status"] == "found")
+    sourced = next(j for j in jobs if j["status"] == "matched")
     response = client.post(f"/api/jobs/{sourced['id']}/archive")
     assert response.status_code == 422
 

@@ -10,6 +10,7 @@ Required:
 
 Options:
   -a <agent>     Agent to run: gemini (default) or claude
+  -m <model>     Model name (e.g. gemini-3.1-pro)
   -i <n>         Max iterations (default: 10)
   -s <skill>     Skill name under ~/.claude/skills or ~/.gemini/config/skills
   -v             Stream Claude tool calls and progress (--verbose; claude agent only)
@@ -22,15 +23,37 @@ EOF
 
 # Default values
 AGENT="gemini"
+MODEL=""
 ITERATIONS=10
 SKILL=""
 PRD=""
 VERBOSE=0
 
+# Load .env file if it exists to provide API keys to agents
+if [ -f .env ]; then
+  # We use a while loop to be more robust against spaces and inline comments
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Skip lines that are empty or start with # (even with leading whitespace)
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    # Strip trailing comments and whitespace, then export
+    VAR_VAL=$(echo "${line%%#*}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    export "$VAR_VAL"
+  done < .env
+  
+  # Some tools expect GOOGLE_API_KEY instead of GEMINI_API_KEY
+  if [ -n "$GEMINI_API_KEY" ]; then
+    [ -z "$GOOGLE_API_KEY" ] && export GOOGLE_API_KEY="$GEMINI_API_KEY"
+    [ -z "$AV_API_KEY" ] && export AV_API_KEY="$GEMINI_API_KEY"
+    [ -z "$ANTIGRAVITY_API_KEY" ] && export ANTIGRAVITY_API_KEY="$GEMINI_API_KEY"
+  fi
+fi
+
 # Parse flags
-while getopts "a:i:s:p:vh" opt; do
+while getopts "a:m:i:s:p:vh" opt; do
   case $opt in
     a) AGENT="$OPTARG" ;;
+    m) MODEL="$OPTARG" ;;
     i) ITERATIONS="$OPTARG" ;;
     s) SKILL="$OPTARG" ;;
     p) PRD="$OPTARG" ;;
@@ -68,7 +91,11 @@ BASE_PROMPT="You are implementing tasks for Parent PRD #$PRD_NUMBER.
 # Agent config — single place to add new agents
 case "$AGENT" in
   gemini)
-    CMD_TEMPLATE='agy --dangerously-skip-permissions -p {prompt}'
+    GEMINI_MODEL_FLAG=""
+    if [ -n "$MODEL" ]; then
+      GEMINI_MODEL_FLAG="--model $MODEL "
+    fi
+    CMD_TEMPLATE="gemini --yolo --skip-trust ${GEMINI_MODEL_FLAG}-p {prompt} < /dev/null"
     SKILLS_DIR="$HOME/.gemini/config/skills" ;;
   claude)
     CLAUDE_VERBOSE=""
@@ -114,14 +141,20 @@ if [ "$VERBOSE" -eq 1 ] && [ "$AGENT" = "claude" ]; then
   VERBOSE_LABEL=", verbose on"
 fi
 
-echo "Starting Ralph Loop ($ITERATIONS iterations max) using agent: $AGENT${VERBOSE_LABEL}"
+MODEL_LABEL=""
+if [ -n "$MODEL" ]; then
+  MODEL_LABEL=" ($MODEL)"
+fi
+
+echo "Starting Ralph Loop ($ITERATIONS iterations max) using agent: $AGENT${MODEL_LABEL}${VERBOSE_LABEL}"
 
 for ((i=1; i<=ITERATIONS; i++)); do
   echo -e "\n${COLOR_ITERATION}=== Iteration $i of $ITERATIONS ===${COLOR_RESET}\n"
   
   # Stream output to terminal and capture it
   TMPFILE=$(mktemp)
-  if command -v unbuffer >/dev/null 2>&1; then
+  # Disable unbuffer if it's causing PTY issues in this environment
+  if command -v unbuffer >/dev/null 2>&1 && [ "$USE_UNBUFFER" != "0" ]; then
     unbuffer bash -c "$FINAL_CMD" 2>&1 | tee "$TMPFILE"
   else
     eval "$FINAL_CMD" 2>&1 | tee "$TMPFILE"

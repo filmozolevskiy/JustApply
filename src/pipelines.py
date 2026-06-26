@@ -221,6 +221,142 @@ async def run_search_pipeline(
     return saved
 
 
+async def run_backfill_pipeline(
+    active_resume: str = "general_cv.md",
+    allowed_remote_types: list = None,
+    seniorities: str = "any",
+    log_func=None,
+) -> dict:
+    """Evaluate all jobs that were never sent through the LLM and apply preference filters.
+
+    Jobs with empty matchType are fetched regardless of status or archive state.
+    After evaluation:
+    - ``scraped`` jobs that fail the remote/seniority gate → moved to ``rejected``.
+    - Already-``rejected`` jobs: scores updated; status left unchanged.
+    - Any job with a passing evaluation gets accurate scores written to the DB.
+
+    Returns a summary dict with counts.
+    """
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    database.init_db()
+    jobs = database.get_unevaluated_jobs()
+    total = len(jobs)
+
+    if not total:
+        await log("No unevaluated jobs found — nothing to backfill.", "summary")
+        return {"total": 0, "evaluated": 0, "attribute_rejected": 0, "errors": 0}
+
+    await log(f"Backfill: {total} unevaluated jobs found.")
+
+    try:
+        resume_content = load_resume(active_resume)
+        await log(f"Loaded resume: {active_resume}")
+    except FileNotFoundError:
+        try:
+            resume_content = load_resume("general_cv.md")
+            active_resume = "general_cv.md"
+            await log(f"Resume '{active_resume}' not found, falling back to general_cv.md", "warning")
+        except FileNotFoundError:
+            await log("No resume found — cannot backfill.", "error")
+            return {"total": total, "evaluated": 0, "attribute_rejected": 0, "errors": total}
+
+    BATCH_SIZE = 15
+    # 5 concurrent batches (75 simultaneous calls) is safe for Gemini rate limits.
+    # The search pipeline uses 30 for small fresh scrapes; backfill processes 3k+
+    # jobs and hammered the API into 87% errors at that concurrency.
+    MAX_CONCURRENCY = 5
+    evaluated = 0
+    attribute_rejected = 0
+    errors = 0
+
+    job_dicts = [j.model_dump() for j in jobs]
+    chunks = [job_dicts[i:i + BATCH_SIZE] for i in range(0, len(job_dicts), BATCH_SIZE)]
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
+    async def process_chunk(chunk):
+        async with semaphore:
+            await log(f"Evaluating batch of {len(chunk)} jobs...")
+            return await evaluate_jobs_batch(chunk, resume_content, log_func)
+
+    tasks = [process_chunk(chunk) for chunk in chunks]
+    chunk_results = await asyncio.gather(*tasks)
+
+    flat_results = []
+    for chunk, results in zip(chunks, chunk_results):
+        flat_results.extend(zip(chunk, results))
+
+    for job_dict, evaluation in flat_results:
+        job_id = job_dict["id"]
+        original_status = job_dict.get("status", "scraped")
+
+        if not evaluation:
+            errors += 1
+            await log(
+                f"Backfill failed for job id={job_id} '{job_dict.get('title', '')}' — no evaluation returned.",
+                "warning",
+            )
+            continue
+
+        evaluated += 1
+        merged = merge_job_attributes(job_dict, evaluation)
+        fields = {
+            "matchScore": evaluation.get("matchScore", 0),
+            "matchType": evaluation.get("matchType", ""),
+            "shouldProceed": evaluation.get("shouldProceed", False),
+            "resumeUsed": active_resume,
+            "strengths": evaluation.get("strengths", []),
+            "gaps": evaluation.get("gaps", []),
+            "description": evaluation.get("summary") or job_dict.get("description") or "",
+            "isRecruiter": evaluation.get("isRecruiter", False),
+            "salary": evaluation.get("salary") or job_dict.get("salary") or "",
+            "remoteType": merged["remoteType"],
+            "seniority": merged["seniority"],
+            "unclassified": is_unclassified(evaluation),
+        }
+        database.update_job_evaluation(job_id, fields)
+
+        if not passes_attribute_gate(
+            merged["remoteType"],
+            merged["seniority"],
+            allowed_remote_types,
+            seniorities,
+        ):
+            attribute_rejected += 1
+            await log(
+                format_attribute_mismatch(
+                    job_dict.get("title", ""),
+                    job_dict.get("company", ""),
+                    remote_type=merged["remoteType"],
+                    seniority=merged["seniority"],
+                    allowed_remote_types=allowed_remote_types,
+                    seniorities=seniorities,
+                ),
+                "info",
+            )
+            if original_status == "scraped":
+                database.update_job_status(job_id, "rejected")
+
+    await log(
+        f"Backfill complete. Total: {total} | Evaluated: {evaluated} | "
+        f"Attribute-rejected: {attribute_rejected} | Errors: {errors}",
+        "summary",
+    )
+    return {
+        "total": total,
+        "evaluated": evaluated,
+        "attribute_rejected": attribute_rejected,
+        "errors": errors,
+    }
+
+
 async def run_reassess_pipeline(
     job_id: int,
     active_resume: str = "general_cv.md",

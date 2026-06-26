@@ -34,7 +34,7 @@ def test_get_jobs_endpoint():
     job1 = next(j for j in jobs if j["id"] == 1)
     assert job1["title"] == "Senior QA Automation Engineer"
     assert job1["company"] == "TechCorp"
-    assert job1["status"] == "found"
+    assert job1["status"] == "scraped"
     assert job1["shouldProceed"] is True
     assert isinstance(job1["strengths"], list)
     assert isinstance(job1["contacts"], list)
@@ -52,7 +52,7 @@ def test_put_job_status_endpoint():
     response = client.get("/api/jobs")
     jobs = response.json()
     job1 = next(j for j in jobs if j["id"] == 1)
-    assert job1["status"] == "found"
+    assert job1["status"] == "scraped"
 
     put_response = client.put("/api/jobs/1/status", json={"status": "accepted"})
     assert put_response.status_code == 200

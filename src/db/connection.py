@@ -54,7 +54,7 @@ def init_db(db_path=None, allow_seed=False):
             matchScore INTEGER,
             matchType TEXT,
             shouldProceed INTEGER DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'found',
+            status TEXT NOT NULL DEFAULT 'scraped',
             resumeUsed TEXT,
             strengths TEXT,
             gaps TEXT,
@@ -208,8 +208,13 @@ def init_db(db_path=None, allow_seed=False):
     )
     conn.commit()
 
-    # Migrate legacy pipeline statuses to Found/Accepted/Applied model
-    cursor.execute("UPDATE jobs SET status = 'found' WHERE status = 'sourced'")
+    # Migrate legacy pipeline statuses to Scraped/Matched/Accepted model
+    # 1. Unscored found/rejected -> scraped
+    cursor.execute("UPDATE jobs SET status = 'scraped' WHERE (matchType = '' OR matchType IS NULL) AND status IN ('found', 'rejected')")
+    # 2. Scored found -> matched
+    cursor.execute("UPDATE jobs SET status = 'matched' WHERE (matchType != '' AND matchType IS NOT NULL) AND status = 'found'")
+    # 3. Legacy sourced/enriching/contacted cleanup
+    cursor.execute("UPDATE jobs SET status = 'scraped' WHERE status = 'sourced'")
     cursor.execute("UPDATE jobs SET status = 'accepted' WHERE status IN ('enriching', 'enriched')")
     cursor.execute("UPDATE jobs SET status = 'applied' WHERE status = 'contacted'")
     conn.commit()

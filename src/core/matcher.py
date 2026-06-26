@@ -10,7 +10,6 @@ from .gemini_client import generate_text as gemini_generate_text
 load_dotenv()
 
 RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
-MODEL_NAME = "gemini-2.5-flash"
 
 RECRUITING_AGENCY_PATTERNS = [
     r'\bhr\s+solutions\b', r'\bstaffing\b', r'\brecruiting\b', r'\bplacement\b',
@@ -81,13 +80,17 @@ Rules:
 """
 
 
+_BATCH_DESC_LIMIT = 2000  # chars; keeps batch prompts under ~8k tokens to avoid timeouts
+
+
 def _build_batch_prompt(resume: str, jobs: list[dict]) -> str:
     jobs_text = ""
     for i, job in enumerate(jobs):
+        desc = (job.get("description") or "")[:_BATCH_DESC_LIMIT]
         jobs_text += f"--- JOB {i} ---\n"
         jobs_text += f"Title: {job.get('title', '')}\n"
         jobs_text += f"Company: {job.get('company', '')}\n"
-        jobs_text += f"Description: {job.get('description', '')}\n\n"
+        jobs_text += f"Description: {desc}\n\n"
 
     return f"""You are a resume matcher. Compare the candidate's resume to the following {len(jobs)} job listings and evaluate compatibility for each.
 
@@ -146,10 +149,10 @@ async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=No
 
     prompt = _build_batch_prompt(resume_content, jobs)
     
-    max_retries = 2
+    max_retries = 4
     for attempt in range(max_retries):
         try:
-            text = await gemini_generate_text(prompt, timeout=60.0)
+            text = await gemini_generate_text(prompt, timeout=90.0)
             if text.startswith("```"):
                 lines = text.splitlines()
                 if lines and lines[0].startswith("```"):
@@ -157,21 +160,21 @@ async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=No
                 if lines and lines[-1].startswith("```"):
                     lines = lines[:-1]
                 text = "\n".join(lines).strip()
-            
+
             results = json.loads(text)
             if not isinstance(results, list) or len(results) != len(jobs):
                 raise ValueError(f"Batch result size mismatch: expected {len(jobs)}, got {len(results) if isinstance(results, list) else 'non-list'}")
-            
+
             # Sort by index to ensure order if LLM shuffled them
             results.sort(key=lambda x: x.get("index", 0))
-            
+
             # Post-process each result
             final_results = []
             for i, result in enumerate(results):
                 job = jobs[i]
                 company_name = job.get("company", "")
                 local_is_recruiter = check_recruiter_by_name(company_name)
-                
+
                 if local_is_recruiter or result.get("isRecruiter"):
                     result["isRecruiter"] = True
                     result["shouldProceed"] = False
@@ -184,19 +187,27 @@ async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=No
                     if "Posted by a recruiting agency/staffing firm" not in gaps:
                         gaps.append("Posted by a recruiting agency/staffing firm")
                 final_results.append(result)
-                
+
             return final_results
-            
+
         except Exception as e:
-            await log(f"Batch evaluation attempt {attempt + 1} failed: {e}. {'Retrying...' if attempt < max_retries - 1 else 'Falling back to sequential.'}", "warning")
-            if attempt == max_retries - 1:
-                # Fallback to sequential
+            err_str = str(e)
+            is_rate_limit = "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower()
+            is_last = attempt == max_retries - 1
+            wait = 2.0 ** attempt  # 1, 2, 4, 8 seconds
+            if is_last:
+                await log(f"Batch evaluation attempt {attempt + 1} failed: {e}. Falling back to sequential.", "warning")
                 sequential_results = []
                 for job in jobs:
                     res = await evaluate_job(job, resume_content, log_func)
                     sequential_results.append(res)
                 return sequential_results
-            await asyncio.sleep(2)
+            await log(
+                f"Batch evaluation attempt {attempt + 1} failed{' (rate limit)' if is_rate_limit else ''}: {e}. "
+                f"Retrying in {wait:.0f}s...",
+                "warning",
+            )
+            await asyncio.sleep(wait)
 
     return [{} for _ in jobs]
 

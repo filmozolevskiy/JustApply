@@ -168,7 +168,7 @@ def test_live_stream_yields_incremental_job_results():
     state.queue.put_nowait({"type": "log", "level": "info", "message": "Evaluating..."})
     state.queue.put_nowait({
         "type": "result",
-        "job": {"id": 42, "title": "QA Engineer", "company": "Acme", "status": "found"},
+        "job": {"id": 42, "title": "QA Engineer", "company": "Acme", "status": "scraped"},
     })
     state.status = "completed"
     state.queue.put_nowait(None)

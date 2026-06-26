@@ -8,7 +8,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .. import db as database
-from ..service import RateLimitError, promote_sourced_jobs, reassess_all_jobs, reassess_job, search_jobs
+from ..service import (
+    RateLimitError,
+    backfill_unevaluated_jobs,
+    promote_sourced_jobs,
+    reassess_all_jobs,
+    reassess_job,
+    search_jobs,
+)
 
 
 def _resume_name_for_position(position: str) -> str:
@@ -64,6 +71,26 @@ async def run_reassess(job_id: int | None = None, reassess_all: bool = False) ->
     return [updated]
 
 
+async def run_backfill() -> dict:
+    """Evaluate all un-evaluated jobs and apply remote-type preference filter."""
+    print("Starting backfill evaluation pipeline...")
+
+    def log_sync(msg: str, level: str = "info"):
+        print(f"  [{level.upper()}] {msg}", file=sys.stderr)
+
+    result = await backfill_unevaluated_jobs(
+        allowed_remote_types=["remote"],
+        log_func=log_sync,
+    )
+
+    print(
+        f"Backfill complete. "
+        f"Total: {result['total']} | Evaluated: {result['evaluated']} | "
+        f"Attribute-rejected: {result['attribute_rejected']} | Errors: {result['errors']}"
+    )
+    return result
+
+
 async def run_promote() -> list:
     """Enrich jobs ready for outreach: source contacts and generate messages."""
     print("Starting promote pipeline...")
@@ -100,6 +127,7 @@ def main():
     parser.add_argument("--promote", action="store_true", help="Source contacts for jobs ready to proceed")
     parser.add_argument("--reassess", metavar="JOB_ID", type=int, help="Re-run Resume Matcher on a single job")
     parser.add_argument("--reassess-all", action="store_true", help="Re-run Resume Matcher on all active jobs")
+    parser.add_argument("--backfill", action="store_true", help="Evaluate all un-evaluated jobs and apply remote filter")
     parser.add_argument("--sites", help="Comma-separated list of job sites (unused, reserved for future use)")
     args = parser.parse_args()
 
@@ -109,6 +137,9 @@ def main():
     elif args.promote:
         _snapshot_before("promote")
         asyncio.run(run_promote())
+    elif args.backfill:
+        _snapshot_before("backfill")
+        asyncio.run(run_backfill())
     elif args.reassess is not None or args.reassess_all:
         asyncio.run(run_reassess(job_id=args.reassess, reassess_all=args.reassess_all))
     else:

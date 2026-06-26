@@ -34,28 +34,28 @@ def test_add_job_creates_found_entry(tmp_path):
 
 def test_update_job_status_logs_move(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "scraped"}, db_str)
     update_job_status(job_id, "applied", db_str)
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
-    assert "Moved Found → Applied" in messages
+    assert "Moved Scraped → Applied" in messages
 
 
 def test_update_job_status_to_accepted_logs_move(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "scraped"}, db_str)
     update_job_status(job_id, "accepted", db_str)
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
-    assert "Moved Found → Accepted" in messages
+    assert "Moved Scraped → Accepted" in messages
 
 
 def test_update_job_status_same_status_no_log_entry(tmp_path):
     db_str = _fresh_db(tmp_path)
-    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "found"}, db_str)
+    job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "scraped"}, db_str)
     before = _get_job(db_str, job_id)
     before_len = len(before.activityLog)
-    update_job_status(job_id, "found", db_str)
+    update_job_status(job_id, "scraped", db_str)
     after = _get_job(db_str, job_id)
     assert len(after.activityLog) == before_len
 
@@ -166,8 +166,8 @@ def test_activity_log_capped_at_50_entries(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
     # Cycle through statuses to generate many log entries
-    statuses = ["applied", "found", "applied", "found", "applied", "found",
-                "applied", "found", "applied", "found"]
+    statuses = ["applied", "scraped", "applied", "scraped", "applied", "scraped",
+                "applied", "scraped", "applied", "scraped"]
     for _ in range(6):  # 6 * 10 = 60 transitions + 1 initial Found = 61 entries attempted
         for s in statuses:
             update_job_status(job_id, s, db_str)

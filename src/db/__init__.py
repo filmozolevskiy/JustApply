@@ -4,6 +4,7 @@ from .jobs import (
     VALID_STATUSES,
     archive_stale_rejected_jobs,
     get_jobs,
+    get_unevaluated_jobs,
     add_job,
     update_job_status,
     update_job_comment,
