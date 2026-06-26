@@ -70,8 +70,10 @@ fi
 # Extract numeric ID if a full URL was provided
 PRD_NUMBER=$(echo "$PRD" | grep -o -E '[0-9]+$' || echo "$PRD")
 
-# Initialize and clear progress.txt for a clean run
-echo "# Ralph Loop Progress Log" > progress.txt
+# Initialize progress.txt only if missing (preserve state across restarts)
+if [ ! -f progress.txt ]; then
+  echo "# Ralph Loop Progress Log" > progress.txt
+fi
 
 # Base prompt instructing the agent on GitHub Issues workflow
 BASE_PROMPT="You are implementing tasks for Parent PRD #$PRD_NUMBER.

@@ -32,3 +32,6 @@
 - Added python-multipart dependency for multipart uploads
 - Tests: tests/test_dashboard_resumes.py (+4 backend), test_dashboard_profile_manager.py (+3 static)
 - Full suite: 752 passed
+
+## Loop complete
+All PRD #85 slices implemented and closed (#96–#99).
