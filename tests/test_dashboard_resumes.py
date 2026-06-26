@@ -1,6 +1,7 @@
 import os
 import sys
 import pytest
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -167,3 +168,78 @@ def test_delete_last_remaining_resume_rejected(tmp_path, monkeypatch):
     assert response.status_code == 409
     assert "last remaining" in response.json()["detail"].lower()
     assert only_file.exists()
+
+
+def test_convert_resume_pdf_returns_markdown_without_writing(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    converted = "# QA Engineer Profile\n\n**SUMMARY**\nConverted from PDF."
+    pdf_bytes = b"%PDF-1.4 fake resume bytes"
+
+    with patch.object(server_module, "get_api_key", return_value="test-key"), patch.object(
+        server_module,
+        "generate_text_from_pdf",
+        new=AsyncMock(return_value=converted),
+    ) as mock_convert:
+        response = client.post(
+            "/api/resumes/convert",
+            files={"file": ("resume.pdf", pdf_bytes, "application/pdf")},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["content"] == converted
+    assert list(resumes_dir.iterdir()) == []
+    mock_convert.assert_awaited_once()
+    assert mock_convert.await_args.args[0] == pdf_bytes
+
+
+def test_convert_resume_pdf_rejects_missing_api_key(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    with patch.object(server_module, "get_api_key", return_value=None):
+        response = client.post(
+            "/api/resumes/convert",
+            files={"file": ("resume.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        )
+
+    assert response.status_code == 503
+    assert "GEMINI_API_KEY" in response.json()["detail"]
+    assert list(resumes_dir.iterdir()) == []
+
+
+def test_convert_resume_pdf_rejects_llm_failure(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    with patch.object(server_module, "get_api_key", return_value="test-key"), patch.object(
+        server_module,
+        "generate_text_from_pdf",
+        new=AsyncMock(side_effect=RuntimeError("Gemini API error")),
+    ):
+        response = client.post(
+            "/api/resumes/convert",
+            files={"file": ("resume.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        )
+
+    assert response.status_code == 503
+    assert "Gemini API error" in response.json()["detail"]
+    assert list(resumes_dir.iterdir()) == []
+
+
+def test_convert_resume_pdf_rejects_non_pdf(tmp_path, monkeypatch):
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    monkeypatch.setattr(server_module, "RESUMES_DIR", str(resumes_dir))
+
+    response = client.post(
+        "/api/resumes/convert",
+        files={"file": ("resume.docx", b"not a pdf", "application/octet-stream")},
+    )
+
+    assert response.status_code == 422
+    assert list(resumes_dir.iterdir()) == []

@@ -1864,7 +1864,8 @@
       <div class="pm-body">
         <div class="pm-list">
           <div class="pm-list-actions">
-            <button class="btn btn-primary btn-sm" id="pm-import-btn" type="button" disabled><i class="fa-solid fa-file-arrow-up"></i> Import PDF</button>
+            <button class="btn btn-primary btn-sm" id="pm-import-btn" type="button" onclick="triggerProfileManagerImport()"><i class="fa-solid fa-file-arrow-up"></i> Import PDF</button>
+            <input type="file" id="pm-import-input" accept="application/pdf,.pdf" hidden />
             <button class="btn btn-secondary btn-sm" id="pm-new-btn" type="button" onclick="newProfileManagerProfile()"><i class="fa-solid fa-plus"></i> New</button>
           </div>
           <div class="pm-list-scroll" id="pm-list-scroll"></div>
@@ -1921,6 +1922,7 @@
     let profileManagerSelectedName = null;
     let profileManagerReviewing = false;
     let profileManagerLastRenderedKey = null;
+    let profileManagerDraftContent = null;
     let activeTableFilter = "all";
     let activeFeedJobId = 1;
     let activeEnrichJobId = null;
@@ -2307,7 +2309,7 @@
       const renderKey = profileManagerReviewing ? 'review' : (profileManagerSelectedName || 'none');
       if (editorEl && renderKey !== profileManagerLastRenderedKey) {
         if (profileManagerReviewing) {
-          editorEl.value = '';
+          editorEl.value = profileManagerDraftContent ?? '';
         } else if (selected) {
           editorEl.value = selected.content;
         }
@@ -2315,9 +2317,64 @@
       }
     }
 
+    function triggerProfileManagerImport() {
+      const input = document.getElementById('pm-import-input');
+      if (input) input.click();
+    }
+
+    async function handleProfileManagerImportFile(event) {
+      const input = event.target;
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file) return;
+
+      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+        addLogLine('Only PDF files are supported for import.', 'warning');
+        return;
+      }
+
+      const importBtn = document.getElementById('pm-import-btn');
+      const prevLabel = importBtn?.innerHTML;
+      if (importBtn) {
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Converting…';
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch('/api/resumes/convert', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          addLogLine(err.detail || 'Resume import failed.', 'error');
+          return;
+        }
+
+        const data = await response.json();
+        profileManagerDraftContent = data.content ?? '';
+        profileManagerReviewing = true;
+        profileManagerSelectedName = null;
+        profileManagerLastRenderedKey = null;
+        addLogLine('PDF converted — review and save when ready.', 'success');
+        renderProfileManager();
+      } catch (err) {
+        addLogLine(`Resume import failed: ${err}`, 'error');
+      } finally {
+        if (importBtn) {
+          importBtn.disabled = false;
+          importBtn.innerHTML = prevLabel || '<i class="fa-solid fa-file-arrow-up"></i> Import PDF';
+        }
+      }
+    }
+
     function newProfileManagerProfile() {
       profileManagerReviewing = true;
       profileManagerSelectedName = null;
+      profileManagerDraftContent = null;
       profileManagerLastRenderedKey = null;
       renderProfileManager();
     }
@@ -2367,6 +2424,7 @@
         }
         profileManagerReviewing = false;
         profileManagerSelectedName = saved.name;
+        profileManagerDraftContent = null;
         profileManagerLastRenderedKey = null;
         addLogLine(`Saved resume profile: ${saved.name}`, 'success');
         renderProfileManager();
@@ -2378,6 +2436,7 @@
     function selectProfileManagerProfile(name) {
       profileManagerReviewing = false;
       profileManagerSelectedName = name;
+      profileManagerDraftContent = null;
       profileManagerLastRenderedKey = null;
       renderProfileManager();
     }
@@ -3248,6 +3307,7 @@
       moveJobStage,
       navigateDrawerJob,
       onBoardSearchInput,
+      triggerProfileManagerImport,
       newProfileManagerProfile,
       openProfileManager,
       reclassifyJob,
@@ -3280,6 +3340,10 @@
     initOutreachSettingsTooltips();
     initEvaluationLockPolling();
     restoreSessionLogs();
+    const pmImportInput = document.getElementById('pm-import-input');
+    if (pmImportInput) {
+      pmImportInput.addEventListener('change', handleProfileManagerImportFile);
+    }
     loadResumes();
     loadOutreachSettings();
     loadJobs().then(() => {

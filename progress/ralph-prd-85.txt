@@ -24,3 +24,11 @@
 - Client guards mirror server; row removed from list on success
 - Tests: tests/test_dashboard_resumes.py (+3 backend), test_dashboard_profile_manager.py (+2 static)
 - Full suite: 745 passed
+
+## Iteration 4 — #99 Resume Import (PDF to Resume Profile via Gemini multimodal)
+- POST /api/resumes/convert: accepts PDF upload, calls generate_text_from_pdf with standardized prompt, returns markdown only (no disk write)
+- Rejects non-PDF (422), missing GEMINI_API_KEY (503), LLM failure (503); raw PDF never persisted
+- Profile Manager: Import PDF file picker, spinner during conversion, review state pre-filled with converted markdown
+- Added python-multipart dependency for multipart uploads
+- Tests: tests/test_dashboard_resumes.py (+4 backend), test_dashboard_profile_manager.py (+3 static)
+- Full suite: 752 passed

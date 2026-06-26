@@ -5,7 +5,7 @@ import json
 import asyncio
 import re
 import time
-from fastapi import FastAPI, BackgroundTasks, Query, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Query, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -26,6 +26,7 @@ from ..service import (
 from ..pipelines import run_reclassify_pipeline, run_load_more_contacts_pipeline
 from ..core.batch_poller import poll_in_flight_batches
 from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
+from ..core.gemini_client import generate_text_from_pdf, get_api_key
 from ..db import batch_jobs as batch_jobs_db
 
 # Initialize SQLite database
@@ -220,6 +221,56 @@ async def delete_resume(filename: str, active_resume: str = Query(...)):
 
     os.remove(filepath)
     return {"name": filename, "deleted": True}
+
+
+RESUME_CONVERT_PROMPT = """Convert this PDF resume into a standardized Markdown Resume Profile.
+
+Use exactly this structure:
+
+# [Target Role] Profile
+
+**SUMMARY**
+[A concise 2-3 sentence summary highlighting years of experience, core domains, major methodologies, and top tooling.]
+
+**KEY SKILLS**
+- [Skill Category 1]: [Comma-separated skills]
+- [Skill Category 2]: [Comma-separated skills]
+- [Skill Category 3]: [Comma-separated skills]
+
+**EXPERIENCE**
+- **[Job Title] @ [Company] ([Date Range])**: [Brief 1-2 sentence summary of achievements and technical scope.]
+- **[Job Title] @ [Company] ([Date Range])**: [Brief 1-2 sentence summary.]
+
+Rules:
+- The Level 1 header must identify the target role (e.g. "# QA Engineer / Automation Specialist Profile").
+- Use **SUMMARY**, **KEY SKILLS**, and **EXPERIENCE** as bold section headers.
+- Keep experience entries concise and high-impact.
+- Output markdown only — no preamble or explanation."""
+
+
+@app.post("/api/resumes/convert")
+async def convert_resume_pdf(file: UploadFile = File(...)):
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".pdf"):
+        raise HTTPException(status_code=422, detail="Only PDF files are supported.")
+
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(status_code=422, detail="Empty file.")
+    if not pdf_bytes.startswith(b"%PDF"):
+        raise HTTPException(status_code=422, detail="Invalid PDF file.")
+
+    if not get_api_key():
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured.")
+
+    try:
+        markdown = await generate_text_from_pdf(pdf_bytes, RESUME_CONVERT_PROMPT)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Resume conversion failed: {exc}") from exc
+
+    return {"content": markdown}
 
 
 @app.get("/api/settings/outreach", response_model=OutreachSettings)

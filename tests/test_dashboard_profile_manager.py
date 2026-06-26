@@ -136,3 +136,35 @@ def test_profile_manager_delete_disabled_for_active_or_last_profile():
         r"profileManagerProfiles\.length\s*>\s*1",
         js,
     )
+
+
+def test_profile_manager_import_pdf_posts_to_convert_endpoint():
+    js = get_script_section(_read_html())
+    assert "triggerProfileManagerImport" in js
+    assert "handleProfileManagerImportFile" in js
+    assert "/api/resumes/convert" in js
+    assert "profileManagerDraftContent" in js
+
+
+def test_profile_manager_import_shows_spinner_during_conversion():
+    js = get_script_section(_read_html())
+    fn_match = re.search(
+        r"async function handleProfileManagerImportFile\([^)]*\)\s*\{([\s\S]*?)\n    \}",
+        js,
+    )
+    assert fn_match, "handleProfileManagerImportFile function not found"
+    fn_body = fn_match.group(1)
+    assert "fa-spinner" in fn_body
+    assert "Converting" in fn_body
+
+
+def test_profile_manager_import_opens_review_state_on_success():
+    js = get_script_section(_read_html())
+    fn_match = re.search(
+        r"async function handleProfileManagerImportFile\([^)]*\)\s*\{([\s\S]*?)\n    \}",
+        js,
+    )
+    assert fn_match
+    fn_body = fn_match.group(1)
+    assert "profileManagerReviewing = true" in fn_body
+    assert "profileManagerDraftContent" in fn_body
