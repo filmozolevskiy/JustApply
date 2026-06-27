@@ -51,3 +51,19 @@ Commit: 8e16bdb
 
 ### Tests
 - 777 passed (full suite)
+
+## Iteration 4 — #104 Scrape Spend Confirmation (checkout-receipt) wired into scrape flow
+
+Status: DONE
+Commit: (pending)
+
+### Summary
+- Wired checkout-receipt Spend Confirmation into `triggerScrapeRun()` before `POST /api/search`.
+- Left panel: keyword, Search Regions grouped by country, time range.
+- Right panel: itemized cost ceiling with editable Per-Region Limit stepper; live recompute of Max postings and Max spend.
+- Cancel/backdrop/Esc closes modal without scrape; confirm runs scrape and syncs limit back to `#kb-per-region-limit`.
+- Deleted throwaway prototype `src/web/prototypes/spend-confirmation.prototype.html`.
+- New static client tests in `tests/test_scrape_spend_confirmation.py`.
+
+### Tests
+- 788 passed (full suite)

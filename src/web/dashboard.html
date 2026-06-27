@@ -1667,6 +1667,174 @@
       gap: 12px;
     }
 
+    .spend-modal-content.spend-modal-receipt {
+      width: 740px;
+      max-width: 96%;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .spend-modal-receipt .spend-modal-foot {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .spend-receipt-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+    }
+
+    .spend-receipt-left {
+      padding: 24px;
+    }
+
+    .spend-receipt-right {
+      padding: 24px;
+      background: rgba(245, 158, 11, 0.06);
+      border-left: 1px solid var(--border-color);
+    }
+
+    .spend-receipt-title {
+      font-family: var(--font-sans);
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 0 0 4px;
+    }
+
+    .spend-receipt-sub {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+    }
+
+    .spend-kw {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .spend-country-head {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin: 10px 0 6px;
+    }
+
+    .spend-region-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .spend-region-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+    }
+
+    .spend-receipt-warn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fcd34d;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+    }
+
+    .spend-receipt-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      padding: 7px 0;
+      color: var(--text-secondary);
+    }
+
+    .spend-receipt-val {
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+    }
+
+    .spend-receipt-stepper {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .spend-receipt-stepper button {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+    }
+
+    .spend-receipt-stepper button:hover {
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .spend-receipt-stepper input {
+      width: 58px;
+      text-align: center;
+      margin: 0 6px;
+      padding: 4px 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    .spend-receipt-stepper input::-webkit-outer-spin-button,
+    .spend-receipt-stepper input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .spend-receipt-stepper input {
+      -moz-appearance: textfield;
+    }
+
+    .spend-receipt-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 8px 0;
+    }
+
+    .spend-receipt-total {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 6px;
+    }
+
+    .spend-receipt-amt {
+      font-family: var(--font-sans);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent-amber);
+    }
+
+    .spend-receipt-note {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      margin-top: 10px;
+    }
+
     .evaluation-lock-indicator {
       display: flex;
       align-items: center;
@@ -2795,6 +2963,193 @@
       }).then(() => {});
     }
 
+    const SCRAPE_COST_PER_RECORD = 0.0015;
+
+    const COUNTRY_DISPLAY_NAMES = {
+      US: 'United States',
+      CA: 'Canada',
+      GB: 'United Kingdom',
+      DE: 'Germany',
+    };
+
+    const TIME_RANGE_LABELS = {
+      any: 'Anytime',
+      past_24_hours: 'Past 24 hours',
+      past_week: 'Past week',
+      past_month: 'Past month',
+    };
+
+    function groupSearchRegionsByCountry(searchRegions) {
+      const grouped = new Map();
+      for (const { country, region } of searchRegions) {
+        if (!grouped.has(country)) grouped.set(country, []);
+        grouped.get(country).push(region);
+      }
+      const countryOrder = ['US', 'CA', 'GB', 'DE'];
+      const ordered = [];
+      for (const code of countryOrder) {
+        if (grouped.has(code)) ordered.push([code, grouped.get(code)]);
+      }
+      for (const [code, regions] of grouped) {
+        if (!countryOrder.includes(code)) ordered.push([code, regions]);
+      }
+      return ordered;
+    }
+
+    function formatTimeRangeLabel(timeRange) {
+      return TIME_RANGE_LABELS[timeRange] || timeRange;
+    }
+
+    function recomputeScrapeSpendEstimate(regionCount, perRegionLimit) {
+      const limit = clampPerRegionLimit(perRegionLimit);
+      const maxPostings = regionCount * limit;
+      const maxSpend = maxPostings * SCRAPE_COST_PER_RECORD;
+      return { limit, maxPostings, maxSpend };
+    }
+
+    function buildScrapeSpendReceiptBodyHtml({ query, groupedRegions, timeRangeLabel, regionCount, perRegionLimit }) {
+      const { maxPostings, maxSpend } = recomputeScrapeSpendEstimate(regionCount, perRegionLimit);
+      const limit = clampPerRegionLimit(perRegionLimit);
+
+      let regionsHtml = '';
+      for (const [country, regions] of groupedRegions) {
+        const displayName = COUNTRY_DISPLAY_NAMES[country] || country;
+        const chips = regions
+          .map((r) => `<span class="spend-region-chip">${escapeSpendHtml(r)}</span>`)
+          .join('');
+        regionsHtml += `
+          <div class="spend-country-head">${escapeSpendHtml(displayName)}</div>
+          <div class="spend-region-chips">${chips}</div>
+        `;
+      }
+
+      return `
+        <div class="spend-receipt-grid">
+          <div class="spend-receipt-left">
+            <h3 class="spend-receipt-title">Run live LinkedIn scrape?</h3>
+            <div class="spend-receipt-sub">Searching <span class="spend-kw">${escapeSpendHtml(query)}</span> in title / description · posted in the <b>${escapeSpendHtml(timeRangeLabel)}</b>.</div>
+            ${regionsHtml}
+          </div>
+          <div class="spend-receipt-right">
+            <div class="spend-receipt-warn">
+              <i class="fa-solid fa-triangle-exclamation"></i> Spends real Bright Data credits
+            </div>
+            <div class="spend-receipt-line"><span>Search regions</span><span class="spend-receipt-val" id="scrape-spend-region-count">${regionCount}</span></div>
+            <div class="spend-receipt-line">
+              <span>Per-region limit</span>
+              <span class="spend-receipt-stepper">
+                <button type="button" id="scrape-spend-limit-dec" aria-label="Decrease">&minus;</button>
+                <input id="scrape-spend-limit" type="number" min="25" max="1000" step="25" value="${limit}" aria-label="Jobs per region">
+                <button type="button" id="scrape-spend-limit-inc" aria-label="Increase">+</button>
+              </span>
+            </div>
+            <div class="spend-receipt-line"><span>Max postings</span><span class="spend-receipt-val" id="scrape-spend-max-postings">${maxPostings.toLocaleString()}</span></div>
+            <div class="spend-receipt-line"><span>Cost per record</span><span class="spend-receipt-val">× $0.0015</span></div>
+            <div class="spend-receipt-divider"></div>
+            <div class="spend-receipt-total"><span class="spend-receipt-sub">Max spend</span><span class="spend-receipt-amt" id="scrape-spend-max-spend">~$${maxSpend.toFixed(2)}</span></div>
+            <div class="spend-receipt-note">Actual cost depends on how many postings match — this is the ceiling.</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function showScrapeSpendConfirmModal({ query, searchRegions, timeRange, perRegionLimit }) {
+      const regionCount = searchRegions.length;
+      const groupedRegions = groupSearchRegionsByCountry(searchRegions);
+      const timeRangeLabel = formatTimeRangeLabel(timeRange);
+      const bodyHtml = buildScrapeSpendReceiptBodyHtml({
+        query,
+        groupedRegions,
+        timeRangeLabel,
+        regionCount,
+        perRegionLimit,
+      });
+
+      return new Promise((resolve) => {
+        const modal = document.getElementById('spend-confirmation-modal');
+        const modalContent = modal?.querySelector('.spend-modal-content');
+        const headEl = modal?.querySelector('.spend-modal-head');
+        const bodyEl = document.getElementById('spend-modal-body');
+        const cancelBtn = document.getElementById('spend-modal-cancel');
+        const confirmBtn = document.getElementById('spend-modal-confirm');
+        if (!modal || !bodyEl || !cancelBtn || !confirmBtn) {
+          resolve({ confirmed: false, perRegionLimit });
+          return;
+        }
+
+        if (modalContent) modalContent.classList.add('spend-modal-receipt');
+        if (headEl) headEl.style.display = 'none';
+
+        bodyEl.innerHTML = bodyHtml;
+        confirmBtn.innerHTML = '<i class="fa-solid fa-play"></i> Run scraper';
+        cancelBtn.style.display = '';
+
+        const limitInput = document.getElementById('scrape-spend-limit');
+        const maxPostingsEl = document.getElementById('scrape-spend-max-postings');
+        const maxSpendEl = document.getElementById('scrape-spend-max-spend');
+        const decBtn = document.getElementById('scrape-spend-limit-dec');
+        const incBtn = document.getElementById('scrape-spend-limit-inc');
+
+        const updateEstimate = () => {
+          if (!limitInput || !maxPostingsEl || !maxSpendEl) return;
+          const { limit, maxPostings, maxSpend } = recomputeScrapeSpendEstimate(regionCount, limitInput.value);
+          limitInput.value = limit;
+          maxPostingsEl.textContent = maxPostings.toLocaleString();
+          maxSpendEl.textContent = '~$' + maxSpend.toFixed(2);
+        };
+
+        const onDec = () => {
+          if (!limitInput) return;
+          limitInput.value = clampPerRegionLimit(parseInt(limitInput.value, 10) - PER_REGION_LIMIT_STEP);
+          updateEstimate();
+        };
+
+        const onInc = () => {
+          if (!limitInput) return;
+          limitInput.value = clampPerRegionLimit(parseInt(limitInput.value, 10) + PER_REGION_LIMIT_STEP);
+          updateEstimate();
+        };
+
+        if (limitInput) {
+          limitInput.addEventListener('input', updateEstimate);
+          limitInput.addEventListener('change', updateEstimate);
+        }
+        if (decBtn) decBtn.addEventListener('click', onDec);
+        if (incBtn) incBtn.addEventListener('click', onInc);
+
+        const cleanupReceiptMode = () => {
+          if (modalContent) modalContent.classList.remove('spend-modal-receipt');
+          if (headEl) headEl.style.display = '';
+          if (limitInput) {
+            limitInput.removeEventListener('input', updateEstimate);
+            limitInput.removeEventListener('change', updateEstimate);
+          }
+          if (decBtn) decBtn.removeEventListener('click', onDec);
+          if (incBtn) incBtn.removeEventListener('click', onInc);
+        };
+
+        const finishScrapeModal = (confirmed) => {
+          const finalLimit = clampPerRegionLimit(limitInput ? limitInput.value : perRegionLimit);
+          cleanupReceiptMode();
+          cleanupSpendModal();
+          resolve({ confirmed, perRegionLimit: finalLimit });
+        };
+
+        spendModalResolver = finishScrapeModal;
+
+        cancelBtn.onclick = () => finishScrapeModal(false);
+        confirmBtn.onclick = () => finishScrapeModal(true);
+
+        spendModalKeyHandler = (e) => {
+          if (e.key === 'Escape') finishScrapeModal(false);
+        };
+        document.addEventListener('keydown', spendModalKeyHandler);
+
+        modal.style.display = 'flex';
+        cancelBtn.focus();
+      });
+    }
+
     async function enrichJob(id) {
       const job = findJob(id);
       if (!job) return;
@@ -3064,8 +3419,9 @@
     let regionsMap = {};
 
     function clampPerRegionLimit(value) {
-      const n = parseInt(value, 10);
-      if (isNaN(n)) return PER_REGION_LIMIT_DEFAULT;
+      let n = parseInt(value, 10);
+      if (isNaN(n)) n = PER_REGION_LIMIT_DEFAULT;
+      n = Math.round(n / PER_REGION_LIMIT_STEP) * PER_REGION_LIMIT_STEP;
       return Math.max(PER_REGION_LIMIT_MIN, Math.min(PER_REGION_LIMIT_MAX, n));
     }
 
@@ -3294,7 +3650,7 @@
       }
     }
 
-    function triggerScrapeRun() {
+    async function triggerScrapeRun() {
       if (evaluationLockActive) {
         addLogLine('Cannot start scrape: batch evaluation is in progress. Cancel or wait for completion.', 'warning');
         return;
@@ -3341,7 +3697,18 @@
 
       const search_regions = getSelectedSearchRegions();
       const limitEl = document.getElementById('kb-per-region-limit');
-      const per_region_limit = clampPerRegionLimit(limitEl ? limitEl.value : PER_REGION_LIMIT_DEFAULT);
+      let per_region_limit = clampPerRegionLimit(limitEl ? limitEl.value : PER_REGION_LIMIT_DEFAULT);
+
+      const spendResult = await showScrapeSpendConfirmModal({
+        query,
+        searchRegions: search_regions,
+        timeRange: time_range,
+        perRegionLimit: per_region_limit,
+      });
+      if (!spendResult.confirmed) return;
+
+      per_region_limit = spendResult.perRegionLimit;
+      if (limitEl) limitEl.value = per_region_limit;
 
       const mockEval = false;
 
