@@ -45,9 +45,12 @@ def test_region_pickers_load_from_api():
 
 def test_country_scoped_region_pickers():
     script = _dashboard_script()
+    html = read_dashboard_html()
+    assert "region-country-tabs" in html or "region-country-tab" in script
+    assert "region-chip" in script or "region-chip-grid" in html
     body = _get_function_body(script, "renderRegionPickers", window=4000)
-    assert "REGIONS_MAP" in body or "regionsMap" in body or "/api/regions" in script
-    assert "kb-filter-country" in script, "Region pickers must tie to country checkboxes"
+    assert "regionsMap" in body or "activeRegionTab" in body
+    assert "activeRegionTab" in script, "Region pickers must use country tabs"
 
 
 def test_run_button_gating_function():
@@ -90,8 +93,18 @@ def test_clamp_per_region_limit_client():
     assert "clampPerRegionLimit" in script, "Client must clamp Per-Region Limit to 25–1000"
 
 
+def test_job_search_settings_two_column_layout():
+    html = read_dashboard_html()
+    assert "job-search-settings-split" in html
+    assert "job-search-scope-col" in html
+    assert "job-search-refine-col" in html
+    assert "job-search-actions" in html
+    assert "Refine results (optional)" in html
+
+
 def test_reset_filters_clears_regions_and_limit():
     script = _dashboard_script()
     body = _get_function_body(script, "resetKbFilters", window=4000)
     assert "kb-per-region-limit" in body, "Reset must restore Per-Region Limit default"
+    assert "selectedSearchRegions" in body, "Reset must clear selected Search Regions"
     assert "kb-filter-location" not in body, "Reset must not reference removed location field"
