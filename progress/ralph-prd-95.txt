@@ -55,7 +55,7 @@ Commit: 8e16bdb
 ## Iteration 4 — #104 Scrape Spend Confirmation (checkout-receipt) wired into scrape flow
 
 Status: DONE
-Commit: (pending)
+Commit: 2b4c0fc
 
 ### Summary
 - Wired checkout-receipt Spend Confirmation into `triggerScrapeRun()` before `POST /api/search`.
