@@ -501,12 +501,13 @@
       background: rgba(13, 18, 36, 0.5);
     }
     .job-search-settings-body.expanded {
-      max-height: 560px;
-      padding: 20px 24px 16px;
+      max-height: min(1400px, calc(100vh - 140px));
+      padding: 20px 24px 20px;
       margin-bottom: 16px;
       opacity: 1;
       border: 1px solid var(--border-color);
-      overflow: visible;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     .panel-header {
@@ -732,13 +733,97 @@
       border-radius: 50%;
       transition: transform var(--transition-fast), background var(--transition-fast);
     }
+    .toggle-switch input:not(:checked) + .toggle-slider {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--border-color);
+    }
+    .toggle-switch input:not(:checked) + .toggle-slider::before {
+      background: var(--text-muted);
+    }
     .toggle-switch input:checked + .toggle-slider {
-      background: rgba(6,182,212,0.25);
+      background: rgba(6, 182, 212, 0.3);
       border-color: var(--accent-cyan);
     }
     .toggle-switch input:checked + .toggle-slider::before {
       transform: translateX(18px);
       background: var(--accent-cyan);
+    }
+
+    .contact-audience-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 900px) {
+      .contact-audience-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .contact-audience-card {
+      position: relative;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      padding-right: 56px;
+      background: rgba(0, 0, 0, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 132px;
+      cursor: pointer;
+      transition: border-color var(--transition-fast), background var(--transition-fast);
+    }
+    .contact-audience-card:hover {
+      border-color: var(--border-hover);
+    }
+    .contact-audience-card.on {
+      border-color: rgba(6, 182, 212, 0.55);
+      background: rgba(6, 182, 212, 0.08);
+    }
+    .contact-audience-card.on .contact-audience-title {
+      color: var(--accent-cyan);
+    }
+    .contact-audience-toggle {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 2;
+    }
+    .contact-audience-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+    }
+    .contact-audience-icon.note {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent-violet);
+    }
+    .contact-audience-icon.globe {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-emerald);
+    }
+    .contact-audience-icon.brief {
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent-indigo);
+    }
+    .contact-audience-title {
+      font-family: var(--font-sans);
+      font-size: 0.88rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .contact-audience-desc {
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+      flex: 1;
+    }
+    .contact-audience-card:not(.on) .contact-audience-desc {
+      color: var(--text-muted);
     }
 
     .settings-tooltip-wrap {
@@ -1306,21 +1391,123 @@
       color: var(--text-primary);
     }
 
-    .region-country-block {
+    .region-country-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
       margin-bottom: 12px;
-      padding: 10px 12px;
-      border: 1px solid var(--border-color);
+    }
+    .region-country-tab {
+      padding: 8px 14px;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      transition: all var(--transition-fast);
     }
-    .region-country-label {
-      font-size: 0.78rem;
-      font-weight: 600;
+    .region-country-tab:hover {
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+    .region-country-tab.active {
+      background: rgba(6, 182, 212, 0.12);
+      border-color: var(--accent-cyan);
       color: var(--accent-cyan);
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
     }
+    .region-tab-badge {
+      margin-left: 6px;
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .region-chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .region-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+      transition: all var(--transition-fast);
+    }
+    .region-chip:hover {
+      border-color: rgba(6, 182, 212, 0.4);
+      color: var(--text-primary);
+    }
+    .region-chip.selected {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+    .region-chip input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      width: 0;
+      height: 0;
+    }
+
+    .job-search-settings-split {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .job-search-scope-col {
+      border-right: 1px solid var(--border-color);
+      padding-right: 20px;
+    }
+    .job-search-refine-col .form-group {
+      margin-bottom: 16px;
+    }
+    .job-search-refine-col .form-group:last-child {
+      margin-bottom: 0;
+    }
+    .job-search-refine-heading {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-indigo);
+      margin-bottom: 12px;
+    }
+    .job-search-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 16px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 12px;
+    }
+    @media (max-width: 800px) {
+      .job-search-settings-split {
+        grid-template-columns: 1fr;
+      }
+      .job-search-scope-col {
+        border-right: none;
+        padding-right: 0;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 16px;
+        margin-bottom: 4px;
+      }
+    }
+
     .region-hint {
       font-size: 0.8rem;
       color: #fcd34d;
@@ -1349,6 +1536,14 @@
     .per-region-stepper input[type="number"] {
       width: 72px;
       text-align: center;
+    }
+    .per-region-stepper input[type="number"]::-webkit-outer-spin-button,
+    .per-region-stepper input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .per-region-stepper input[type="number"] {
+      -moz-appearance: textfield;
     }
 
     /* Profile Manager modal */
@@ -1898,78 +2093,75 @@
         </div>
         <!-- Foldable job search + contact search settings -->
         <div class="job-search-settings-body" id="job-search-settings-body" data-collapse-key="panel-scraper-settings-collapsed">
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-            <div class="form-group">
-              <label>Position / Query</label>
-              <input type="text" id="kb-filter-position" value="Senior QA Automation">
-            </div>
-            <div class="form-group">
-              <label>Per-Region Limit</label>
-              <div class="per-region-stepper" id="kb-per-region-stepper">
-                <button type="button" class="stepper-btn" id="kb-per-region-dec" aria-label="Decrease">&minus;</button>
-                <input type="number" id="kb-per-region-limit" min="25" max="1000" step="25" value="200" aria-label="Jobs per region">
-                <button type="button" class="stepper-btn" id="kb-per-region-inc" aria-label="Increase">+</button>
+          <div class="job-search-settings-split">
+            <div class="job-search-scope-col">
+              <div class="form-group">
+                <label>Position / Query</label>
+                <input type="text" id="kb-filter-position" value="Senior QA Automation">
+              </div>
+              <div class="form-group">
+                <label>Search Regions</label>
+                <p id="kb-region-hint" class="region-hint" hidden>Pick at least one Search Region to run a scrape.</p>
+                <div id="kb-region-country-tabs" class="region-country-tabs"></div>
+                <div id="kb-region-chips" class="region-chip-grid"></div>
+              </div>
+              <div class="form-group">
+                <label>Per-Region Limit</label>
+                <div class="per-region-stepper" id="kb-per-region-stepper">
+                  <button type="button" class="stepper-btn" id="kb-per-region-dec" aria-label="Decrease">&minus;</button>
+                  <input type="number" id="kb-per-region-limit" min="25" max="1000" step="25" value="200" aria-label="Jobs per region">
+                  <button type="button" class="stepper-btn" id="kb-per-region-inc" aria-label="Increase">+</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Source Platform</label>
+                <select id="kb-filter-platform" style="width: 100%;">
+                  <option value="brightdata_linkedin" selected>LinkedIn (Bright Data)</option>
+                </select>
               </div>
             </div>
-            <div class="form-group">
-              <label>Remote Type</label>
-              <div class="checkbox-group">
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="remote" checked> Remote</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="hybrid"> Hybrid</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="in_office"> In Office</label>
+            <div class="job-search-refine-col">
+              <div class="job-search-refine-heading">Refine results (optional)</div>
+              <div class="form-group">
+                <label>Remote Type</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="remote" checked> Remote</label>
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="hybrid"> Hybrid</label>
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-remote" value="in_office"> In Office</label>
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label>Seniority (Optional)</label>
-              <div class="checkbox-group">
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="junior"> Junior</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="mid"> Mid-level</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="senior" checked> Senior</label>
+              <div class="form-group">
+                <label>Seniority</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="junior"> Junior</label>
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="mid"> Mid-level</label>
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-seniority" value="senior" checked> Senior</label>
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label>Salary Min (Optional)</label>
-              <input type="text" id="kb-filter-salary" placeholder="e.g. $120k">
-            </div>
-            <div class="form-group">
-              <label>Company Size (Optional)</label>
-              <div class="checkbox-group">
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="small"> Small (1-50)</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="medium"> Medium (50-500)</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="large"> Large (500+)</label>
+              <div class="form-group">
+                <label>Posted within</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="any" checked> Anytime</label>
+                  <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_24_hours"> Past 24h</label>
+                  <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_week"> Past Week</label>
+                  <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_month"> Past Month</label>
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label>Source Platform</label>
-              <select id="kb-filter-platform" style="width: 100%;">
-                <option value="brightdata_linkedin" selected>LinkedIn (Bright Data)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Target Countries</label>
-              <div class="checkbox-group">
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="us" checked> US</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="ca"> Canada</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="gb"> UK</label>
-                <label class="checkbox-item"><input type="checkbox" name="kb-filter-country" value="de"> Germany</label>
+              <div class="form-group">
+                <label>Company Size</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="small"> Small (1-50)</label>
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="medium"> Medium (50-500)</label>
+                  <label class="checkbox-item"><input type="checkbox" name="kb-filter-size" value="large"> Large (500+)</label>
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label>Time Range</label>
-              <div class="checkbox-group">
-                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="any" checked> Anytime</label>
-                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_24_hours"> Past 24h</label>
-                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_week"> Past Week</label>
-                <label class="checkbox-item"><input type="radio" name="kb-filter-time" value="past_month"> Past Month</label>
+              <div class="form-group">
+                <label>Salary Min</label>
+                <input type="text" id="kb-filter-salary" placeholder="e.g. $120k">
               </div>
             </div>
           </div>
-          <div class="form-group" style="margin-top: 12px;">
-            <label>Search Regions</label>
-            <p id="kb-region-hint" class="region-hint" hidden>Select at least one region for each checked country.</p>
-            <div id="kb-region-pickers"></div>
-          </div>
-          <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px; border-top: 1px solid var(--border-color); padding-top:12px;">
+          <div class="job-search-actions">
             <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="resetKbFilters()"><i class="fa-solid fa-undo"></i> Reset Filters</button>
             <button class="btn btn-primary" id="kb-scrape-btn-panel" style="padding: 6px 12px; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo)); box-shadow: 0 4px 10px rgba(6,182,212,0.2);" onclick="triggerScrapeRun()" disabled><i class="fa-solid fa-play"></i> Run Scraper with Filters</button>
           </div>
@@ -1978,39 +2170,39 @@
 
           <!-- Contact Search Settings -->
           <div class="panel-section" id="contact-search-settings-section">
-            <div class="panel-header" style="flex-wrap: wrap; gap: 12px; padding: 12px 0 0;">
+            <div class="panel-header" style="padding: 12px 0 14px;">
               <div class="panel-header-left">
                 <i class="fa-solid fa-bullhorn"></i>
-                <span class="settings-tooltip-wrap" data-tooltip="Control which audiences to enrich and how outreach messages are written.">Contact Search Settings</span>
+                <span>Contact Search Settings</span>
               </div>
-              <div class="panel-header-right" style="flex-wrap: wrap; gap: 16px;">
-                <span class="settings-tooltip-wrap" data-tooltip="Free LinkedIn accounts limit connection notes to 200 characters. Turn off for the complete draft. Re-classify jobs to apply.">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                    <label class="toggle-switch">
-                      <input type="checkbox" id="toggle-short-connection-note" onchange="saveOutreachSettings('short_connection_note', this.checked)">
-                      <span class="toggle-slider"></span>
-                    </label>
-                    <span style="font-size: 0.82rem; color: var(--text-secondary);">Short connection note</span>
-                  </label>
-                </span>
-                <span class="settings-tooltip-wrap" data-tooltip="Target employees with Russian/CIS background for referral outreach.">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                    <label class="toggle-switch">
-                      <input type="checkbox" id="toggle-russian-speakers" onchange="saveOutreachSettings('target_russian_speakers', this.checked)">
-                      <span class="toggle-slider"></span>
-                    </label>
-                    <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Russian/CIS speakers</span>
-                  </label>
-                </span>
-                <span class="settings-tooltip-wrap" data-tooltip="Target HR and recruiting roles.">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                    <label class="toggle-switch">
-                      <input type="checkbox" id="toggle-recruiters" onchange="saveOutreachSettings('target_recruiters', this.checked)">
-                      <span class="toggle-slider"></span>
-                    </label>
-                    <span style="font-size: 0.82rem; color: var(--text-secondary);">Target Recruiters/HR</span>
-                  </label>
-                </span>
+            </div>
+            <div class="contact-audience-grid">
+              <div class="contact-audience-card on" data-outreach-card="short_connection_note" role="switch" aria-checked="true">
+                <label class="toggle-switch contact-audience-toggle">
+                  <input type="checkbox" id="toggle-short-connection-note" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <div class="contact-audience-icon note"><i class="fa-solid fa-compress"></i></div>
+                <div class="contact-audience-title settings-tooltip-wrap" data-tooltip="Free LinkedIn accounts limit connection notes to 200 characters. Turn off for the complete draft. Re-classify jobs to apply.">Short connection note</div>
+                <p class="contact-audience-desc">Keep LinkedIn connection requests under the 200-character free-tier limit.</p>
+              </div>
+              <div class="contact-audience-card on" data-outreach-card="target_russian_speakers" role="switch" aria-checked="true">
+                <label class="toggle-switch contact-audience-toggle">
+                  <input type="checkbox" id="toggle-russian-speakers" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <div class="contact-audience-icon globe"><i class="fa-solid fa-earth-americas"></i></div>
+                <div class="contact-audience-title settings-tooltip-wrap" data-tooltip="Target employees with Russian/CIS background for referral outreach.">Target Russian/CIS speakers</div>
+                <p class="contact-audience-desc">Prefer contacts with Russian/CIS background when enriching for referrals.</p>
+              </div>
+              <div class="contact-audience-card on" data-outreach-card="target_recruiters" role="switch" aria-checked="true">
+                <label class="toggle-switch contact-audience-toggle">
+                  <input type="checkbox" id="toggle-recruiters" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+                <div class="contact-audience-icon brief"><i class="fa-solid fa-user-tie"></i></div>
+                <div class="contact-audience-title settings-tooltip-wrap" data-tooltip="Target HR and recruiting roles.">Target Recruiters/HR</div>
+                <p class="contact-audience-desc">Include HR and recruiting roles when loading more contacts.</p>
               </div>
             </div>
           </div>
@@ -3412,11 +3604,19 @@
     }
 
     const COUNTRY_CODE_MAP = { us: 'US', ca: 'CA', gb: 'GB', de: 'DE' };
+    const COUNTRY_LABELS = { US: 'United States', CA: 'Canada', GB: 'United Kingdom', DE: 'Germany' };
+    const COUNTRY_ORDER = ['US', 'CA', 'GB', 'DE'];
     const PER_REGION_LIMIT_MIN = 25;
     const PER_REGION_LIMIT_MAX = 1000;
     const PER_REGION_LIMIT_DEFAULT = 200;
     const PER_REGION_LIMIT_STEP = 25;
     let regionsMap = {};
+    let activeRegionTab = 'US';
+    const selectedSearchRegions = new Set();
+
+    function regionSelectionKey(country, region) {
+      return `${country}|${region}`;
+    }
 
     function clampPerRegionLimit(value) {
       let n = parseInt(value, 10);
@@ -3426,30 +3626,30 @@
     }
 
     function getSelectedCountries() {
-      const countryEls = document.querySelectorAll('input[name="kb-filter-country"]:checked');
-      return countryEls.length > 0 ? Array.from(countryEls).map(el => el.value) : [];
+      const codes = new Set(getSelectedSearchRegions().map(r => r.country));
+      return [...codes].map(code => {
+        const entry = Object.entries(COUNTRY_CODE_MAP).find(([, v]) => v === code);
+        return entry ? entry[0] : code.toLowerCase();
+      });
     }
 
     function getSelectedSearchRegions() {
-      const regions = [];
-      document.querySelectorAll('input[name="kb-filter-region"]:checked').forEach(el => {
-        const countryCode = el.dataset.country;
-        if (countryCode) {
-          regions.push({ country: countryCode, region: el.value });
-        }
-      });
-      return regions;
+      return [...selectedSearchRegions].map(key => {
+        const [country, ...rest] = key.split('|');
+        return { country, region: rest.join('|') };
+      }).sort((a, b) => a.country.localeCompare(b.country) || a.region.localeCompare(b.region));
+    }
+
+    function countSelectedRegionsForCountry(code) {
+      let count = 0;
+      for (const key of selectedSearchRegions) {
+        if (key.startsWith(`${code}|`)) count += 1;
+      }
+      return count;
     }
 
     function isSearchRegionsValid() {
-      const countries = getSelectedCountries();
-      if (countries.length === 0) return false;
-      for (const countryVal of countries) {
-        const code = COUNTRY_CODE_MAP[countryVal] || countryVal.toUpperCase();
-        const hasRegion = document.querySelector(`input[name="kb-filter-region"][data-country="${code}"]:checked`);
-        if (!hasRegion) return false;
-      }
-      return true;
+      return selectedSearchRegions.size > 0;
     }
 
     function updateScrapeRunButtonState() {
@@ -3476,62 +3676,47 @@
       btnPanel.innerHTML = '<i class="fa-solid fa-play"></i> Run Scraper with Filters';
     }
 
-    function renderRegionPickers() {
-      const container = document.getElementById('kb-region-pickers');
-      if (!container || !regionsMap) return;
-
-      container.innerHTML = '';
-      const countryOrder = ['US', 'CA', 'GB', 'DE'];
-
-      for (const code of countryOrder) {
-        const regions = regionsMap[code];
-        if (!regions) continue;
-
-        const lowerKey = Object.entries(COUNTRY_CODE_MAP).find(([, v]) => v === code)?.[0] || code.toLowerCase();
-
-        const block = document.createElement('div');
-        block.className = 'region-country-block';
-        block.id = `kb-regions-${lowerKey}`;
-        block.dataset.country = code;
-        block.style.display = 'none';
-
-        const label = document.createElement('div');
-        label.className = 'region-country-label';
-        label.textContent = code;
-        block.appendChild(label);
-
-        const group = document.createElement('div');
-        group.className = 'checkbox-group';
-
-        for (const region of regions) {
-          const item = document.createElement('label');
-          item.className = 'checkbox-item';
-          const input = document.createElement('input');
-          input.type = 'checkbox';
-          input.name = 'kb-filter-region';
-          input.value = region;
-          input.dataset.country = code;
-          item.appendChild(input);
-          item.appendChild(document.createTextNode(' ' + region));
-          group.appendChild(item);
-        }
-        block.appendChild(group);
-        container.appendChild(block);
-      }
-
-      syncRegionPickerVisibility();
+    function toggleSearchRegion(country, region) {
+      const key = regionSelectionKey(country, region);
+      if (selectedSearchRegions.has(key)) selectedSearchRegions.delete(key);
+      else selectedSearchRegions.add(key);
+      renderRegionPickers();
     }
 
-    function syncRegionPickerVisibility() {
-      const checked = getSelectedCountries();
-      document.querySelectorAll('.region-country-block').forEach(block => {
-        const code = block.dataset.country;
-        const lowerKey = Object.entries(COUNTRY_CODE_MAP).find(([, v]) => v === code)?.[0];
-        block.style.display = checked.includes(lowerKey) ? 'block' : 'none';
-        if (!checked.includes(lowerKey)) {
-          block.querySelectorAll('input[name="kb-filter-region"]').forEach(cb => { cb.checked = false; });
-        }
-      });
+    function renderRegionPickers() {
+      const tabsEl = document.getElementById('kb-region-country-tabs');
+      const chipsEl = document.getElementById('kb-region-chips');
+      if (!tabsEl || !chipsEl || !regionsMap) return;
+
+      tabsEl.innerHTML = '';
+      for (const code of COUNTRY_ORDER) {
+        if (!regionsMap[code]) continue;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'region-country-tab' + (code === activeRegionTab ? ' active' : '');
+        const count = countSelectedRegionsForCountry(code);
+        btn.innerHTML = (COUNTRY_LABELS[code] || code)
+          + (count ? `<span class="region-tab-badge">${count}</span>` : '');
+        btn.addEventListener('click', () => {
+          activeRegionTab = code;
+          renderRegionPickers();
+        });
+        tabsEl.appendChild(btn);
+      }
+
+      chipsEl.innerHTML = '';
+      const regions = regionsMap[activeRegionTab] || [];
+      for (const region of regions) {
+        const key = regionSelectionKey(activeRegionTab, region);
+        const selected = selectedSearchRegions.has(key);
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'region-chip' + (selected ? ' selected' : '');
+        chip.textContent = region;
+        chip.addEventListener('click', () => toggleSearchRegion(activeRegionTab, region));
+        chipsEl.appendChild(chip);
+      }
+
       updateScrapeRunButtonState();
     }
 
@@ -3540,17 +3725,8 @@
         const resp = await fetch('/api/regions');
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         regionsMap = await resp.json();
+        activeRegionTab = COUNTRY_ORDER.find(code => regionsMap[code]) || 'US';
         renderRegionPickers();
-
-        document.querySelectorAll('input[name="kb-filter-country"]').forEach(cb => {
-          cb.addEventListener('change', syncRegionPickerVisibility);
-        });
-        const pickers = document.getElementById('kb-region-pickers');
-        if (pickers) {
-          pickers.addEventListener('change', (e) => {
-            if (e.target.name === 'kb-filter-region') updateScrapeRunButtonState();
-          });
-        }
       } catch (err) {
         console.error('Failed to load regions:', err);
       }
@@ -3656,7 +3832,7 @@
         return;
       }
       if (!isSearchRegionsValid()) {
-        addLogLine('Cannot start scrape: select at least one Search Region for each checked country.', 'warning');
+        addLogLine('Cannot start scrape: pick at least one Search Region.', 'warning');
         return;
       }
       let query = "QA Engineer";
@@ -3689,8 +3865,7 @@
       const platformEl = document.getElementById('kb-filter-platform');
       const platform = platformEl ? platformEl.value : "brightdata_linkedin";
 
-      const countryEls = document.querySelectorAll('input[name="kb-filter-country"]:checked');
-      const countries = countryEls.length > 0 ? Array.from(countryEls).map(el => el.value).join(',') : 'us';
+      const countries = getSelectedCountries().join(',') || 'us';
 
       const timeEl = document.querySelector('input[name="kb-filter-time"]:checked');
       const time_range = timeEl ? timeEl.value : 'any';
@@ -3882,7 +4057,8 @@
       document.querySelectorAll('input[name="kb-filter-remote"]').forEach(cb => cb.checked = cb.value === 'remote');
       document.querySelectorAll('input[name="kb-filter-seniority"]').forEach(cb => cb.checked = cb.value === 'senior');
       document.querySelectorAll('input[name="kb-filter-size"]').forEach(cb => cb.checked = false);
-      document.querySelectorAll('input[name="kb-filter-region"]').forEach(cb => { cb.checked = false; });
+      selectedSearchRegions.clear();
+      activeRegionTab = COUNTRY_ORDER.find(code => regionsMap[code]) || 'US';
       
       const salaryEl = document.getElementById('kb-filter-salary');
       if (salaryEl) salaryEl.value = '';
@@ -3893,10 +4069,9 @@
       const limitEl = document.getElementById('kb-per-region-limit');
       if (limitEl) limitEl.value = PER_REGION_LIMIT_DEFAULT;
       
-      document.querySelectorAll('input[name="kb-filter-country"]').forEach(cb => cb.checked = cb.value === 'us');
       document.querySelectorAll('input[name="kb-filter-time"]').forEach(rb => rb.checked = rb.value === 'any');
 
-      syncRegionPickerVisibility();
+      renderRegionPickers();
       addLogLine("Kanban scraper settings reset to default values.", 'info');
     }
 
@@ -4038,7 +4213,57 @@
         document.getElementById('toggle-short-connection-note').checked = s.short_connection_note !== false;
         document.getElementById('toggle-russian-speakers').checked = !!s.target_russian_speakers;
         document.getElementById('toggle-recruiters').checked = !!s.target_recruiters;
+        syncOutreachCardVisuals();
       } catch (e) { console.error('Failed to load outreach settings', e); }
+    }
+
+    function syncOutreachCardVisuals() {
+      const keys = ['short_connection_note', 'target_russian_speakers', 'target_recruiters'];
+      const ids = ['toggle-short-connection-note', 'toggle-russian-speakers', 'toggle-recruiters'];
+      keys.forEach((key, i) => {
+        const cb = document.getElementById(ids[i]);
+        const card = document.querySelector(`[data-outreach-card="${key}"]`);
+        if (!cb || !card) return;
+        card.classList.toggle('on', cb.checked);
+        card.setAttribute('aria-checked', cb.checked ? 'true' : 'false');
+      });
+    }
+
+    function onOutreachToggle(key, value) {
+      syncOutreachCardVisuals();
+      saveOutreachSettings(key, value);
+    }
+
+    function initOutreachToggleHandlers() {
+      const configs = [
+        { key: 'short_connection_note', id: 'toggle-short-connection-note' },
+        { key: 'target_russian_speakers', id: 'toggle-russian-speakers' },
+        { key: 'target_recruiters', id: 'toggle-recruiters' },
+      ];
+
+      configs.forEach(({ key, id }) => {
+        const cb = document.getElementById(id);
+        const card = document.querySelector(`[data-outreach-card="${key}"]`);
+        if (!cb || !card) return;
+
+        const toggle = cb.closest('.toggle-switch');
+        if (toggle) {
+          const stopCardToggle = (event) => event.stopPropagation();
+          toggle.addEventListener('click', stopCardToggle);
+          toggle.addEventListener('mousedown', stopCardToggle);
+        }
+
+        cb.addEventListener('change', () => {
+          onOutreachToggle(key, cb.checked);
+        });
+
+        card.addEventListener('click', (event) => {
+          if (event.target.closest('.toggle-switch')) return;
+          cb.checked = !cb.checked;
+          syncOutreachCardVisuals();
+          saveOutreachSettings(key, cb.checked);
+        });
+      });
     }
 
     async function saveOutreachSettings(key, value) {
@@ -4183,6 +4408,7 @@
     initSearchRegionPickers();
     initPerRegionLimitStepper();
     initOutreachSettingsTooltips();
+    initOutreachToggleHandlers();
     initEvaluationLockPolling();
     restoreSessionLogs();
     const pmImportInput = document.getElementById('pm-import-input');
