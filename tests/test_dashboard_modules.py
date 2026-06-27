@@ -507,3 +507,12 @@ def test_drawer_shows_reclassify_progress_banner():
         "drawerController must show in-drawer spinner while re-classifying"
     assert "refreshDrawerIfOpen" in content, \
         "drawerController must export refreshDrawerIfOpen to avoid reopening closed drawer"
+
+
+def test_drawer_inline_handlers_exported_to_window():
+    """Inline oninput/onclick in drawer HTML require globals on window."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    window_block = content[content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3]
+    for name in ("updateJobComment", "saveOutreachTemplate", "updateOutreachCounter"):
+        assert f"{name}," in window_block, f"{name} must be exported to window for drawer inline handlers"
