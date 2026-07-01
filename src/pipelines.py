@@ -512,10 +512,16 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
     enrichment_note = ""
     enrichment_note_kind = ""
     contacts = []
+    settings = OutreachSettings()
+
+    try:
+        settings = OutreachSettings(**database.get_outreach_settings())
+    except Exception as exc:
+        enrichment_note = f"Could not load Outreach Settings: {exc}"
+        await log(enrichment_note, "error")
 
     source_meta = {}
     try:
-        settings = OutreachSettings(**database.get_outreach_settings())
         contacts = await source_contacts(
             job,
             settings=settings,
@@ -523,8 +529,13 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
             meta=source_meta,
         )
     except Exception as exc:
-        enrichment_note = f"Enrichment failed: {exc}"
-        await log(enrichment_note, "error")
+        sourcing_note = f"Contact sourcing failed: {exc}"
+        enrichment_note = (
+            f"{enrichment_note} {sourcing_note}".strip()
+            if enrichment_note
+            else sourcing_note
+        )
+        await log(sourcing_note, "error")
 
     if not enrichment_note:
         if source_meta.get("empty_reason") == "no_company_url":

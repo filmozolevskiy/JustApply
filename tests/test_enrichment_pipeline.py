@@ -93,8 +93,35 @@ async def test_enrichment_infrastructure_error_sets_note(db):
         result = await run_enrichment_pipeline(job)
 
     assert result is not None
-    assert result.enrichmentNote != ""
+    assert result.enrichmentNote.startswith("Contact sourcing failed:")
+    assert "Apify trigger failed: HTTP 403" in result.enrichmentNote
     assert result.status == "accepted"
+    assert result.recruiterOutreachTemplate == _EMPTY_TEMPLATES["recruiter"]
+    assert result.russianSpeakerOutreachTemplate == _EMPTY_TEMPLATES["russian_speaker"]
+
+
+@pytest.mark.asyncio
+async def test_enrichment_settings_read_failure_completes_with_note_and_templates(db):
+    """Settings read failure completes without crash; job stays Accepted with templates."""
+    log_records = []
+
+    async def capture_log(msg, level="info"):
+        log_records.append((msg, level))
+
+    with patch("src.pipelines.database.get_outreach_settings", side_effect=Exception("DB locked")), \
+         patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
+        from src.pipelines import run_enrichment_pipeline
+        job = _enriching_job(db)
+        result = await run_enrichment_pipeline(job, log_func=capture_log)
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert result.enrichmentNote.startswith("Could not load Outreach Settings:")
+    assert "DB locked" in result.enrichmentNote
+    assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
+    assert result.russianSpeakerOutreachTemplate == _BOTH_TEMPLATES["russian_speaker"]
+    assert any(level == "error" for _, level in log_records)
 
 
 @pytest.mark.asyncio
