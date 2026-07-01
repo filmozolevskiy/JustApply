@@ -11,14 +11,37 @@ export function parseBoardSearchTerms(query) {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
+function buildBoardSearchJobHaystack(job) {
+  return BOARD_SEARCH_FIELD_KEYS.map((key) => String(job[key] || '').toLowerCase()).join('\n');
+}
+
+function buildBoardSearchContactHaystack(job) {
+  const contacts = Array.isArray(job.contacts) ? job.contacts : [];
+  return contacts.map((contact) => String(contact?.name || '').toLowerCase()).join('\n');
+}
+
+function haystackMatchesBoardSearchTerms(haystack, terms) {
+  return terms.every((term) => haystack.includes(term));
+}
+
+export function jobContactsMatchBoardSearch(job, query) {
+  const terms = parseBoardSearchTerms(query);
+  if (terms.length === 0) {
+    return true;
+  }
+  return haystackMatchesBoardSearchTerms(buildBoardSearchContactHaystack(job), terms);
+}
+
 export function jobMatchesBoardSearch(job, query) {
   const terms = parseBoardSearchTerms(query);
   if (terms.length === 0) {
     return true;
   }
 
-  const haystack = BOARD_SEARCH_FIELD_KEYS.map((key) => String(job[key] || '').toLowerCase()).join('\n');
-  return terms.every((term) => haystack.includes(term));
+  const haystack = [buildBoardSearchJobHaystack(job), buildBoardSearchContactHaystack(job)]
+    .filter(Boolean)
+    .join('\n');
+  return haystackMatchesBoardSearchTerms(haystack, terms);
 }
 
 export function getCompanySizeCategory(sizeStr) {

@@ -1,0 +1,10 @@
+# Ralph Loop Progress — PRD #106
+
+Started: 2026-07-01
+Composed skills: tdd
+
+## #107 Board Search matches Contact names — 2026-07-01
+- Extended `jobMatchesBoardSearch` haystack to include contact `name` fields (case-insensitive, multi-word AND across job fields + contact names)
+- Exported `jobContactsMatchBoardSearch` predicate (same AND rule on contact names alone) for slice 2 archived bypass
+- Added `test_board_renderer_search_matches_contact_names` in tests/test_dashboard_modules.py
+- Tests: 807 passed (pytest tests/)

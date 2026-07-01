@@ -163,6 +163,69 @@ def test_board_renderer_search_filters_by_title_company_location_description():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_board_renderer_search_matches_contact_names():
+    """Board Search includes contact display names in the haystack (name only, case-insensitive AND)."""
+    result = _run_node(
+        """
+        import {
+          filterJobs,
+          jobMatchesBoardSearch,
+          jobContactsMatchBoardSearch,
+        } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'Backend Engineer',
+            company: 'Acme Corp',
+            location: 'Remote',
+            description: 'API development',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            contacts: [
+              { name: 'Jane Smith', title: 'Technical Recruiter', url: 'https://linkedin.com/in/jane' },
+              { name: 'Bob Lee', title: 'Engineering Manager', url: 'https://linkedin.com/in/bob', contacted: true },
+            ],
+          },
+          {
+            id: 2,
+            title: 'Project Manager',
+            company: 'Beta Inc',
+            location: 'New York',
+            description: 'Agile delivery',
+            remoteType: 'hybrid',
+            size: '1000+',
+            isRecruiter: false,
+            contacts: [],
+          },
+        ];
+
+        if (!jobMatchesBoardSearch(jobs[0], 'jane')) process.exit(1);
+        if (jobMatchesBoardSearch(jobs[1], 'jane')) process.exit(2);
+        if (!jobMatchesBoardSearch(jobs[0], 'JANE SMITH')) process.exit(3);
+        if (jobMatchesBoardSearch(jobs[0], 'recruiter')) process.exit(4);
+        if (!jobMatchesBoardSearch(jobs[0], 'jane engineer')) process.exit(5);
+        if (jobMatchesBoardSearch(jobs[0], 'jane beta')) process.exit(6);
+        if (!jobContactsMatchBoardSearch(jobs[0], 'jane smith')) process.exit(7);
+        if (jobContactsMatchBoardSearch(jobs[0], 'engineer')) process.exit(8);
+        if (jobContactsMatchBoardSearch(jobs[1], 'jane')) process.exit(9);
+        if (!jobContactsMatchBoardSearch(jobs[0], '')) process.exit(10);
+
+        const filtered = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'jane',
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(11);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_board_renderer_search_combines_with_other_board_filters():
     """Board Search ANDs with remote, size, and recruiter filters."""
     result = _run_node(
@@ -514,5 +577,13 @@ def test_drawer_inline_handlers_exported_to_window():
     with open(HTML_PATH, encoding="utf-8") as f:
         content = f.read()
     window_block = content[content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3]
-    for name in ("updateJobComment", "saveOutreachTemplate", "updateOutreachCounter"):
+    for name in (
+        "postJobComment",
+        "cancelJobComment",
+        "postOutreachTemplate",
+        "cancelOutreachTemplate",
+        "onCommentDraftInput",
+        "onOutreachDraftInput",
+        "updateOutreachCounter",
+    ):
         assert f"{name}," in window_block, f"{name} must be exported to window for drawer inline handlers"
