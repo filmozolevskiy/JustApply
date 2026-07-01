@@ -1,0 +1,42 @@
+# JustApply — canonical dependency and project metadata source.
+#
+# Version policy: dependencies use compatible-release ranges (>=X,<next_major)
+# so security patches flow in while major upgrades stay deliberate. We do not
+# commit a lock file; after changing bounds here, reinstall in a fresh venv and
+# run `pytest tests/` before merging. To pin exact versions for a deployment,
+# export with `pip freeze` or adopt uv/pip-tools in a follow-up.
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "justapply"
+version = "0.1.0"
+description = "AI-powered job search and application pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0,<1.0.0",
+    "uvicorn>=0.29.0,<1.0.0",
+    "python-multipart>=0.0.9,<1.0.0",
+    "watchfiles>=1.0.0,<2.0.0",
+    "sse-starlette>=2.0.0,<4.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "httpx>=0.27.0,<1.0.0",
+    "google-genai>=1.0.0,<3.0.0",
+    "python-dotenv>=1.2.2,<2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3,<10.0.0",
+    "pytest-asyncio>=1.4.0,<2.0.0",
+    "pytest-cov>=6.0.0,<7.0.0",
+    "ruff>=0.9.0,<1.0.0",
+    "mypy>=1.14.0,<2.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

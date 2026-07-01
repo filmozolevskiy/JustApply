@@ -30,8 +30,13 @@ All commands below must be run from the **repo root** with the project virtualen
    python3 -m venv .venv
    source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-   pip install -r requirements.txt
+   # Contributors (runtime + pytest, ruff, mypy, coverage):
+   pip install -e ".[dev]"
+
+   # Runtime-only (dashboard + CLI, no dev tools):
+   # pip install -e .
    ```
+   Dependency versions live in `pyproject.toml` using compatible-release ranges (`>=X,<next_major`). There is no lock file — bump bounds deliberately, then verify in a fresh venv with `pytest tests/`. Legacy `requirements.txt` lists runtime deps only.
 2. **Environment**:
    ```bash
    cp .env.example .env
@@ -53,7 +58,7 @@ All commands below must be run from the **repo root** with the project virtualen
    python3 -m src.cli --promote
    ```
 
-**Troubleshooting:** If you see `No module named 'src'` or `requirements.txt` not found, you are not in the repo directory or you activated the wrong venv. Run `cd` into the clone, then `source .venv/bin/activate`. Confirm with `which python3` — it should point to `.venv/bin/python3` inside the repo.
+**Troubleshooting:** If you see `No module named 'src'` or install errors, you are not in the repo directory or you activated the wrong venv. Run `cd` into the clone, then `source .venv/bin/activate`. Confirm with `which python3` — it should point to `.venv/bin/python3` inside the repo. Use `pip install -e ".[dev]"` from the repo root (not `requirements.txt` alone if you need pytest).
 
 ### Repo Layout
 ```text
@@ -81,5 +86,6 @@ All commands below must be run from the **repo root** with the project virtualen
 │       └── static/js/           # jobStore, boardRenderer, drawerController, taskLogClient
 ├── tests/
 ├── .env.example
-└── requirements.txt
+├── pyproject.toml     # Canonical dependencies (runtime + [dev] extras)
+└── requirements.txt   # Runtime-only re-export for legacy scripts
 ```

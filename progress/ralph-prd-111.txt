@@ -1,0 +1,8 @@
+# Ralph Loop Progress — PRD #111
+
+## #125 — Introduce pyproject.toml with runtime and dev dependency groups
+- Added `pyproject.toml` as canonical metadata: runtime deps (FastAPI stack, google-genai, httpx, pydantic, dotenv, multipart, watchfiles, sse-starlette) and `[dev]` extras (pytest, pytest-asyncio, pytest-cov, ruff, mypy) with compatible-release bounds.
+- Regenerated `requirements.txt` as runtime-only backward-compatible re-export (removed pytest).
+- Updated README setup: `pip install -e ".[dev]"` for contributors, runtime-only `pip install -e .`, documented pin policy (no lock file).
+- Tests: 817 passed.
+- Commit: 70054db
