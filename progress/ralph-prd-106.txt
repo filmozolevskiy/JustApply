@@ -8,3 +8,11 @@ Composed skills: tdd
 - Exported `jobContactsMatchBoardSearch` predicate (same AND rule on contact names alone) for slice 2 archived bypass
 - Added `test_board_renderer_search_matches_contact_names` in tests/test_dashboard_modules.py
 - Tests: 807 passed (pytest tests/)
+
+## #108 Archived jobs surface on contact-name search — 2026-07-01
+- Added `resolveJobsArchivedFetchParam`: Active + non-empty search fetches `archived=all`; otherwise unchanged
+- `filterJobs` hides archived under Active by default; contact-name bypass via `jobContactsMatchBoardSearch` when search active
+- Archived/All visibility modes skip bypass; job-field-only matches on archived jobs stay hidden under Active
+- Dashboard `loadJobs`, search debounce, and `clearBoardSearch` reload when fetch param changes; drawer reload aligned
+- Added 6 tests in tests/test_dashboard_modules.py
+- Tests: 813 passed (pytest tests/)

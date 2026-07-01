@@ -11,6 +11,17 @@ export function parseBoardSearchTerms(query) {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
+export function resolveJobsArchivedFetchParam(archivedVisibility, searchQuery) {
+  const visibility = archivedVisibility || 'active';
+  if (visibility !== 'active') {
+    return visibility;
+  }
+  if (parseBoardSearchTerms(searchQuery).length > 0) {
+    return 'all';
+  }
+  return 'active';
+}
+
 function buildBoardSearchJobHaystack(job) {
   return BOARD_SEARCH_FIELD_KEYS.map((key) => String(job[key] || '').toLowerCase()).join('\n');
 }
@@ -76,10 +87,31 @@ export function filterJobs(jobs, filters) {
   const sizeFilter = filters.size || 'all';
   const recruiterFilter = filters.recruiter || 'all';
   const searchQuery = filters.search ?? '';
+  const archivedVisibility = filters.archivedVisibility || 'active';
+  const hasSearch = parseBoardSearchTerms(searchQuery).length > 0;
+  const activeWithContactBypass = archivedVisibility === 'active' && hasSearch;
 
   return jobs.filter((job) => {
-    if (!jobMatchesBoardSearch(job, searchQuery)) {
-      return false;
+    const isArchived = Boolean(job.archived);
+
+    if (activeWithContactBypass) {
+      if (isArchived) {
+        if (!jobContactsMatchBoardSearch(job, searchQuery)) {
+          return false;
+        }
+      } else if (!jobMatchesBoardSearch(job, searchQuery)) {
+        return false;
+      }
+    } else {
+      if (archivedVisibility === 'active' && isArchived) {
+        return false;
+      }
+      if (archivedVisibility === 'archived' && !isArchived) {
+        return false;
+      }
+      if (!jobMatchesBoardSearch(job, searchQuery)) {
+        return false;
+      }
     }
 
     if (remoteFilter !== 'all') {
@@ -148,6 +180,10 @@ export function getBoardFiltersFromDom() {
     recruiter: document.getElementById('board-filter-recruiter')?.value || 'all',
     search: document.getElementById('board-filter-search')?.value || '',
     sortBy: document.getElementById('board-sort-by')?.value || 'match_desc',
+    archivedVisibility:
+      document.getElementById('board-filter-archived')?.value ||
+      localStorage.getItem('boardFilterArchived') ||
+      'active',
   };
 }
 

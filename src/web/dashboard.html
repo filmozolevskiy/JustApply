@@ -1159,6 +1159,23 @@
       word-break: break-word;
     }
 
+    .drawer-draft-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .drawer-draft-btn {
+      padding: 4px 12px;
+      font-size: 0.75rem;
+    }
+
+    .drawer-draft-btn:disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
     .detail-description {
       color: var(--text-secondary);
       font-size: 0.85rem;
@@ -2365,13 +2382,13 @@
   </main>
 
   <!-- Detail side drawer (Used for Kanban detail view) -->
-  <div class="drawer-overlay" id="kanban-drawer" onclick="closeDrawer(event)">
+  <div class="drawer-overlay" id="kanban-drawer" onclick="void closeDrawer(event)">
     <div class="drawer-frame" onclick="event.stopPropagation()">
       <button type="button" class="drawer-nav drawer-nav-prev" id="drawer-nav-prev" onclick="navigateDrawerJob(-1)" aria-label="Previous job" disabled>
         <i class="fa-solid fa-chevron-left"></i>
       </button>
       <div class="drawer-content">
-        <button class="drawer-close" onclick="closeDrawer(null)"><i class="fa-solid fa-xmark"></i></button>
+        <button class="drawer-close" onclick="void closeDrawer(null)"><i class="fa-solid fa-xmark"></i></button>
         <div id="drawer-body">
           <!-- Rendered dynamically when card clicked -->
         </div>
@@ -2443,6 +2460,7 @@
     } from '/static/js/jobStore.js';
     import {
       renderBoard, getBoardFiltersFromDom, filterJobs, parseBoardSearchTerms,
+      resolveJobsArchivedFetchParam,
     } from '/static/js/boardRenderer.js';
     import {
       createTaskLogClient,
@@ -2475,6 +2493,7 @@
     let activeLoadMoreJobId = null;
     let activeReclassifyJobIds = [];
     let boardSearchDebounceTimer = null;
+    let lastJobsFetchArchivedParam = null;
     const BOARD_SEARCH_DEBOUNCE_MS = 300;
     const BOARD_CONTROLS_DEFAULTS = {
       search: '',
@@ -2496,6 +2515,12 @@
         loadMoreJobId: activeLoadMoreJobId,
         reclassifyJobIds: activeReclassifyJobIds,
       };
+    }
+
+    function getJobsFetchArchivedParam() {
+      const archivedFilter = getArchivedFilter();
+      const searchQuery = document.getElementById('board-filter-search')?.value || '';
+      return resolveJobsArchivedFetchParam(archivedFilter, searchQuery);
     }
 
     function updateBoardSearchClearVisibility() {
@@ -2526,8 +2551,13 @@
       boardSearchDebounceTimer = setTimeout(() => {
         boardSearchDebounceTimer = null;
         persistBoardSearch();
-        renderActiveVariant();
-        updateDrawerNav();
+        const fetchParam = getJobsFetchArchivedParam();
+        if (fetchParam !== lastJobsFetchArchivedParam) {
+          loadJobs().then(() => updateDrawerNav());
+        } else {
+          renderActiveVariant();
+          updateDrawerNav();
+        }
       }, BOARD_SEARCH_DEBOUNCE_MS);
     }
 
@@ -2541,8 +2571,13 @@
         boardSearchDebounceTimer = null;
       }
       persistBoardSearch();
-      renderActiveVariant();
-      updateDrawerNav();
+      const fetchParam = getJobsFetchArchivedParam();
+      if (fetchParam !== lastJobsFetchArchivedParam) {
+        loadJobs().then(() => updateDrawerNav());
+      } else {
+        renderActiveVariant();
+        updateDrawerNav();
+      }
       updateBoardSearchClearVisibility();
     }
 
@@ -2620,23 +2655,32 @@
     const drawer = createDrawerController({
       onJobMutated: renderActiveVariant,
       addLogLine,
+      confirmDiscardUnsavedEdits,
       getActiveReclassifyJobIds: () => activeReclassifyJobIds,
       getActiveLoadMoreJobId: () => activeLoadMoreJobId,
       getBoardFilters: getBoardFiltersFromDom,
     });
     const {
+      cancelJobComment,
+      cancelOutreachTemplate,
       closeDrawer,
+      closeDrawerImmediate,
       copyDrawerOutreach,
+      enrichJobFromDrawer,
+      markAppliedFromDrawer,
       navigateDrawerJob,
+      onCommentDraftInput,
+      onOutreachDraftInput,
       openContactedElsewhereJob,
       openJobDetailsDrawer,
+      postJobComment,
+      postOutreachTemplate,
       refreshDrawerIfOpen,
-      saveOutreachTemplate,
+      rejectJobFromDrawer,
       selectActiveContact,
       toggleActivityLog,
       toggleContacted,
       updateDrawerNav,
-      updateJobComment,
       updateOutreachCounter,
     } = drawer;
 
@@ -3153,6 +3197,15 @@
         confirmLabel: okLabel || 'OK',
         showCancel: false,
       }).then(() => {});
+    }
+
+    function confirmDiscardUnsavedEdits(message) {
+      return showSpendConfirmModal({
+        title: 'Unsaved changes',
+        subtitle: 'Your edits have not been posted.',
+        bodyHtml: `<div class="spend-modal-message">${escapeSpendHtml(message)}</div>`,
+        confirmLabel: 'Discard',
+      });
     }
 
     const SCRAPE_COST_PER_RECORD = 0.0015;
@@ -4102,7 +4155,8 @@
     }
 
     function loadJobs() {
-      const archivedFilter = getArchivedFilter();
+      const archivedFilter = getJobsFetchArchivedParam();
+      lastJobsFetchArchivedParam = archivedFilter;
       return fetch(`/api/jobs?archived=${archivedFilter}`)
         .then(r => {
           if (!r.ok) throw new Error("HTTP error " + r.status);
@@ -4363,6 +4417,8 @@
     Object.assign(window, {
       archiveJob,
       cancelEvaluation,
+      cancelJobComment,
+      cancelOutreachTemplate,
       changeJobStage,
       clearBoardSearch,
       clearLogs,
@@ -4371,20 +4427,26 @@
       copyDrawerOutreach,
       dismissSpendModalFromOverlay,
       enrichJob,
+      enrichJobFromDrawer,
       loadMoreContacts,
+      markAppliedFromDrawer,
       moveJobStage,
       navigateDrawerJob,
       onBoardSearchInput,
+      onCommentDraftInput,
+      onOutreachDraftInput,
       triggerProfileManagerImport,
       newProfileManagerProfile,
       openProfileManager,
+      postJobComment,
+      postOutreachTemplate,
       reclassifyJob,
       openContactedElsewhereJob,
       openJobDetailsDrawer,
+      rejectJobFromDrawer,
       resetBoardControls,
       resetKbFilters,
       saveOutreachSettings,
-      saveOutreachTemplate,
       selectActiveContact,
       saveProfileManagerProfile,
       selectProfileManagerProfile,
@@ -4398,7 +4460,6 @@
       triggerScrapeRun,
       updateArchiveVisibility,
       updateBoardFiltersAndSort,
-      updateJobComment,
       updateOutreachCounter,
     });
 

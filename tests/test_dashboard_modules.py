@@ -226,6 +226,217 @@ def test_board_renderer_search_matches_contact_names():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_board_renderer_resolve_jobs_archived_fetch_param():
+    """Active visibility + non-empty search fetches all jobs; otherwise unchanged."""
+    result = _run_node(
+        """
+        import { resolveJobsArchivedFetchParam } from './src/web/static/js/boardRenderer.js';
+
+        if (resolveJobsArchivedFetchParam('active', 'jane') !== 'all') process.exit(1);
+        if (resolveJobsArchivedFetchParam('active', '  ') !== 'active') process.exit(2);
+        if (resolveJobsArchivedFetchParam('active', '') !== 'active') process.exit(3);
+        if (resolveJobsArchivedFetchParam('archived', 'jane') !== 'archived') process.exit(4);
+        if (resolveJobsArchivedFetchParam('all', 'jane') !== 'all') process.exit(5);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_active_search_surfaces_archived_on_contact_match_only():
+    """Under Active visibility, archived jobs appear only when contact names match search."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const base = {
+          remoteType: 'remote',
+          size: '10-50',
+          isRecruiter: false,
+          status: 'rejected',
+        };
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'Active QA',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing',
+            archived: false,
+            contacts: [{ name: 'Jane Smith' }],
+            ...base,
+          },
+          {
+            id: 2,
+            title: 'Old Role',
+            company: 'Hidden Corp',
+            location: 'Remote',
+            description: 'Legacy',
+            archived: true,
+            contacts: [{ name: 'Jane Smith' }],
+            ...base,
+          },
+          {
+            id: 3,
+            title: 'Hidden Corp PM',
+            company: 'Hidden Corp',
+            location: 'Remote',
+            description: 'Legacy',
+            archived: true,
+            contacts: [],
+            ...base,
+          },
+        ];
+
+        const activeSearchFilters = {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'jane',
+          archivedVisibility: 'active',
+        };
+
+        const filtered = filterJobs(jobs, activeSearchFilters);
+        const ids = filtered.map((j) => j.id).sort((a, b) => a - b);
+        if (ids.join(',') !== '1,2') process.exit(1);
+
+        const companyOnly = filterJobs(jobs, {
+          ...activeSearchFilters,
+          search: 'hidden',
+        });
+        if (companyOnly.some((j) => j.archived)) process.exit(2);
+
+        const noSearch = filterJobs(jobs, {
+          ...activeSearchFilters,
+          search: '',
+        });
+        if (noSearch.some((j) => j.archived)) process.exit(3);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_archived_and_all_visibility_skip_contact_bypass():
+    """Archived and All visibility modes use normal search — no contact-only bypass."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const job = {
+          id: 9,
+          title: 'Hidden Corp Role',
+          company: 'Hidden Corp',
+          location: 'Remote',
+          description: 'Legacy',
+          remoteType: 'remote',
+          size: '10-50',
+          isRecruiter: false,
+          status: 'rejected',
+          archived: true,
+          contacts: [],
+        };
+
+        const archivedMode = filterJobs([job], {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'hidden',
+          archivedVisibility: 'archived',
+        });
+        if (archivedMode.length !== 1) process.exit(1);
+
+        const allMode = filterJobs([job], {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'hidden',
+          archivedVisibility: 'all',
+        });
+        if (allMode.length !== 1) process.exit(2);
+
+        const activeMode = filterJobs([job], {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'hidden',
+          archivedVisibility: 'active',
+        });
+        if (activeMode.length !== 0) process.exit(3);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_active_archived_bypass_combines_with_other_filters():
+    """Contact-name archived bypass still respects remote, size, and recruiter filters."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'Role A',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            archived: true,
+            contacts: [{ name: 'Jane Smith' }],
+          },
+          {
+            id: 2,
+            title: 'Role B',
+            company: 'Agency',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: true,
+            archived: true,
+            contacts: [{ name: 'Jane Smith' }],
+          },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'remote',
+          size: 'all',
+          recruiter: 'exclude',
+          search: 'jane',
+          archivedVisibility: 'active',
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_dashboard_load_jobs_uses_archived_fetch_resolver():
+    """loadJobs uses resolveJobsArchivedFetchParam for search-aware fetch under Active."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert "resolveJobsArchivedFetchParam" in content
+    assert "getJobsFetchArchivedParam" in content
+
+
+def test_dashboard_clear_board_search_reloads_jobs():
+    """Clearing Board Search reloads jobs so archived rows drop under Active visibility."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    clear_fn = content[content.find("function clearBoardSearch"): content.find("function resetBoardControls")]
+    assert "loadJobs()" in clear_fn
+
+
 def test_board_renderer_search_combines_with_other_board_filters():
     """Board Search ANDs with remote, size, and recruiter filters."""
     result = _run_node(

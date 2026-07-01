@@ -1,7 +1,7 @@
 /** Job details drawer — Active Contact, templates, and outreach UI. */
 
 import { findJob, getJobs, setJobs, updateJob, upsertJob } from './jobStore.js';
-import { getBoardJobOrder } from './boardRenderer.js';
+import { getBoardJobOrder, resolveJobsArchivedFetchParam } from './boardRenderer.js';
 
 export const NAME_PLACEHOLDER = '______';
 
@@ -101,7 +101,7 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
             .map(
               ({ contact, origIdx }) => `
             <div id="contact-row-${jobId}-${origIdx}"
-              onclick="selectActiveContact(${jobId}, ${origIdx})"
+              onclick="void selectActiveContact(${jobId}, ${origIdx})"
               style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.18); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.02); border-left:${origIdx === activeContactIdx ? '3px solid var(--accent-cyan)' : '3px solid transparent'}; cursor:pointer;">
               <div style="display:flex; align-items:center; gap:10px;">
                 <input type="checkbox" id="contact-${jobId}-${origIdx}" ${contact.contacted ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleContacted(${jobId}, ${origIdx}, this.checked)" style="width:16px; height:16px; cursor:pointer;">
@@ -131,16 +131,223 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
 export function createDrawerController({
   onJobMutated,
   addLogLine,
+  confirmDiscardUnsavedEdits = async () => true,
   getActiveReclassifyJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
   getBoardFilters = () => ({}),
 }) {
   let activeContactIdx = -1;
-  let commentTimeout = null;
-  let templateSaveTimeout = null;
   let drawerJobId = null;
+  let postedComment = '';
+  let postedRecruiterTemplate = '';
+  let postedRussianSpeakerTemplate = '';
 
-  function selectActiveContact(jobId, contactIdx) {
+  function initPostedBaselines(job) {
+    postedComment = job.comment || '';
+    postedRecruiterTemplate = job.recruiterOutreachTemplate || job.outreachMessage || '';
+    postedRussianSpeakerTemplate = job.russianSpeakerOutreachTemplate || '';
+  }
+
+  function activeAudience(job) {
+    const contact = activeContactIdx >= 0 && job.contacts ? job.contacts[activeContactIdx] : null;
+    return contact && contact.is_recruiter ? 'recruiter' : 'russian_speaker';
+  }
+
+  function getPostedOutreachTemplate(job) {
+    return activeAudience(job) === 'recruiter'
+      ? postedRecruiterTemplate
+      : postedRussianSpeakerTemplate;
+  }
+
+  function getOutreachDisplayValue(job) {
+    const rawTemplate = getPostedOutreachTemplate(job);
+    const contact = activeContactIdx >= 0 && job.contacts ? job.contacts[activeContactIdx] : null;
+    const firstName = contact ? contact.name.split(' ')[0] : '';
+    return firstName ? applyGreetingName(rawTemplate, firstName) : rawTemplate;
+  }
+
+  function isCommentDirty() {
+    const el = document.getElementById('drawer-comment-text');
+    return Boolean(el && el.value !== postedComment);
+  }
+
+  function isOutreachDirty() {
+    const el = document.getElementById('drawer-outreach-text');
+    const job = drawerJobId != null ? findJob(drawerJobId) : null;
+    if (!el || !job) return false;
+    return normalizeGreeting(el.value) !== getPostedOutreachTemplate(job);
+  }
+
+  function hasUnsavedDrafts() {
+    return isCommentDirty() || isOutreachDirty();
+  }
+
+  function getDiscardMessage() {
+    const commentDirty = isCommentDirty();
+    const outreachDirty = isOutreachDirty();
+    if (commentDirty && outreachDirty) {
+      return 'Discard unsaved notes and outreach draft?';
+    }
+    if (commentDirty) return 'Discard unsaved notes?';
+    if (outreachDirty) return 'Discard unsaved outreach draft?';
+    return '';
+  }
+
+  function revertDraftFields() {
+    const commentEl = document.getElementById('drawer-comment-text');
+    if (commentEl) commentEl.value = postedComment;
+    const job = drawerJobId != null ? findJob(drawerJobId) : null;
+    const outreachEl = document.getElementById('drawer-outreach-text');
+    if (outreachEl && job) {
+      outreachEl.value = getOutreachDisplayValue(job);
+      updateOutreachCounter();
+    }
+    updateDraftButtonStates();
+  }
+
+  async function confirmDiscardIfNeeded() {
+    if (!hasUnsavedDrafts()) return true;
+    const ok = await confirmDiscardUnsavedEdits(getDiscardMessage());
+    if (ok) revertDraftFields();
+    return ok;
+  }
+
+  async function runWithDiscardGuard(action) {
+    if (!(await confirmDiscardIfNeeded())) return false;
+    await action();
+    return true;
+  }
+
+  function updateDraftButtonStates() {
+    const commentDirty = isCommentDirty();
+    const outreachDirty = isOutreachDirty();
+    const commentPost = document.getElementById('drawer-comment-post');
+    const commentCancel = document.getElementById('drawer-comment-cancel');
+    const outreachPost = document.getElementById('drawer-outreach-post');
+    const outreachCancel = document.getElementById('drawer-outreach-cancel');
+    if (commentPost) commentPost.disabled = !commentDirty;
+    if (commentCancel) commentCancel.disabled = !commentDirty;
+    if (outreachPost) outreachPost.disabled = !outreachDirty;
+    if (outreachCancel) outreachCancel.disabled = !outreachDirty;
+  }
+
+  function onCommentDraftInput() {
+    updateDraftButtonStates();
+  }
+
+  function onOutreachDraftInput() {
+    updateOutreachCounter();
+    updateDraftButtonStates();
+  }
+
+  async function appendActivityLogFailure(jobId, message, job) {
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/activity-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!resp.ok) return;
+      const updated = await resp.json();
+      if (job) {
+        job.activityLog = updated.activityLog || job.activityLog;
+      }
+    } catch (_) {
+      /* best-effort failure audit */
+    }
+  }
+
+  async function postJobComment(jobId) {
+    const el = document.getElementById('drawer-comment-text');
+    if (!el || !isCommentDirty()) return;
+    const job = findJob(jobId);
+    const value = el.value;
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/comment`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: value }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      postedComment = updatedJob.comment;
+      if (job) {
+        job.comment = updatedJob.comment;
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+      }
+      addLogLine(`Posted notes for [${job ? job.title : jobId}]`, 'success');
+      updateDraftButtonStates();
+      onJobMutated();
+    } catch (err) {
+      addLogLine(`Failed to save comment: ${err.message}`, 'warning');
+      await appendActivityLogFailure(jobId, `Notes save failed · ${err.message}`, job);
+    }
+  }
+
+  function cancelJobComment() {
+    const el = document.getElementById('drawer-comment-text');
+    if (el) el.value = postedComment;
+    updateDraftButtonStates();
+  }
+
+  async function postOutreachTemplate(jobId) {
+    const el = document.getElementById('drawer-outreach-text');
+    if (!el || !isOutreachDirty()) return;
+    const job = findJob(jobId);
+    if (!job) return;
+    const audience = activeAudience(job);
+    const normalizedTemplate = normalizeGreeting(el.value);
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/template`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audience, template: normalizedTemplate }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      if (audience === 'recruiter') {
+        postedRecruiterTemplate = updatedJob.recruiterOutreachTemplate || normalizedTemplate;
+      } else {
+        postedRussianSpeakerTemplate = updatedJob.russianSpeakerOutreachTemplate || normalizedTemplate;
+      }
+      if (job) {
+        job.recruiterOutreachTemplate = updatedJob.recruiterOutreachTemplate;
+        job.russianSpeakerOutreachTemplate = updatedJob.russianSpeakerOutreachTemplate;
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+      }
+      el.value = getOutreachDisplayValue(job);
+      updateOutreachCounter();
+      addLogLine(`Posted outreach template for [${job.title}]`, 'success');
+      updateDraftButtonStates();
+    } catch (err) {
+      addLogLine(`Failed to save outreach template: ${err.message}`, 'warning');
+      await appendActivityLogFailure(
+        jobId,
+        `Outreach template save failed · ${err.message}`,
+        job,
+      );
+    }
+  }
+
+  function cancelOutreachTemplate() {
+    const job = drawerJobId != null ? findJob(drawerJobId) : null;
+    const el = document.getElementById('drawer-outreach-text');
+    if (el && job) {
+      el.value = getOutreachDisplayValue(job);
+      updateOutreachCounter();
+    }
+    updateDraftButtonStates();
+  }
+
+  function closeDrawerImmediate() {
+    document.getElementById('kanban-drawer')?.classList.remove('active');
+    drawerJobId = null;
+  }
+
+  async function selectActiveContact(jobId, contactIdx) {
+    if (contactIdx === activeContactIdx) return;
+    if (!(await confirmDiscardIfNeeded())) return;
+
     activeContactIdx = contactIdx;
     const job = findJob(jobId);
     if (!job) return;
@@ -156,10 +363,7 @@ export function createDrawerController({
 
     const textarea = document.getElementById('drawer-outreach-text');
     const counter = document.getElementById('drawer-char-counter');
-    const rawTemplate = getActiveTemplate(job, contactIdx);
-    const contact = contacts[contactIdx];
-    const firstName = contact ? contact.name.split(' ')[0] : '';
-    const template = firstName ? applyGreetingName(rawTemplate, firstName) : rawTemplate;
+    const template = getOutreachDisplayValue(job);
     if (textarea) {
       textarea.value = template;
       if (counter) {
@@ -168,6 +372,7 @@ export function createDrawerController({
         counter.style.color = len > 200 ? 'var(--accent-rose)' : 'var(--text-muted)';
       }
     }
+    updateDraftButtonStates();
   }
 
   function getDrawerJobNeighbors() {
@@ -199,21 +404,29 @@ export function createDrawerController({
     }
   }
 
-  function navigateDrawerJob(delta) {
+  async function navigateDrawerJob(delta) {
+    if (!(await confirmDiscardIfNeeded())) return;
     const { prevId, nextId } = getDrawerJobNeighbors();
     const targetId = delta < 0 ? prevId : nextId;
     if (targetId == null) return;
-    openJobDetailsDrawer(targetId);
+    await openJobDetailsDrawer(targetId);
     document.querySelector('.drawer-content')?.scrollTo(0, 0);
   }
 
-  function openJobDetailsDrawer(id) {
+  async function openJobDetailsDrawer(id) {
+    const overlay = document.getElementById('kanban-drawer');
+    const switching =
+      overlay?.classList.contains('active') &&
+      drawerJobId != null &&
+      drawerJobId !== id;
+    if (switching && !(await confirmDiscardIfNeeded())) return;
+
     const job = findJob(id);
     if (!job) return;
 
     drawerJobId = id;
+    initPostedBaselines(job);
 
-    const overlay = document.getElementById('kanban-drawer');
     const body = document.getElementById('drawer-body');
 
     let matchClass = 'match-low';
@@ -358,7 +571,11 @@ export function createDrawerController({
 
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Notes / Comments</h4>
-            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="updateJobComment(${job.id}, this.value)">${job.comment || ''}</textarea>
+            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="onCommentDraftInput(${job.id})">${postedComment}</textarea>
+            <div class="drawer-draft-actions">
+              <button id="drawer-comment-cancel" type="button" class="btn btn-secondary drawer-draft-btn" disabled onclick="cancelJobComment(${job.id})">Cancel</button>
+              <button id="drawer-comment-post" type="button" class="btn btn-primary drawer-draft-btn" disabled onclick="void postJobComment(${job.id})">Post</button>
+            </div>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:8px;">
@@ -390,14 +607,18 @@ export function createDrawerController({
             </div>
             ${activeTemplate || (contacts.length === 0 && (job.outreachMessage || job.recruiterOutreachTemplate || job.russianSpeakerOutreachTemplate))
               ? `
-              <textarea class="outreach-text" id="drawer-outreach-text" oninput="updateOutreachCounter(); saveOutreachTemplate(${job.id}, this.value)" style="font-size:0.8rem;">${activeTemplate}</textarea>
+              <textarea class="outreach-text" id="drawer-outreach-text" oninput="onOutreachDraftInput(${job.id})" style="font-size:0.8rem;">${activeTemplate}</textarea>
+              <div class="drawer-draft-actions">
+                <button id="drawer-outreach-cancel" type="button" class="btn btn-secondary drawer-draft-btn" disabled onclick="cancelOutreachTemplate(${job.id})">Cancel</button>
+                <button id="drawer-outreach-post" type="button" class="btn btn-primary drawer-draft-btn" disabled onclick="void postOutreachTemplate(${job.id})">Post</button>
+              </div>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
                 <span id="drawer-char-counter" style="font-size:0.75rem; color:var(--text-muted);">${activeTemplate.length}/200</span>
                 <div style="display:flex; gap:8px;">
                   <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyDrawerOutreach()"><i class="fa-regular fa-copy"></i> Copy</button>
                   ${job.status === 'accepted'
                     ? `
-                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="changeJobStage(${job.id}, 'applied'); closeDrawer(null);"><i class="fa-solid fa-check"></i> Mark Applied</button>
+                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background:linear-gradient(135deg, var(--accent-emerald), #059669);" onclick="void markAppliedFromDrawer(${job.id})"><i class="fa-solid fa-check"></i> Mark Applied</button>
                   `
                     : ''}
                 </div>
@@ -406,7 +627,7 @@ export function createDrawerController({
               : `
               <p style="font-size:0.75rem; color:var(--text-secondary); text-align:center;">Enrich job listing to source contacts and generate outreach.</p>
               <div style="display:flex; justify-content:center; margin-top:6px;">
-                <button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem;" onclick="enrichJob(${job.id}); closeDrawer(null);"><i class="fa-solid fa-wand-magic-sparkles"></i> Enrich Job</button>
+                <button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem;" onclick="void enrichJobFromDrawer(${job.id})"><i class="fa-solid fa-wand-magic-sparkles"></i> Enrich Job</button>
               </div>
             `}
           </div>
@@ -423,89 +644,17 @@ export function createDrawerController({
               : ''}
             ${job.status !== 'rejected'
               ? `
-              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.2);" onclick="changeJobStage(${job.id}, 'rejected'); closeDrawer(null);"><i class="fa-solid fa-ban"></i> Reject Job</button>
+              <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.2);" onclick="void rejectJobFromDrawer(${job.id})"><i class="fa-solid fa-ban"></i> Reject Job</button>
             `
               : ''}
-            <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="closeDrawer(null)"><i class="fa-solid fa-xmark"></i> Close</button>
+            <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="void closeDrawer(null)"><i class="fa-solid fa-xmark"></i> Close</button>
           </div>
         </div>
       `;
 
     overlay.classList.add('active');
     updateDrawerNav();
-  }
-
-  function updateJobComment(id, value) {
-    const job = findJob(id);
-    if (job) {
-      job.comment = value;
-      onJobMutated();
-    }
-
-    if (commentTimeout) {
-      clearTimeout(commentTimeout);
-    }
-    commentTimeout = setTimeout(() => {
-      fetch(`/api/jobs/${id}/comment`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ comment: value }),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error('HTTP error ' + r.status);
-          return r.json();
-        })
-        .then((updatedJob) => {
-          if (job) {
-            job.comment = updatedJob.comment;
-          }
-          addLogLine(`Successfully saved comment for [${job ? job.title : id}] to DB`, 'success');
-        })
-        .catch((err) => {
-          addLogLine(`Failed to save comment: ${err.message}`, 'warning');
-        });
-    }, 500);
-  }
-
-  function saveOutreachTemplate(jobId, template) {
-    const job = findJob(jobId);
-    if (!job) return;
-
-    const contact = activeContactIdx >= 0 && job.contacts ? job.contacts[activeContactIdx] : null;
-    const audience = contact && contact.is_recruiter ? 'recruiter' : 'russian_speaker';
-    const normalizedTemplate = normalizeGreeting(template);
-
-    if (audience === 'recruiter') {
-      job.recruiterOutreachTemplate = normalizedTemplate;
-    } else {
-      job.russianSpeakerOutreachTemplate = normalizedTemplate;
-    }
-
-    if (templateSaveTimeout) {
-      clearTimeout(templateSaveTimeout);
-    }
-    templateSaveTimeout = setTimeout(() => {
-      fetch(`/api/jobs/${jobId}/template`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audience, template: normalizedTemplate }),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error('HTTP error ' + r.status);
-          return r.json();
-        })
-        .then((updatedJob) => {
-          if (job) {
-            job.recruiterOutreachTemplate = updatedJob.recruiterOutreachTemplate;
-            job.russianSpeakerOutreachTemplate = updatedJob.russianSpeakerOutreachTemplate;
-          }
-        })
-        .catch((err) => {
-          addLogLine(`Failed to save outreach template: ${err.message}`, 'warning');
-        });
-    }, 500);
+    updateDraftButtonStates();
   }
 
   async function reloadJobsFromServer() {
@@ -513,7 +662,9 @@ export function createDrawerController({
       document.getElementById('board-filter-archived')?.value ||
       localStorage.getItem('boardFilterArchived') ||
       'active';
-    const resp = await fetch(`/api/jobs?archived=${archivedFilter}`);
+    const searchQuery = document.getElementById('board-filter-search')?.value || '';
+    const fetchParam = resolveJobsArchivedFetchParam(archivedFilter, searchQuery);
+    const resp = await fetch(`/api/jobs?archived=${fetchParam}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     setJobs(Array.isArray(data) ? data : []);
@@ -532,11 +683,17 @@ export function createDrawerController({
         return;
       }
     }
-    openJobDetailsDrawer(sourceJobId);
+    await openJobDetailsDrawer(sourceJobId);
     onJobMutated();
   }
 
   async function toggleContacted(jobId, contactIdx, isChecked) {
+    if (!(await confirmDiscardIfNeeded())) {
+      const cb = document.getElementById(`contact-${jobId}-${contactIdx}`);
+      if (cb) cb.checked = !isChecked;
+      return;
+    }
+
     const job = findJob(jobId);
     if (!job || !job.contacts || !job.contacts[contactIdx]) return;
 
@@ -569,21 +726,23 @@ export function createDrawerController({
     onJobMutated();
   }
 
-  function closeDrawer(e) {
+  async function closeDrawer(e) {
     if (
-      !e ||
-      e.target === document.getElementById('kanban-drawer') ||
-      e.target.closest('.drawer-close')
+      e &&
+      e.target !== document.getElementById('kanban-drawer') &&
+      !e.target.closest('.drawer-close')
     ) {
-      document.getElementById('kanban-drawer').classList.remove('active');
-      drawerJobId = null;
+      return;
     }
+    if (!(await confirmDiscardIfNeeded())) return;
+    closeDrawerImmediate();
   }
 
-  function refreshDrawerIfOpen(id) {
+  async function refreshDrawerIfOpen(id) {
+    if (!(await confirmDiscardIfNeeded())) return;
     const overlay = document.getElementById('kanban-drawer');
     if (overlay?.classList.contains('active')) {
-      openJobDetailsDrawer(id);
+      await openJobDetailsDrawer(id);
     }
   }
 
@@ -621,22 +780,56 @@ export function createDrawerController({
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     e.preventDefault();
-    navigateDrawerJob(e.key === 'ArrowLeft' ? -1 : 1);
+    void navigateDrawerJob(e.key === 'ArrowLeft' ? -1 : 1);
   });
 
+  async function markAppliedFromDrawer(jobId) {
+    if (!(await confirmDiscardIfNeeded())) return;
+    closeDrawerImmediate();
+    if (typeof globalThis.changeJobStage === 'function') {
+      globalThis.changeJobStage(jobId, 'applied');
+    }
+  }
+
+  async function rejectJobFromDrawer(jobId) {
+    if (!(await confirmDiscardIfNeeded())) return;
+    closeDrawerImmediate();
+    if (typeof globalThis.changeJobStage === 'function') {
+      globalThis.changeJobStage(jobId, 'rejected');
+    }
+  }
+
+  async function enrichJobFromDrawer(jobId) {
+    if (!(await confirmDiscardIfNeeded())) return;
+    closeDrawerImmediate();
+    if (typeof globalThis.enrichJob === 'function') {
+      await globalThis.enrichJob(jobId);
+    }
+  }
+
   return {
+    cancelJobComment,
+    cancelOutreachTemplate,
     closeDrawer,
+    closeDrawerImmediate,
+    confirmDiscardIfNeeded,
     copyDrawerOutreach,
+    enrichJobFromDrawer,
+    markAppliedFromDrawer,
     navigateDrawerJob,
+    onCommentDraftInput,
+    onOutreachDraftInput,
     openContactedElsewhereJob,
     openJobDetailsDrawer,
+    postJobComment,
+    postOutreachTemplate,
     refreshDrawerIfOpen,
-    saveOutreachTemplate,
+    rejectJobFromDrawer,
+    runWithDiscardGuard,
     selectActiveContact,
     toggleActivityLog,
     toggleContacted,
     updateDrawerNav,
-    updateJobComment,
     updateOutreachCounter,
   };
 }
