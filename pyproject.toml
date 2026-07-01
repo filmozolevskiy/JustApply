@@ -62,3 +62,19 @@ ignore = [
 "**/__init__.py" = ["F401"]
 # load_dotenv() must run before importing modules that read os.environ.
 "src/cli/cli.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+# First gate: db, schemas, service only; skip deep checks on out-of-scope imports.
+follow_imports = "silent"
+files = ["src/db", "src/schemas.py", "src/service"]
+
+[[tool.mypy.overrides]]
+module = [
+    "google.*",
+    "httpx.*",
+    "sse_starlette.*",
+]
+ignore_missing_imports = true

@@ -123,6 +123,9 @@ def enrich_jobs_with_contacted_elsewhere(jobs: list[Job], db_path=None) -> list[
 
     enriched: list[Job] = []
     for job in jobs:
+        if job.id is None:
+            enriched.append(job)
+            continue
         updated_contacts = []
         for contact in job.contacts or []:
             payload = contact.model_dump() if isinstance(contact, Contact) else dict(contact)

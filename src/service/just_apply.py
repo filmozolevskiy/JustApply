@@ -76,6 +76,7 @@ async def search_jobs(
     assert_evaluation_lock_clear()
     if rate_limit:
         acquire_scrape_slot(mock_eval, mock_scraper)
+    remote_types = allowed_remote_types if allowed_remote_types is not None else ["any"]
     return await run_search_pipeline(
         query=query,
         location=location,
@@ -84,7 +85,7 @@ async def search_jobs(
         active_resume=active_resume,
         mock_eval=mock_eval,
         mock_scraper=scraper_will_mock(mock_eval, mock_scraper),
-        allowed_remote_types=allowed_remote_types,
+        allowed_remote_types=remote_types,
         seniorities=seniorities,
         company_sizes=company_sizes,
         countries=countries,
@@ -180,9 +181,10 @@ async def backfill_unevaluated_jobs(
     """Submit Batch Evaluation Jobs for unevaluated jobs; poller writes results back."""
     init_db(db_path)
     assert_evaluation_lock_clear(db_path=db_path)
+    remote_types = allowed_remote_types if allowed_remote_types is not None else ["any"]
     return await run_backfill_pipeline(
         active_resume=active_resume,
-        allowed_remote_types=allowed_remote_types,
+        allowed_remote_types=remote_types,
         seniorities=seniorities,
         wait=wait,
         log_func=log_func,

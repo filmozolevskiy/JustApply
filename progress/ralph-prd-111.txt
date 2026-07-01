@@ -13,3 +13,10 @@
 - Documented `ruff check src tests` in README (Quality checks) and CLAUDE.md command table.
 - Tests: 817 passed; `ruff check src tests` exits 0.
 - Commit: e2443b9
+
+## #127 — Add mypy type gate on core packages
+- Added `[tool.mypy]` to `pyproject.toml`: py311, `follow_imports = "silent"`, scoped to `src/db`, `src/schemas.py`, `src/service`; pragmatic `ignore_missing_imports` for google/httpx/sse_starlette stubs.
+- Fixed three type errors in scoped packages: guard `job.id is None` in `contacted_elsewhere.py`; normalize `allowed_remote_types` default to `["any"]` in `just_apply.py` before pipeline calls.
+- Documented `mypy` (no args) in README Quality checks and CLAUDE.md command table.
+- Tests: 817 passed; `mypy` exits 0 (12 source files).
+- Commit: 375a7f1

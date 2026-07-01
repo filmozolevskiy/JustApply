@@ -66,10 +66,13 @@ From the repo root with dev extras installed:
 
 ```bash
 ruff check src tests
+mypy
 pytest tests/
 ```
 
 `ruff check` uses settings in `pyproject.toml`. Auto-fix safe issues with `ruff check src tests --fix`.
+
+`mypy` (no args) type-checks core packages (`src/db`, `src/schemas`, `src/service`) per `[tool.mypy]` in `pyproject.toml`.
 
 ### Repo Layout
 ```text
