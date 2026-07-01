@@ -1,0 +1,8 @@
+# Ralph Loop Progress — PRD #112
+
+## #119 — Sync JustApply agent skills with CONTEXT.md lanes and env vars
+- Updated `.claude/skills/just-apply/SKILL.md` and `.cursor/skills/just-apply/SKILL.md` in sync
+- Preflight now lists GEMINI_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_JOB_SCRAPER_ID, APIFY_API_TOKEN (matches .env.example)
+- Workflow uses Scraped → Matched → Accepted triage; Kanban lanes updated; --promote described as enrichment
+- Removed obsolete APIFY_API_KEY, Found/Sourced/Enriching lane references
+- Tests: 817 passed
