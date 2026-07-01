@@ -49,3 +49,9 @@ graph TD
 * **Enhanced Safety**: Running scraping tasks on commercial clouds prevents any direct scraping actions from the user's IP or logged-in LinkedIn session, ensuring account protection.
 * **Credit Cost Efficiency**: Sourcing only a small batch of target employees (e.g. 20–30) per company run preserves Apify credit usage.
 * **High Relevance**: The two-stage fallback gives us the best chance to target Russian-speaking recruiters, while falling back gracefully to general HR professionals if none are found.
+
+---
+
+## Historical note (environment variables)
+
+This ADR uses `APIFY_API_KEY` in the consequences above. The current Apify credential name in `.env.example` is **`APIFY_API_TOKEN`**. Decision text is unchanged; use `.env.example` as the source of truth for setup.
