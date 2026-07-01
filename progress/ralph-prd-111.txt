@@ -5,4 +5,4 @@
 - Regenerated `requirements.txt` as runtime-only backward-compatible re-export (removed pytest).
 - Updated README setup: `pip install -e ".[dev]"` for contributors, runtime-only `pip install -e .`, documented pin policy (no lock file).
 - Tests: 817 passed.
-- Commit: 70054db
+- Commit: e8211ea
