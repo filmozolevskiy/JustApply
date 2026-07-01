@@ -12,3 +12,4 @@
 - Auto-fixed unused imports, import sorting, and pyupgrade-safe modernizations across `src/` and `tests/`; removed stale `database` re-export from `src/cli/__init__.py`.
 - Documented `ruff check src tests` in README (Quality checks) and CLAUDE.md command table.
 - Tests: 817 passed; `ruff check src tests` exits 0.
+- Commit: e2443b9
