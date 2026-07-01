@@ -68,6 +68,21 @@ def archive_stale_rejected_jobs(db_path=None) -> int:
     return archived_count
 
 
+def enrich_job_record(job, db_path=None):
+    """Attach Contacted Elsewhere metadata to a single Job for API responses."""
+    if job is None:
+        return None
+    enriched = enrich_jobs_with_contacted_elsewhere([job], db_path=db_path)
+    return enriched[0] if enriched else None
+
+
+def parse_job_row_enriched(row, db_path=None):
+    """Parse a SQLite row and attach Contacted Elsewhere metadata."""
+    if row is None:
+        return None
+    return enrich_job_record(parse_job_row(row), db_path=db_path)
+
+
 def get_jobs(db_path=None, archived_filter="active"):
     if db_path is None:
         db_path = connection.DB_PATH
@@ -117,7 +132,7 @@ def update_job_status(job_id, status, db_path=None):
     conn.close()
     if not row:
         return None
-    return parse_job_row(row)
+    return parse_job_row_enriched(row, db_path=db_path)
 
 
 def update_job_comment(job_id, comment, db_path=None):
@@ -132,7 +147,7 @@ def update_job_comment(job_id, comment, db_path=None):
     conn.close()
     if not row:
         return None
-    return parse_job_row(row)
+    return parse_job_row_enriched(row, db_path=db_path)
 
 
 def update_contact_status(job_id, contact_idx, contacted, db_path=None):
@@ -174,8 +189,7 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()
     conn.close()
-    enriched = enrich_jobs_with_contacted_elsewhere([parse_job_row(updated)], db_path=db_path)
-    return enriched[0] if enriched else None
+    return parse_job_row_enriched(updated, db_path=db_path)
 
 
 def get_job(job_id, db_path=None):
@@ -188,8 +202,7 @@ def get_job(job_id, db_path=None):
     conn.close()
     if not row:
         return None
-    enriched = enrich_jobs_with_contacted_elsewhere([parse_job_row(row)], db_path=db_path)
-    return enriched[0] if enriched else None
+    return parse_job_row_enriched(row, db_path=db_path)
 
 
 def start_enrichment(job_id, db_path=None):
@@ -266,7 +279,7 @@ def enrich_job(
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     conn.close()
-    return parse_job_row(row) if row else None
+    return parse_job_row_enriched(row, db_path=db_path)
 
 
 def log_activity(job_id: int, message: str, db_path=None) -> None:
@@ -300,7 +313,7 @@ def update_outreach_template(job_id, audience, template, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     conn.close()
-    return parse_job_row(row) if row else None
+    return parse_job_row_enriched(row, db_path=db_path)
 
 
 def archive_job(job_id: int, db_path=None):
@@ -335,7 +348,7 @@ def archive_job(job_id: int, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()
     conn.close()
-    return parse_job_row(updated) if updated else None
+    return parse_job_row_enriched(updated, db_path=db_path)
 
 
 def get_unevaluated_jobs(db_path=None):
@@ -493,7 +506,7 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     updated = cursor.fetchone()
     conn.close()
-    return parse_job_row(updated) if updated else None
+    return parse_job_row_enriched(updated, db_path=db_path)
 
 
 def increment_batch_attempts(job_id: int, db_path=None) -> int:

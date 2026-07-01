@@ -210,3 +210,56 @@ def test_api_contact_toggle_clears_elsewhere_on_same_job(db, monkeypatch):
 
 def test_enrich_jobs_with_contacted_elsewhere_is_noop_for_empty_list(db):
     assert enrich_jobs_with_contacted_elsewhere([], db_path=db) == []
+
+
+def test_enrich_job_returns_contacted_elsewhere(db):
+    from src.db.jobs import enrich_job
+
+    source_id = _add_job_with_contact(
+        db,
+        title="Source Role",
+        company="SourceCo",
+        contacted=True,
+        contacted_at="2026-02-01T08:00:00+00:00",
+    )
+    target_id = _add_job_with_contact(db, title="Target Role", company="TargetCo")
+    updated = enrich_job(
+        target_id,
+        [
+            {
+                "name": "Jane Doe",
+                "title": "Recruiter",
+                "url": SHARED_URL,
+                "contacted": False,
+            }
+        ],
+        "Hello",
+        db_path=db,
+    )
+    payload = updated.contacts[0].model_dump()
+    assert payload["contactedElsewhere"] == {
+        "jobId": source_id,
+        "company": "SourceCo",
+        "title": "Source Role",
+    }
+
+
+def test_update_job_status_returns_contacted_elsewhere(db, monkeypatch):
+    monkeypatch.setattr(_db_connection, "DB_PATH", db)
+    client = TestClient(app)
+    source_id = _add_job_with_contact(
+        db,
+        title="Source Role",
+        company="SourceCo",
+        contacted=True,
+        contacted_at="2026-02-01T08:00:00+00:00",
+    )
+    target_id = _add_job_with_contact(
+        db,
+        title="Target Role",
+        company="TargetCo",
+        contacted=False,
+    )
+    resp = client.put(f"/api/jobs/{target_id}/status", json={"status": "accepted"})
+    assert resp.status_code == 200
+    assert resp.json()["contacts"][0]["contactedElsewhere"]["jobId"] == source_id
