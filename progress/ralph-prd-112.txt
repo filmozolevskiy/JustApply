@@ -29,3 +29,9 @@
 - Updated `docs/prd/documentation-and-domain-alignment.md` implementation notes
 - Verified unique numeric prefixes under `docs/adr/`; no broken links to old filenames
 - Tests: 817 passed
+
+## #123 — Footnote superseded env var names in historical ADRs
+- Added Historical note section to `docs/adr/0002-hybrid-scraping-architecture.md` mapping `APIFY_API_KEY` → `APIFY_API_TOKEN` per `.env.example`
+- Preserved original decision text; only footnote added
+- Verified no other ADRs mention deprecated env var names
+- Tests: 817 passed
