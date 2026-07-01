@@ -329,59 +329,62 @@ def test_contact_name_title_do_not_toggle_contacted_checkbox():
         "toggleContacted must remain wired to the checkbox onchange handler"
 
 
-# --- Issue #35: Persist outreach template edits ---
+# --- Issue #35 / PRD #105: Post outreach template edits ---
 
-def test_save_outreach_template_function_defined():
-    """saveOutreachTemplate function must be present in the script."""
-    script = _load_script()
-    assert "function saveOutreachTemplate(" in script, \
-        "saveOutreachTemplate function must be defined in the dashboard script"
-
-
-def test_outreach_textarea_wired_to_save_template():
-    """Outreach textarea oninput must call saveOutreachTemplate."""
-    script = _load_script()
-    assert "saveOutreachTemplate" in script, \
-        "saveOutreachTemplate must be referenced in the drawer outreach textarea oninput"
-
-
-def test_save_outreach_template_uses_debounce():
-    """saveOutreachTemplate must debounce saves (uses templateSaveTimeout)."""
+def test_post_outreach_template_function_defined():
+    """postOutreachTemplate function must be present in the drawer script."""
     script = read_drawer_controller()
-    assert "templateSaveTimeout" in script, \
-        "saveOutreachTemplate must use templateSaveTimeout for debouncing"
+    assert "function postOutreachTemplate(" in script, \
+        "postOutreachTemplate function must be defined in the drawer script"
 
 
-def test_save_outreach_template_calls_template_endpoint():
-    """saveOutreachTemplate must PUT to /api/jobs/.../template."""
+def test_outreach_textarea_wired_to_draft_input():
+    """Outreach textarea oninput must track draft locally without autosave."""
     script = read_drawer_controller()
-    assert "/template" in script, \
-        "saveOutreachTemplate must call the /template API endpoint"
+    assert "onOutreachDraftInput" in script, \
+        "Outreach textarea must call onOutreachDraftInput on input"
 
 
-def test_save_outreach_template_uses_active_contact_audience():
-    """saveOutreachTemplate selects audience from active contact's is_recruiter flag."""
+def test_post_outreach_template_calls_template_endpoint():
+    """postOutreachTemplate must PUT to /api/jobs/.../template."""
     script = read_drawer_controller()
-    fn_start = script.find("function saveOutreachTemplate(")
+    fn_start = script.find("function postOutreachTemplate(")
     assert fn_start != -1
-    fn_body = script[fn_start:fn_start + 800]
-    assert "is_recruiter" in fn_body, \
-        "saveOutreachTemplate must inspect is_recruiter to determine audience"
+    fn_body = script[fn_start:fn_start + 1200]
+    assert "/template" in fn_body, \
+        "postOutreachTemplate must call the /template API endpoint"
+
+
+def test_post_outreach_template_uses_active_contact_audience():
+    """postOutreachTemplate selects audience from active contact's is_recruiter flag."""
+    script = read_drawer_controller()
+    fn_start = script.find("function postOutreachTemplate(")
+    assert fn_start != -1
+    fn_body = script[fn_start:fn_start + 1200]
+    assert "activeAudience" in fn_body, \
+        "postOutreachTemplate must resolve audience from the active contact"
     assert "recruiter" in fn_body, \
-        "saveOutreachTemplate must send audience='recruiter' for recruiter contacts"
-    assert "russian_speaker" in fn_body, \
-        "saveOutreachTemplate must send audience='russian_speaker' for non-recruiter contacts"
+        "postOutreachTemplate must send audience='recruiter' for recruiter contacts"
 
 
-def test_save_outreach_template_updates_in_memory_job():
-    """saveOutreachTemplate updates the in-memory job entry immediately."""
+def test_post_outreach_template_updates_posted_baseline_on_success():
+    """postOutreachTemplate updates posted template baseline after a successful Post."""
     script = read_drawer_controller()
-    fn_start = script.find("function saveOutreachTemplate(")
+    fn_start = script.find("function postOutreachTemplate(")
     assert fn_start != -1
-    fn_body = script[fn_start:fn_start + 800]
-    # Must update at least one of the in-memory template fields
-    assert "recruiterOutreachTemplate" in fn_body or "russianSpeakerOutreachTemplate" in fn_body, \
-        "saveOutreachTemplate must update the in-memory job template field"
+    fn_body = script[fn_start:fn_start + 1600]
+    assert "postedRecruiterTemplate" in fn_body or "postedRussianSpeakerTemplate" in fn_body, \
+        "postOutreachTemplate must update the posted template baseline on success"
+
+
+def test_post_outreach_template_normalizes_greeting():
+    """postOutreachTemplate must call normalizeGreeting before persisting the template."""
+    script = read_drawer_controller()
+    fn_start = script.find("function postOutreachTemplate(")
+    assert fn_start != -1, "postOutreachTemplate function must exist"
+    fn_body = script[fn_start:fn_start + 1200]
+    assert "normalizeGreeting" in fn_body, \
+        "postOutreachTemplate must call normalizeGreeting to restore the Name Placeholder before saving"
 
 
 # --- Issue #39: Active Contact greeting name substitution ---
@@ -408,23 +411,18 @@ def test_normalize_greeting_function_defined():
 
 
 def test_select_active_contact_applies_greeting_substitution():
-    """selectActiveContact must call applyGreetingName to substitute the contact's first name."""
+    """selectActiveContact must load outreach text via getOutreachDisplayValue (greeting substitution)."""
     script = read_drawer_controller()
-    fn_start = script.find("function selectActiveContact(")
+    fn_start = script.find("async function selectActiveContact(")
     assert fn_start != -1, "selectActiveContact function must exist"
     fn_body = script[fn_start:fn_start + 1200]
-    assert "applyGreetingName" in fn_body, \
-        "selectActiveContact must call applyGreetingName to substitute the greeting name"
+    assert "getOutreachDisplayValue" in fn_body, \
+        "selectActiveContact must load display template with greeting substitution"
 
 
 def test_save_outreach_template_normalizes_greeting():
-    """saveOutreachTemplate must call normalizeGreeting before persisting the template."""
-    script = read_drawer_controller()
-    fn_start = script.find("function saveOutreachTemplate(")
-    assert fn_start != -1, "saveOutreachTemplate function must exist"
-    fn_body = script[fn_start:fn_start + 1000]
-    assert "normalizeGreeting" in fn_body, \
-        "saveOutreachTemplate must call normalizeGreeting to restore the Name Placeholder before saving"
+    """Legacy test name kept — normalizeGreeting runs on postOutreachTemplate."""
+    test_post_outreach_template_normalizes_greeting()
 
 
 def test_open_job_drawer_applies_greeting_for_default_contact():
@@ -458,17 +456,13 @@ def test_normalize_greeting_restores_placeholder():
 
 
 def test_switch_audience_loads_template_and_applies_greeting():
-    """selectActiveContact must load the audience template then apply greeting for the new contact."""
+    """selectActiveContact must load the posted audience template with greeting substitution."""
     script = _load_script()
-    fn_start = script.find("function selectActiveContact(")
+    fn_start = script.find("async function selectActiveContact(")
     assert fn_start != -1
     fn_body = script[fn_start:fn_start + 1200]
-    # must call getActiveTemplate (loads correct audience template)
-    assert "getActiveTemplate" in fn_body, \
-        "selectActiveContact must call getActiveTemplate to load the correct audience template"
-    # then apply greeting substitution
-    assert "applyGreetingName" in fn_body, \
-        "selectActiveContact must apply greeting substitution after loading the template"
+    assert "getOutreachDisplayValue" in fn_body, \
+        "selectActiveContact must load the correct audience template for display"
 
 
 def test_greeting_functions_support_hello_prefix():

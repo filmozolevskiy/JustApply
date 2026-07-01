@@ -175,6 +175,28 @@ def test_activity_log_capped_at_50_entries(tmp_path):
     assert len(job.activityLog) <= 50
 
 
+# --- Job Comment Post (PRD #105) ---
+
+def test_update_job_comment_appends_notes_updated(tmp_path):
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    from src.db import update_job_comment
+
+    update_job_comment(job_id, "Phone screen next week", db_str)
+    job = _get_job(db_str, job_id)
+    assert "Notes updated" in [e.message for e in job.activityLog]
+
+
+def test_update_outreach_template_appends_outreach_template_updated(tmp_path):
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    from src.db.jobs import update_outreach_template
+
+    update_outreach_template(job_id, "recruiter", "Hello ______,", db_path=db_str)
+    job = _get_job(db_str, job_id)
+    assert "Outreach template updated" in [e.message for e in job.activityLog]
+
+
 # --- activityLog field on job ---
 
 def test_activity_log_field_is_list_on_all_jobs(tmp_path):

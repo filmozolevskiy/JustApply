@@ -140,7 +140,12 @@ def update_job_comment(job_id, comment, db_path=None):
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
     cursor.execute("UPDATE jobs SET comment = ? WHERE id = ?", (comment, job_id))
+    _append_activity_log(cursor, job_id, "Notes updated")
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
@@ -309,6 +314,7 @@ def update_outreach_template(job_id, audience, template, db_path=None):
         conn.close()
         return None
     cursor.execute(f"UPDATE jobs SET {column} = ? WHERE id = ?", (template, job_id))
+    _append_activity_log(cursor, job_id, "Outreach template updated")
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()

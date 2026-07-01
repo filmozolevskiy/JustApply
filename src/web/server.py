@@ -14,7 +14,7 @@ from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job, archive_stale_rejected_jobs
+from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job, archive_stale_rejected_jobs, log_activity
 from ..service import (
     RateLimitError,
     acquire_scrape_slot,
@@ -325,6 +325,20 @@ async def update_comment(job_id: int, update: CommentUpdate):
     updated = update_job_comment(job_id, update.comment)
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return updated
+
+
+class ActivityLogAppend(BaseModel):
+    message: str
+
+
+@app.post("/api/jobs/{job_id}/activity-log", response_model=Job)
+async def append_activity_log(job_id: int, entry: ActivityLogAppend):
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    log_activity(job_id, entry.message)
+    updated = get_job(job_id)
     return updated
 
 
