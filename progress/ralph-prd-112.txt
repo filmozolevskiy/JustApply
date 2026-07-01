@@ -13,3 +13,10 @@
 - Schema guidance references CONTEXT.md and single jobs table only; removed Applications table mention
 - Legacy lane names (Found, Sourced, Enriching, Enriched) documented as migration-only note
 - Tests: 817 passed
+
+## #121 — Expand README architecture section and link to CONTEXT.md
+- Added CONTEXT.md pointer in "How it Works" for domain terminology
+- Expanded repo layout: pipelines orchestration, batch evaluation/poller, evaluation lock, enrichment, safety gate, web static/js at real paths
+- Confirmed env var names match .env.example (GEMINI_API_KEY, BRIGHTDATA_*, APIFY_API_TOKEN)
+- Verified README image paths (images/kanban.gif, search.gif, enriching.gif, cost_control.png) exist
+- Tests: 817 passed
