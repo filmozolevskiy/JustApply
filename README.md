@@ -14,35 +14,56 @@ JustApply is an AI-powered job search and application pipeline that automates th
   ![Cost Controls](images/cost_control.png)
 
 ### How it Works
-JustApply uses **FastAPI** for the backend and **Gemini 1.5** for intelligent job assessment. It leverages **Bright Data** for resilient scraping and **Apify** for contact discovery. Data is stored locally in a `just_apply.db` SQLite database to keep your search private and persistent.
+JustApply uses **FastAPI** for the backend and **Gemini** for intelligent job assessment. It leverages **Bright Data** for resilient scraping and **Apify** for contact discovery. Data is stored locally in `data/just_apply.db` (SQLite) to keep your search private and persistent.
 
 ### Setup
-1. **Clone and Install**:
+
+All commands below must be run from the **repo root** with the project virtualenv active.
+
+1. **Clone and install**:
    ```bash
    git clone https://github.com/filmozolevskiy/JustApply.git
    cd JustApply
+
+   python3 -m venv .venv
+   source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
    pip install -r requirements.txt
    ```
 2. **Environment**:
-   Set your `GOOGLE_API_KEY`, `BRIGHT_DATA_URL`, and `APIFY_TOKEN` in a `.env` file.
-3. **Run Dashboard**:
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in at least:
+   - `GEMINI_API_KEY` — resume matching and outreach
+   - `BRIGHTDATA_API_KEY` and `BRIGHTDATA_JOB_SCRAPER_ID` — job scraping
+   - `APIFY_API_TOKEN` — contact enrichment
+
+   See `.env.example` for the full list.
+3. **Run dashboard**:
    ```bash
    python3 -m src.web.run_dashboard
    ```
-4. **Run CLI**:
+   Open http://127.0.0.1:8000
+4. **Run CLI** (same shell — repo root + venv active):
    ```bash
    python3 -m src.cli --search "Data Engineer"
+   python3 -m src.cli --promote
    ```
+
+**Troubleshooting:** If you see `No module named 'src'` or `requirements.txt` not found, you are not in the repo directory or you activated the wrong venv. Run `cd` into the clone, then `source .venv/bin/activate`. Confirm with `which python3` — it should point to `.venv/bin/python3` inside the repo.
 
 ### Repo Layout
 ```text
 .
+├── data/              # Runtime SQLite db (just_apply.db) and logs
 ├── src/
 │   ├── cli/           # CLI entry points
 │   ├── core/          # Business logic & LLM scoring
-│   ├── db/            # SQLite connection (just_apply.db)
-│   ├── service/       # API and Scraping services
-│   └── web/           # FastAPI dashboard & templates
-├── static/            # UI assets (JS/CSS)
+│   ├── db/            # SQLite connection and CRUD
+│   ├── service/       # Search and scraping services
+│   └── web/           # FastAPI dashboard, HTML, and static JS
+├── tests/
+├── .env.example
 └── requirements.txt
 ```
