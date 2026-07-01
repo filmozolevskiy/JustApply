@@ -1,4 +1,6 @@
-# ADR 0003: Parallel Batch Evaluation for Search Pipeline
+# ADR 0011: Parallel Batch Evaluation for Search Pipeline
+
+> Formerly ADR 0003.
 
 ## Status
 Superseded by ADR 0010 (Gemini Batch API for Job Evaluation). The "Prompt Packing" strategy described below (15 jobs per prompt, up to 30 parallel live HTTP calls) has been replaced by an asynchronous Batch Evaluation Job. Retained for historical context.

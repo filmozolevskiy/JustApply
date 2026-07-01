@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted — supersedes ADR 0003 (Parallel Batch Evaluation). The term "batch" is redefined: it now means an asynchronous **Batch Evaluation Job** submitted to the Gemini Batch API, not the prior prompt-packing-plus-parallel-HTTP strategy.
+Accepted — supersedes ADR 0011 (Parallel Batch Evaluation). The term "batch" is redefined: it now means an asynchronous **Batch Evaluation Job** submitted to the Gemini Batch API, not the prior prompt-packing-plus-parallel-HTTP strategy.
 
 ## Context
 
-ADR 0003 evaluated jobs by packing 15 jobs into one prompt and firing up to 30 such prompts concurrently as live HTTP calls ("Prompt Packing"). This broke down for bulk work: backfilling ~2,661 historically-unevaluated jobs hammered the API into high error rates, and large packed prompts (~62K chars) hung and timed out. The client also used the deprecated `google.generativeai` library.
+ADR 0011 evaluated jobs by packing 15 jobs into one prompt and firing up to 30 such prompts concurrently as live HTTP calls ("Prompt Packing"). This broke down for bulk work: backfilling ~2,661 historically-unevaluated jobs hammered the API into high error rates, and large packed prompts (~62K chars) hung and timed out. The client also used the deprecated `google.generativeai` library.
 
 The Gemini Batch API is an asynchronous endpoint for exactly this: submit all requests once, poll, retrieve results, at 50% of interactive cost.
 

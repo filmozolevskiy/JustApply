@@ -46,7 +46,7 @@ Synchronize all human-facing and agent-facing documentation with `CONTEXT.md` as
 - Update `CLAUDE.md`: project tree, CLI descriptions, schema note (jobs table only), verification steps unchanged.
 - Update `.claude/skills/just-apply/SKILL.md` and `.cursor/skills/just-apply/SKILL.md` env var checklist to `GEMINI_API_KEY`, `BRIGHTDATA_API_KEY`, `BRIGHTDATA_JOB_SCRAPER_ID`, `APIFY_API_TOKEN`.
 - Update README repo layout section to reflect major packages without turning into a full file listing.
-- Renumber duplicate `docs/adr/0003-*` files — pick next free number for one ADR, update cross-references inside ADRs and PRDs.
+- Renumbered duplicate ADRs: `0003-parallel-batch-evaluation` → `0011`, `0010-region-scoped-scrapes-and-spend-confirmation` → `0012`; cross-references updated in ADRs and PRDs.
 - Add footnotes to older ADRs where historical env names differ (`APIFY_API_KEY` → `APIFY_API_TOKEN`) rather than rewriting history body text extensively.
 - Align CLI help text for `--promote` with "enrich **Matched**/**Accepted** jobs" wording while keeping flag name for backward compatibility unless a separate alias PRD is opened.
 - Do not change runtime code behavior in this PRD except CLI help strings if needed for accuracy.
@@ -74,4 +74,4 @@ Documentation PRD — automated tests are optional smoke only:
 
 ## Further Notes
 
-README env vars were partially fixed since the original audit; remaining drift lives mainly in agent rules, skills, ADR 0002/0003 numbering, and `CLAUDE.md` structure. This PRD is safe to ship independently of code refactors.
+README env vars were partially fixed since the original audit; remaining drift lives mainly in agent rules, skills, historical ADR env var footnotes (#123), and `CLAUDE.md` structure. This PRD is safe to ship independently of code refactors.

@@ -1,4 +1,6 @@
-# 0010: Region-scoped scrapes and Spend Confirmation modal
+# 0012: Region-scoped scrapes and Spend Confirmation modal
+
+> Formerly ADR 0010.
 
 ## Status
 

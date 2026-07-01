@@ -20,3 +20,12 @@
 - Confirmed env var names match .env.example (GEMINI_API_KEY, BRIGHTDATA_*, APIFY_API_TOKEN)
 - Verified README image paths (images/kanban.gif, search.gif, enriching.gif, cost_control.png) exist
 - Tests: 817 passed
+
+## #122 — Renumber duplicate ADR files and fix cross-references
+- Renamed `0003-parallel-batch-evaluation.md` → `0011-parallel-batch-evaluation.md` (formerly ADR 0003 note added)
+- Renamed `0010-region-scoped-scrapes-and-spend-confirmation.md` → `0012-region-scoped-scrapes-and-spend-confirmation.md` (formerly ADR 0010 note added)
+- Kept `0003-fail-fast-scraping-credit-protection.md` and `0010-gemini-batch-api-evaluation.md` at original numbers
+- Updated ADR 0010 cross-references from ADR 0003 → ADR 0011 for Parallel Batch Evaluation
+- Updated `docs/prd/documentation-and-domain-alignment.md` implementation notes
+- Verified unique numeric prefixes under `docs/adr/`; no broken links to old filenames
+- Tests: 817 passed
