@@ -6,3 +6,10 @@
 - Workflow uses Scraped → Matched → Accepted triage; Kanban lanes updated; --promote described as enrichment
 - Removed obsolete APIFY_API_KEY, Found/Sourced/Enriching lane references
 - Tests: 817 passed
+
+## #120 — Update CLAUDE.md project map, CLI table, and schema guidance
+- Expanded project structure tree: pipelines, service, safety, schemas, batch evaluation, enrichment subpackage, web static JS
+- CLI table now covers --search, --promote (Enrichment), --backfill, --collect, --reassess, --reassess-all, dashboard
+- Schema guidance references CONTEXT.md and single jobs table only; removed Applications table mention
+- Legacy lane names (Found, Sourced, Enriching, Enriched) documented as migration-only note
+- Tests: 817 passed
