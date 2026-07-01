@@ -35,3 +35,9 @@
 - Preserved original decision text; only footnote added
 - Verified no other ADRs mention deprecated env var names
 - Tests: 817 passed
+
+## #124 — Align CLI --promote help text with Enrichment vocabulary
+- Updated `--promote` argparse help to Enrichment / Matched / Accepted Job wording
+- Updated `run_promote` docstring and log lines (Enrichment pipeline, Accepted Job count)
+- No behavior changes; flag name `--promote` retained
+- Tests: 817 passed

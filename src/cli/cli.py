@@ -121,15 +121,15 @@ async def run_collect(wait: bool = False) -> dict:
 
 
 async def run_promote() -> list:
-    """Enrich jobs ready for outreach: source contacts and generate messages."""
-    print("Starting promote pipeline...")
+    """Run Enrichment on Matched and Accepted jobs: source contacts and generate outreach templates."""
+    print("Starting Enrichment pipeline...")
 
     def log_sync(msg: str, level: str = "info"):
         print(f"  [{level.upper()}] {msg}", file=sys.stderr)
 
     promoted = await promote_sourced_jobs(log_func=log_sync)
 
-    print(f"Promote complete. Processed {len(promoted)} jobs.")
+    print(f"Enrichment complete. Processed {len(promoted)} Accepted Job(s).")
     return promoted
 
 
@@ -153,7 +153,11 @@ def main():
     parser = argparse.ArgumentParser(description="JustApply CLI")
     parser.add_argument("--search", metavar="POSITION", help="Search and evaluate jobs for a position")
     parser.add_argument("--mock-eval", action="store_true", help="Skip LLM evaluation and use mock data")
-    parser.add_argument("--promote", action="store_true", help="Source contacts for jobs ready to proceed")
+    parser.add_argument(
+        "--promote",
+        action="store_true",
+        help="Run Enrichment on Matched and Accepted jobs (contact sourcing, classification, outreach templates)",
+    )
     parser.add_argument("--reassess", metavar="JOB_ID", type=int, help="Re-run Resume Matcher on a single job")
     parser.add_argument("--reassess-all", action="store_true", help="Re-run Resume Matcher on all active jobs")
     parser.add_argument("--backfill", action="store_true", help="Submit batch evaluation for un-evaluated jobs")
