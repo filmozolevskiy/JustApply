@@ -14,13 +14,24 @@ Dedicated repository for the **JustApply** skill. Automates job search, resume m
 | `python3 -m src.cli --reassess <job_id>`   | Re-run **Resume Matcher** on a single job                                                                         |
 | `python3 -m src.cli --reassess-all`        | Re-run **Resume Matcher** on all active jobs                                                                      |
 | `python3 -m src.web.run_dashboard`         | Launch local FastAPI **Kanban Dashboard**                                                                         |
-| `pytest tests/`                            | Run all unit and integration tests                                                                                |
-| `pytest tests/ --cov=src --cov-report=term-missing` | Run tests with coverage gate on `src/` Python (≥84%; requires dev extras)                                  |
-| `ruff check src tests`                     | Lint Python under `src/` and `tests/` (requires dev extras)                                                       |
-| `mypy`                                     | Type-check core packages (`src/db`, `src/schemas`, `src/service`; requires dev extras)                          |
 
+## Quality checks
 
+Install dev extras first (see README setup): `pip install -e ".[dev]"`. From the repo root with that venv active, run the same gates as CI (`.github/workflows/ci.yml`):
 
+```bash
+ruff check src tests
+mypy
+pytest tests/ --cov=src --cov-report=term-missing
+```
+
+| Command | Action |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `ruff check src tests` | Lint Python under `src/` and `tests/` (`[tool.ruff]` in `pyproject.toml`) |
+| `mypy` | Type-check core packages (`src/db`, `src/schemas`, `src/service`; `[tool.mypy]` in `pyproject.toml`) |
+| `pytest tests/ --cov=src --cov-report=term-missing` | Full test suite with coverage gate on `src/` Python (≥84%; `[tool.coverage.report]` in `pyproject.toml`) |
+
+For a quick test-only iteration, `pytest tests/` is fine; before claiming Python work complete, run all three commands above.
 
 ## Constitution
 
@@ -50,7 +61,7 @@ Older docs used **Found**, **Sourced**, **Enriching**, and **Enriched** lanes. T
 
 1. **Read this file** — always in context.
 2. **Use skills when present** — read `.claude/skills/just-apply/SKILL.md` before starting tasks.
-3. **Verify before claiming done** — run pytest and verify no regressions.
+3. **Verify before claiming done** — on Python changes, run the full quality gate suite (`ruff check src tests`, `mypy`, `pytest tests/ --cov=src --cov-report=term-missing`); do not stop after pytest alone. Requires dev install (`pip install -e ".[dev]"`, see README).
 
 ---
 

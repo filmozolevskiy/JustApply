@@ -34,3 +34,9 @@
 - No secrets required; no application behavior changes.
 - Tests: 817 passed; ruff, mypy, coverage gate (84.55%) all exit 0 locally.
 - Commit: 001c822
+
+## #130 — Document quality verification commands in CLAUDE.md
+- Split CLI commands from a dedicated **Quality checks** section in `CLAUDE.md`: CI-matching gate order (`ruff check src tests`, `mypy`, `pytest tests/ --cov=src --cov-report=term-missing`) with dev install prerequisite (`pip install -e ".[dev]"`, see README).
+- Updated AI workflow step 3: agents must run the full gate suite on Python changes, not pytest alone.
+- Tests: 817 passed.
+- Commit: 6992420
