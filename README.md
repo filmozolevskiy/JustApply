@@ -68,11 +68,14 @@ From the repo root with dev extras installed:
 ruff check src tests
 mypy
 pytest tests/
+pytest tests/ --cov=src --cov-report=term-missing
 ```
 
 `ruff check` uses settings in `pyproject.toml`. Auto-fix safe issues with `ruff check src tests --fix`.
 
 `mypy` (no args) type-checks core packages (`src/db`, `src/schemas`, `src/service`) per `[tool.mypy]` in `pyproject.toml`.
+
+`pytest tests/ --cov=src --cov-report=term-missing` runs the full suite with a coverage gate on `src/` Python (≥84%, baseline measured 2026-07). HTML/JS dashboard assets are excluded from the denominator. Exits non-zero if coverage drops below the threshold.
 
 ### Repo Layout
 ```text

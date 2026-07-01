@@ -78,3 +78,19 @@ module = [
     "sse_starlette.*",
 ]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src"]
+# Dashboard HTML/JS are not Python; omit keeps the denominator backend-only.
+omit = [
+    "src/web/dashboard.html",
+    "src/web/static/js/*",
+]
+
+[tool.coverage.report]
+fail_under = 84
+show_missing = true
+skip_empty = true

@@ -15,6 +15,7 @@ Dedicated repository for the **JustApply** skill. Automates job search, resume m
 | `python3 -m src.cli --reassess-all`        | Re-run **Resume Matcher** on all active jobs                                                                      |
 | `python3 -m src.web.run_dashboard`         | Launch local FastAPI **Kanban Dashboard**                                                                         |
 | `pytest tests/`                            | Run all unit and integration tests                                                                                |
+| `pytest tests/ --cov=src --cov-report=term-missing` | Run tests with coverage gate on `src/` Python (≥84%; requires dev extras)                                  |
 | `ruff check src tests`                     | Lint Python under `src/` and `tests/` (requires dev extras)                                                       |
 | `mypy`                                     | Type-check core packages (`src/db`, `src/schemas`, `src/service`; requires dev extras)                          |
 
