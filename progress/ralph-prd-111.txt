@@ -19,4 +19,4 @@
 - Fixed three type errors in scoped packages: guard `job.id is None` in `contacted_elsewhere.py`; normalize `allowed_remote_types` default to `["any"]` in `just_apply.py` before pipeline calls.
 - Documented `mypy` (no args) in README Quality checks and CLAUDE.md command table.
 - Tests: 817 passed; `mypy` exits 0 (12 source files).
-- Commit: 375a7f1
+- Commit: 017d530
