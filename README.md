@@ -16,6 +16,8 @@ JustApply is an AI-powered job search and application pipeline that automates th
 ### How it Works
 JustApply uses **FastAPI** for the backend and **Gemini** for intelligent job assessment. It leverages **Bright Data** for resilient scraping and **Apify** for contact discovery. Data is stored locally in `data/just_apply.db` (SQLite) to keep your search private and persistent.
 
+For domain terminology — Kanban lanes, pipeline stages, batch evaluation, enrichment — see [`CONTEXT.md`](CONTEXT.md).
+
 ### Setup
 
 All commands below must be run from the **repo root** with the project virtualenv active.
@@ -56,13 +58,27 @@ All commands below must be run from the **repo root** with the project virtualen
 ### Repo Layout
 ```text
 .
+├── CONTEXT.md         # Domain glossary (lanes, pipelines, batch evaluation)
 ├── data/              # Runtime SQLite db (just_apply.db) and logs
+├── images/            # README screenshots and GIFs
+├── resumes/           # Resume Profiles (.md only)
 ├── src/
-│   ├── cli/           # CLI entry points
-│   ├── core/          # Business logic & LLM scoring
-│   ├── db/            # SQLite connection and CRUD
-│   ├── service/       # Search and scraping services
-│   └── web/           # FastAPI dashboard, HTML, and static JS
+│   ├── pipelines.py   # Search & Evaluation Pipeline, backfill, enrichment orchestration
+│   ├── cli/           # CLI entry points (python3 -m src.cli)
+│   ├── service/       # run_search, run_promote, run_backfill, run_collect
+│   ├── core/
+│   │   ├── batch_evaluation.py  # Gemini Batch API submissions
+│   │   ├── batch_poller.py      # Poll in-flight batches, write scores back
+│   │   ├── evaluation_lock.py   # Blocks overlapping search/backfill rounds
+│   │   ├── matcher.py           # Resume Matcher LLM
+│   │   ├── scraper.py           # Bright Data LinkedIn scraper
+│   │   └── enrichment/          # Contact Sample, classification, outreach templates
+│   ├── db/            # Job Tracker Database (SQLite jobs table)
+│   ├── safety/        # Database Safety Gate (blocks destructive DB ops)
+│   └── web/
+│       ├── server.py            # FastAPI backend
+│       ├── dashboard.html       # Kanban board UI
+│       └── static/js/           # jobStore, boardRenderer, drawerController, taskLogClient
 ├── tests/
 ├── .env.example
 └── requirements.txt
