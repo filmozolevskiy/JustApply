@@ -338,3 +338,130 @@ def test_dashboard_exports_reclassify_job():
     script = get_script_section(read_dashboard_html())
     assert "reclassifyJob" in script, \
         "dashboard.html must define and export reclassifyJob"
+
+
+# --- Hardening: infrastructure failures (issue #118) ---
+
+_EMPTY_TEMPLATES = {"recruiter": "", "russian_speaker": ""}
+_BOTH_TEMPLATES = {
+    "recruiter": "Hello ______,\n\nAcme is looking for a QA.",
+    "russian_speaker": "Hello ______,\n\nAcme is looking for a QA.",
+}
+
+
+@pytest.mark.asyncio
+async def test_reclassify_settings_read_failure_no_cache_completes_with_note(db):
+    """Settings read failure on no-cache path completes without crash."""
+    log_records = []
+
+    async def capture_log(msg, level="info"):
+        log_records.append((msg, level))
+
+    job_id = _make_accepted_job_with_contacts(db)
+
+    with patch("src.pipelines.database.get_outreach_settings", side_effect=Exception("DB locked")), \
+         patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
+        from src.pipelines import run_reclassify_pipeline
+        result = await run_reclassify_pipeline(job_id, log_func=capture_log)
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert result.enrichmentNote.startswith("Could not load Outreach Settings:")
+    assert "DB locked" in result.enrichmentNote
+    assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
+    assert any(level == "error" for _, level in log_records)
+
+
+@pytest.mark.asyncio
+async def test_reclassify_settings_read_failure_cache_hit_completes_with_note(db):
+    """Settings read failure on cache-hit path completes without crash."""
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+
+    job_id = _make_accepted_job_with_contacts(db)
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(
+        slug,
+        [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob", "headline": "HR Manager"}],
+        stream="recruiters",
+        db_path=db,
+    )
+
+    with patch("src.pipelines.database.get_outreach_settings", side_effect=Exception("DB locked")), \
+         patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
+        from src.pipelines import run_reclassify_pipeline
+        result = await run_reclassify_pipeline(job_id)
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert result.enrichmentNote.startswith("Could not load Outreach Settings:")
+    assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
+
+
+@pytest.mark.asyncio
+async def test_reclassify_template_generation_failure_persists_note(db):
+    """Template generation failure leaves Accepted job with explanatory note."""
+    job_id = _make_accepted_job_with_contacts(db)
+
+    with patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(side_effect=Exception("LLM timeout"))):
+        from src.pipelines import run_reclassify_pipeline
+        result = await run_reclassify_pipeline(job_id)
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert result.enrichmentNote.startswith("Outreach template generation failed:")
+    assert "LLM timeout" in result.enrichmentNote
+
+
+@pytest.mark.asyncio
+async def test_reclassify_contact_sourcing_failure_persists_note(db):
+    """Contact sourcing failure on cache-hit path persists note and templates."""
+    from src.db.cache import set_contact_sample
+    from src.core.enrichment.contact_sample import company_cache_slug
+
+    job_id = _make_accepted_job_with_contacts(db)
+    slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
+    set_contact_sample(
+        slug,
+        [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob", "headline": "HR Manager"}],
+        stream="recruiters",
+        db_path=db,
+    )
+
+    with patch("src.pipelines.source_contacts", new=AsyncMock(side_effect=Exception("Apify trigger failed"))), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
+        from src.pipelines import run_reclassify_pipeline
+        result = await run_reclassify_pipeline(job_id)
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert result.enrichmentNote.startswith("Contact sourcing failed:")
+    assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
+
+
+@pytest.mark.asyncio
+async def test_run_reclassify_task_settings_failure_reaches_terminal_state(db):
+    """Dashboard re-classify task completes (not stuck) when settings read fails."""
+    from src.web.server import run_reclassify_task_with_logs, TaskState, active_tasks
+    import uuid
+
+    job_id = _make_accepted_job_with_contacts(db)
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+
+    with patch("src.pipelines.database.get_outreach_settings", side_effect=Exception("DB locked")), \
+         patch("src.db.cache.get_contact_sample", return_value=None), \
+         patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=_BOTH_TEMPLATES)):
+        await run_reclassify_task_with_logs(task_id, job_id)
+
+    assert state.status == "completed"
+    assert state.result is not None
+    assert any(
+        "Could not load Outreach Settings" in entry.get("message", "")
+        for entry in state.logs
+        if entry.get("level") == "error"
+    )

@@ -304,6 +304,14 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
     """
     from .db.cache import get_contact_sample
 
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
     job = database.get_job(job_id)
     if not job:
         raise ValueError("Job not found")
@@ -311,10 +319,37 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
     if job.status != "accepted":
         raise ValueError("Job must be in Accepted lane to re-classify")
 
+    enrichment_note = ""
+    settings = OutreachSettings()
+
+    try:
+        settings = OutreachSettings(**database.get_outreach_settings())
+    except Exception as exc:
+        enrichment_note = f"Could not load Outreach Settings: {exc}"
+        await log(enrichment_note, "error")
+
     # Detect country from job location for targeted outreach
     detected_country = detect_country_from_location(job.location)
     slug = company_cache_slug(job.company or "", job.companyUrl or "", country=detected_country)
-    settings = OutreachSettings(**database.get_outreach_settings())
+
+    async def safe_generate_templates(contacts_list):
+        nonlocal enrichment_note
+        try:
+            return await generate_outreach_templates(
+                job,
+                contacts_list,
+                log_func=log_func,
+                short_connection_note=settings.short_connection_note,
+            )
+        except Exception as exc:
+            template_note = f"Outreach template generation failed: {exc}"
+            enrichment_note = (
+                f"{enrichment_note} {template_note}".strip()
+                if enrichment_note
+                else template_note
+            )
+            await log(template_note, "error")
+            return {"recruiter": "", "russian_speaker": ""}
 
     # Check whether any active stream has cached data.
     if settings.target_recruiters or settings.target_russian_speakers:
@@ -330,20 +365,19 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
     if not has_cache:
         # Template-only path: regenerate templates without touching contacts.
         existing_contacts = [c.model_dump() for c in job.contacts]
-        templates = await generate_outreach_templates(
-            job,
-            existing_contacts,
-            log_func=log_func,
-            short_connection_note=settings.short_connection_note,
-        )
+        templates = await safe_generate_templates(existing_contacts)
         outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
-        note = "Outreach templates refreshed; contacts unchanged (no cached employee sample)."
+        note = (
+            enrichment_note
+            or "Outreach templates refreshed; contacts unchanged (no cached employee sample)."
+        )
+        note_kind = "" if enrichment_note else "info"
         updated = database.enrich_job(
             job_id,
             [],
             outreach_message,
             enrichment_note=note,
-            enrichment_note_kind="info",
+            enrichment_note_kind=note_kind,
             recruiter_template=templates.get("recruiter", ""),
             russian_speaker_template=templates.get("russian_speaker", ""),
             activity_kind="reclassify_no_cache",
@@ -354,15 +388,24 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
         return updated
 
     source_meta = {}
-    contacts = await source_contacts(
-        job,
-        settings=settings,
-        log_func=log_func,
-        meta=source_meta,
-    )
+    contacts = []
+    try:
+        contacts = await source_contacts(
+            job,
+            settings=settings,
+            log_func=log_func,
+            meta=source_meta,
+        )
+    except Exception as exc:
+        sourcing_note = f"Contact sourcing failed: {exc}"
+        enrichment_note = (
+            f"{enrichment_note} {sourcing_note}".strip()
+            if enrichment_note
+            else sourcing_note
+        )
+        await log(sourcing_note, "error")
 
-    enrichment_note = ""
-    if not contacts:
+    if not enrichment_note and not contacts:
         if source_meta.get("empty_reason") == "no_company_url":
             enrichment_note = "No LinkedIn company URL — cannot fetch employees."
         elif source_meta.get("empty_reason") == "no_employees":
@@ -370,12 +413,7 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
         else:
             enrichment_note = "No contacts matched active Outreach Settings."
 
-    templates = await generate_outreach_templates(
-        job,
-        contacts,
-        log_func=log_func,
-        short_connection_note=settings.short_connection_note,
-    )
+    templates = await safe_generate_templates(contacts)
     outreach_message = templates.get("recruiter") or templates.get("russian_speaker") or ""
 
     updated = database.enrich_job(

@@ -11,3 +11,9 @@
 - **Changes:** Removed `start_enrichment` from `src/db/jobs.py` and its export in `src/db/__init__.py`. Enrichment status transitions remain owned by `begin_enrichment` in `src/core/enrichment/coordinator.py` (used by dashboard Enrich Job, CLI `--promote`, and service adapter). Dropped legacy DB tests and stale mock patches in coordinator/just_apply tests.
 - **Tests:** `812 passed` via `.venv/bin/python -m pytest tests/` (2 fewer tests after removing legacy helper coverage).
 - **Issue:** Closed #117
+
+## Iteration 3 — #118 Harden Re-classify when settings or classification infrastructure fails
+- **Task:** Harden Re-classify when settings or classification infrastructure fails (#118)
+- **Changes:** `run_reclassify_pipeline` now initializes `OutreachSettings()` defaults before loading persisted settings, matching the #116 safe-default pattern. Settings-read, contact-sourcing, and template-generation failures are handled in separate try blocks with distinct note prefixes. No-cache path preserves info note on success but surfaces infrastructure errors in the drawer. Dashboard `run_reclassify_task_with_logs` reaches terminal `completed` state when the pipeline returns with a note instead of raising.
+- **Tests:** Added five hardening tests in `tests/test_reclassify.py` covering settings failure (no-cache and cache-hit), template generation failure, contact sourcing failure, and dashboard task terminal state. `817 passed` via `.venv/bin/python -m pytest tests/`.
+- **Issue:** Closed #118
