@@ -27,3 +27,10 @@
 - Documented `pytest tests/ --cov=src --cov-report=term-missing` in README Quality checks and CLAUDE.md command table.
 - Tests: 817 passed with coverage gate; threshold 84% reached (84.61%).
 - Commit: e5cdd23
+
+## #129 — Add GitHub Actions CI for tests and quality gates
+- Added `.github/workflows/ci.yml`: triggers on PRs and pushes to `main`; Python 3.11 with pip cache; installs `pip install -e ".[dev]"`.
+- Runs same local commands: `ruff check src tests`, `mypy`, `pytest tests/ --cov=src --cov-report=term-missing` as separate steps (non-zero exit fails workflow).
+- No secrets required; no application behavior changes.
+- Tests: 817 passed; ruff, mypy, coverage gate (84.55%) all exit 0 locally.
+- Commit: (pending)
