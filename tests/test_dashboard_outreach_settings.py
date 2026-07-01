@@ -1,20 +1,20 @@
 import os
 import sys
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
+from src import db as database
+from src.web.server import app
+
 from kanban_js import (
     get_drawer_body,
     load_kanban_js,
-    read_dashboard_html,
     read_drawer_controller,
 )
-
-from src import db as database
-import src.db.connection as _db_connection
-from src.web.server import app
-from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -187,7 +187,7 @@ def test_drawer_active_contact_loads_recruiter_template_for_is_recruiter():
     """Recruiter contact (is_recruiter=true) loads recruiterOutreachTemplate."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "recruiterOutreachTemplate" in drawer_body, \
         "Drawer must reference recruiterOutreachTemplate for recruiter contacts"
@@ -197,7 +197,7 @@ def test_drawer_active_contact_loads_russian_speaker_template_for_non_recruiter(
     """Non-recruiter contact loads russianSpeakerOutreachTemplate."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "russianSpeakerOutreachTemplate" in drawer_body, \
         "Drawer must reference russianSpeakerOutreachTemplate for non-recruiter contacts"
@@ -207,7 +207,7 @@ def test_drawer_active_contact_highlight_uses_is_recruiter_flag():
     """HR badge is driven by is_recruiter flag, not title keywords."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "is_recruiter" in drawer_body, \
         "Drawer must use is_recruiter flag for HR badge"
@@ -219,7 +219,7 @@ def test_drawer_active_contact_row_highlighted():
     """Active Contact row has a distinct visual highlight (cyan left border)."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "activeContactIdx" in drawer_body, \
         "Drawer must track activeContactIdx for Active Contact highlight"
@@ -229,7 +229,7 @@ def test_drawer_character_counter_present():
     """Outreach textarea has a live character counter."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "/200" in drawer_body, \
         "Drawer must show a character counter with /200 limit"
@@ -239,7 +239,7 @@ def test_drawer_regenerate_button_removed():
     """The Regenerate button is removed from the drawer."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "regenerateOutreach" not in drawer_body, \
         "Regenerate button must be removed from the drawer"
@@ -249,7 +249,7 @@ def test_drawer_title_keyword_badge_logic_removed():
     """Title-keyword HR heuristic must be removed from the drawer."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert "talent acquisition" not in drawer_body.lower(), \
         "Title-keyword HR heuristic must be removed from the drawer"
@@ -321,7 +321,7 @@ def test_contact_name_title_do_not_toggle_contacted_checkbox():
     """Only the checkbox may toggle contacted; name/title must not be label-linked."""
     html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
     with open(html_path) as f:
-        content = f.read()
+        f.read()
     drawer_body = _get_drawer_body()
     assert 'label for="contact-${jobId}-${origIdx}"' not in drawer_body, \
         "Contact name/title must not be wrapped in a label tied to the contacted checkbox"

@@ -1,9 +1,9 @@
+import json
 import os
 import sys
-import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -158,8 +158,9 @@ def test_recruiter_company_detection_local():
 
 @pytest.mark.asyncio
 async def test_evaluate_job_applies_recruiter_override():
+    from unittest.mock import AsyncMock, patch
+
     from src.core.matcher import evaluate_job
-    from unittest.mock import patch, MagicMock, AsyncMock
 
     recruiter_job = {
         "title": "QA Analyst",

@@ -1,16 +1,17 @@
 """Tests for Load More Contacts — append next Apify page to cache and re-classify."""
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
 from src.db.cache import get_contact_sample, set_contact_sample
 from src.web.server import app
-from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -81,8 +82,8 @@ def test_append_second_call_increments_again(db):
 
 def _make_accepted_job_with_cache(db):
     """Insert an accepted job with a recruiter contact and a seeded per-stream recruiters cache."""
-    from src.db.jobs import add_job, enrich_job
     from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.jobs import add_job, enrich_job
     job_id = add_job({
         "title": "QA Engineer",
         "company": "Acme",
@@ -126,8 +127,8 @@ async def test_pipeline_raises_for_non_accepted_job(db):
 @pytest.mark.asyncio
 async def test_pipeline_fetches_page_one_when_no_cache(db):
     """Missing cache is not a blocker — pipeline fetches page 1."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_accepted_job_with_cache(db)
     database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
@@ -144,8 +145,8 @@ async def test_pipeline_fetches_page_one_when_no_cache(db):
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_with_next_page(db):
     """Pipeline calls stream-specific Apify with start_page = pages_fetched + 1."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_accepted_job_with_cache(db)  # recruiters cache pages_fetched=1
 
     new_profiles = [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob/"}]
@@ -167,9 +168,9 @@ async def test_pipeline_calls_apify_with_next_page(db):
 @pytest.mark.asyncio
 async def test_pipeline_appends_profiles_to_cache(db):
     """Pipeline appends new profiles to per-stream cache and increments pages_fetched."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_accepted_job_with_cache(db)
 
     new_profiles = [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob/"}]
@@ -191,8 +192,8 @@ async def test_pipeline_appends_profiles_to_cache(db):
 @pytest.mark.asyncio
 async def test_pipeline_job_stays_accepted(db):
     """Job status remains 'accepted' after load-more."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_accepted_job_with_cache(db)
 
     new_profiles = [{"firstName": "Bob", "linkedinUrl": "https://linkedin.com/in/bob/"}]
@@ -211,9 +212,9 @@ async def test_pipeline_job_stays_accepted(db):
 @pytest.mark.asyncio
 async def test_second_load_more_requests_page_3(db):
     """When pages_fetched=2, next load-more calls Apify with start_page=3."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_accepted_job_with_cache(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
     # Simulate one prior load-more already done
@@ -338,7 +339,7 @@ def test_drawer_load_more_shows_spinner_while_loading():
 # --- Dashboard JS export ---
 
 def test_dashboard_exports_load_more_contacts():
-    from kanban_js import read_dashboard_html, get_script_section
+    from kanban_js import get_script_section, read_dashboard_html
     script = get_script_section(read_dashboard_html())
     assert "loadMoreContacts" in script, \
         "dashboard.html must define and export loadMoreContacts"

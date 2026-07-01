@@ -1,14 +1,12 @@
 """Tests for archived visibility filter and un-archive — issue #54."""
 import os
-import sys
 import sqlite3
-import pytest
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_jobs, update_job_status, add_job
-from src.db.jobs import get_job, archive_job
-
+from src.db import add_job, get_jobs, init_db, update_job_status
+from src.db.jobs import archive_job, get_job
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -180,8 +178,8 @@ def _setup_client(tmp_path, suffix="test.db"):
     from src.db import init_db as _init_db
     _db_connection.DB_PATH = str(tmp_path / suffix)
     _init_db(_db_connection.DB_PATH)
-    from src.web.server import app
     from fastapi.testclient import TestClient
+    from src.web.server import app
     return TestClient(app), _db_connection.DB_PATH
 
 

@@ -40,3 +40,25 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line length — existing code; tighten in a follow-up
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Package barrels re-export public APIs without using names locally.
+"**/__init__.py" = ["F401"]
+# load_dotenv() must run before importing modules that read os.environ.
+"src/cli/cli.py" = ["E402"]

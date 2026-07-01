@@ -17,7 +17,7 @@ class RateLimiter:
         current = time.time()
         if os.path.exists(self._lock_file):
             try:
-                with open(self._lock_file, "r") as f:
+                with open(self._lock_file) as f:
                     last = float(f.read().strip())
                 elapsed = current - last
                 if elapsed < self._window:

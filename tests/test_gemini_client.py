@@ -1,8 +1,6 @@
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from src.core import gemini_client
 
 

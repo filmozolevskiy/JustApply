@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import connection
 from .contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
@@ -31,7 +31,7 @@ def _append_activity_log(cursor, job_id: int, message: str) -> None:
         return
     log = _parse_activity_log(row[0])
     log.append({
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "message": message,
     })
     if len(log) > ACTIVITY_LOG_MAX:
@@ -179,7 +179,7 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     contacts[contact_idx]["contacted"] = bool(contacted)
 
     if contacted:
-        contacts[contact_idx]["contacted_at"] = datetime.now(timezone.utc).isoformat()
+        contacts[contact_idx]["contacted_at"] = datetime.now(UTC).isoformat()
         contact_name = contacts[contact_idx].get("name") or "Contact"
         _append_activity_log(cursor, job_id, f"Marked {contact_name} contacted")
     else:

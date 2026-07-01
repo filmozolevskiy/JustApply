@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import inspect
 import os
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
-from ..schemas import Job
-
-from ..db import get_job, get_jobs, init_db
 from ..core.batch_poller import run_batch_collection
-from ..pipelines import run_backfill_pipeline, run_enrichment_pipeline, run_search_pipeline, run_reassess_pipeline
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..core.evaluation_lock import assert_evaluation_lock_clear
+from ..db import get_job, get_jobs, init_db
+from ..pipelines import (
+    run_backfill_pipeline,
+    run_enrichment_pipeline,
+    run_reassess_pipeline,
+    run_search_pipeline,
+)
 from ..rate_limiter import RateLimitError, scrape_limiter
+from ..schemas import Job
 
 LogFunc = Callable[[str, str], None] | Callable[[str, str], Awaitable[None]]
 

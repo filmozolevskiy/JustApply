@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -47,7 +47,7 @@ def test_poll_cadence_seconds_table(age_seconds, expected):
 
 
 def test_is_due_for_poll_respects_cadence():
-    submitted = datetime(2026, 6, 26, 12, 0, tzinfo=timezone.utc)
+    submitted = datetime(2026, 6, 26, 12, 0, tzinfo=UTC)
     batch = {
         "submittedAt": submitted.isoformat(),
         "lastPolledAt": None,
@@ -217,7 +217,7 @@ async def test_poll_in_flight_skips_batches_not_due(tmp_db, monkeypatch):
     from src.core import batch_poller
 
     job_id = _seed_scraped_job(tmp_db)
-    submitted = datetime(2026, 6, 26, 12, 0, tzinfo=timezone.utc)
+    submitted = datetime(2026, 6, 26, 12, 0, tzinfo=UTC)
     batch_jobs.create_batch_job(
         batch_name="batches/not-due",
         display_name="test",

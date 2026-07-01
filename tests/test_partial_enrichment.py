@@ -8,15 +8,16 @@ Full failure (zero kept across all active streams) is unchanged.
 """
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.db.connection as _db_connection
 from src import db as database
-from src.db.connection import init_db
 from src.core.enrichment.coordinator import begin_enrichment
+from src.db.connection import init_db
 
 
 @pytest.fixture

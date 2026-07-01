@@ -1,34 +1,33 @@
 import json
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.core.enrichment.connection_note as connection_note_module
 from src.core.enrichment.connection_note import (
-    FIT_LINE,
-    COMPLETE_OUTREACH_OPENER,
     COMPLETE_CANDIDATE_FIT_LINE,
+    COMPLETE_OUTREACH_OPENER,
     COMPLETE_RECRUITER_CTA,
+    FIT_LINE,
+    RECRUITER_CTA,
+    RUSSIAN_SPEAKER_CTA,
     SIGN_OFF,
     assemble_complete_outreach_template,
     complete_outreach_fallback_template,
     complete_outreach_greeting,
     complete_russian_speaker_cta,
     extract_complete_outreach_slots,
-    fetch_complete_outreach_slots,
-    generate_connection_note_template,
     generate_complete_outreach_template,
+    generate_connection_note_template,
     generate_outreach_templates,
     minimal_fallback_template,
     normalize_complete_outreach_bullets,
     parse_complete_outreach_json,
-    RECRUITER_CTA,
-    RUSSIAN_SPEAKER_CTA,
 )
-
 
 # --- minimal_fallback_template ---
 

@@ -4,31 +4,45 @@ Dedicated repository for the **JustApply** skill. Automates job search, resume m
 
 ## CLI & Run Commands
 
-| Command | Action |
-|:---|:---|
+
+| Command                                    | Action                                                                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `python3 -m src.cli --search "<position>"` | Run the **Search & Evaluation Pipeline** — scrape listings, save to **Scraped**, submit **Batch Evaluation Jobs** |
-| `python3 -m src.cli --promote` | **Enrichment** for **Matched**/**Accepted** jobs — Contact Sample, classification, outreach templates |
-| `python3 -m src.cli --backfill` | Submit batch evaluation for **Scraped** jobs missing scores (add `--wait` to block until batches finish) |
-| `python3 -m src.cli --collect` | Poll in-flight **Batch Evaluation Jobs** once and write back completed results (add `--wait` to block) |
-| `python3 -m src.cli --reassess <job_id>` | Re-run **Resume Matcher** on a single job |
-| `python3 -m src.cli --reassess-all` | Re-run **Resume Matcher** on all active jobs |
-| `python3 -m src.web.run_dashboard` | Launch local FastAPI **Kanban Dashboard** |
-| `pytest tests/` | Run all unit and integration tests |
+| `python3 -m src.cli --promote`             | **Enrichment** for **Matched**/**Accepted** jobs — Contact Sample, classification, outreach templates             |
+| `python3 -m src.cli --backfill`            | Submit batch evaluation for **Scraped** jobs missing scores (add `--wait` to block until batches finish)          |
+| `python3 -m src.cli --collect`             | Poll in-flight **Batch Evaluation Jobs** once and write back completed results (add `--wait` to block)            |
+| `python3 -m src.cli --reassess <job_id>`   | Re-run **Resume Matcher** on a single job                                                                         |
+| `python3 -m src.cli --reassess-all`        | Re-run **Resume Matcher** on all active jobs                                                                      |
+| `python3 -m src.web.run_dashboard`         | Launch local FastAPI **Kanban Dashboard**                                                                         |
+| `pytest tests/`                            | Run all unit and integration tests                                                                                |
+| `ruff check src tests`                     | Lint Python under `src/` and `tests/` (requires dev extras)                                                       |
+
+
+
 
 ## Constitution
 
+
+
 ### Role
+
 You are a software engineer working on the JustApply automation system.
 
 ### MUST
-1. **Writing style**: Plain language, short sentences. Lead with the answer.
+
+1. **Writing style**: Plain ESL-friendly language, short sentences. Lead with the answer.
 2. **Evidence**: Factual claims about code require concrete file paths, line ranges, or test outputs.
-3. **Data Schemas**: Keep schema fields strictly aligned with `CONTEXT.md` and the single **`jobs`** table in the **Job Tracker Database** (`src/schemas.py` `Job` model, `src/db/jobs.py` CRUD). There is no separate Applications table.
+3. **Data Schemas**: Keep schema fields strictly aligned with `CONTEXT.md` and the single `jobs` table in the **Job Tracker Database** (`src/schemas.py` `Job` model, `src/db/jobs.py` CRUD). There is no separate Applications table.
+
+
 
 ### Legacy status names (migration only)
+
 Older docs used **Found**, **Sourced**, **Enriching**, and **Enriched** lanes. The active Kanban lanes are **Scraped → Matched → Accepted → Applied → Interviewing → Rejected**. Use legacy names only when handling read-time migrations in `src/db/job_model.py`.
 
 ---
+
+
 
 ## AI workflow
 
@@ -37,6 +51,8 @@ Older docs used **Found**, **Sourced**, **Enriching**, and **Enriched** lanes. T
 3. **Verify before claiming done** — run pytest and verify no regressions.
 
 ---
+
+
 
 ## Project structure
 
@@ -100,3 +116,4 @@ tests/                       # Pytest unit and integration tests
 └── skills/
     └── just-apply/SKILL.md  # JustApply agent skill guides
 ```
+

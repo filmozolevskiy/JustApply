@@ -1,7 +1,8 @@
 """LLM Outreach Audience classification for Contact Sample profiles."""
 
-import os
 import json
+import os
+
 from dotenv import load_dotenv
 
 

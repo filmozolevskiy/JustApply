@@ -1,12 +1,13 @@
 import os
 import sys
-import json
+
 import pytest
 
 # Add root directory to path to import database
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.db import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, enrich_job
+from src.db import add_job, enrich_job, get_jobs, init_db, update_job_status
+
 
 def test_database_lifecycle(tmp_path):
     test_db = tmp_path / "test_just_apply.db"

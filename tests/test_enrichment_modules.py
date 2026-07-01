@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 async def test_source_module_delegates_to_contact_sample_on_cache_miss(monkeypatch):
     from unittest.mock import AsyncMock
 
-    from src.core.enrichment import source as source_module
     import src.db.cache as cache_mod
+    from src.core.enrichment import source as source_module
     from src.schemas import OutreachSettings
 
     job = {"title": "QA", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}

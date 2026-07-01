@@ -1,16 +1,17 @@
 """Tests for Contact Sample Cache — DB layer and source_contacts cache-aware behavior."""
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import src.db.connection as _db_connection
 import src.core.enrichment.source as source_module
+import src.db.connection as _db_connection
 from src import db as database
-from src.db.cache import get_contact_sample, set_contact_sample, delete_contact_sample
 from src.core.outreach import source_contacts
+from src.db.cache import delete_contact_sample, get_contact_sample, set_contact_sample
 from src.schemas import OutreachSettings
 
 _LEGACY_SETTINGS = OutreachSettings(target_recruiters=False, target_russian_speakers=False)
@@ -175,12 +176,10 @@ async def test_source_contacts_cache_hit_logs_company_and_fetch_date(db):
 @pytest.mark.asyncio
 async def test_source_contacts_cache_hit_appends_activity_log(db):
     """Cache hit appends an entry to the job's Job Activity Log."""
-    from src.db import get_job
 
     profiles = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     set_contact_sample("acme", profiles, display_name="Acme Corp", db_path=db)
 
-    from src.schemas import Job
 
     job = database.get_job(1, db_path=db)
     assert job is not None, "Seed data must provide at least one job"

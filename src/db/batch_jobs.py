@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import connection
 
@@ -13,7 +13,7 @@ TERMINAL_STATES = frozenset({
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _parse_job_ids(raw) -> list[int]:

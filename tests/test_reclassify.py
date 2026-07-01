@@ -1,15 +1,16 @@
 """Tests for POST /api/jobs/{id}/reclassify — re-classify from cached Contact Sample."""
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import db as database
 import src.db.connection as _db_connection
-from src.web.server import app
 from fastapi.testclient import TestClient
+from src import db as database
+from src.web.server import app
 
 client = TestClient(app)
 
@@ -35,8 +36,8 @@ def db(tmp_path, monkeypatch):
 
 def _make_accepted_job_with_contacts(db):
     """Insert an accepted job with contacts and return its id."""
-    from src.db.jobs import add_job, enrich_job
     from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.jobs import add_job, enrich_job
     job_id = add_job({
         "title": "QA Engineer",
         "company": "Acme",
@@ -116,8 +117,8 @@ async def test_reclassify_no_cache_does_not_call_source_contacts(db):
 
 
 def test_enrich_job_failure_sets_warning_note_kind(db):
-    from src.db.jobs import add_job, enrich_job
     from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.jobs import add_job, enrich_job
     job_id = add_job({"title": "Dev", "company": "Co", "status": "found"}, db_path=db)
     begin_enrichment(job_id, db)
     result = enrich_job(
@@ -169,11 +170,11 @@ async def test_reclassify_uses_cache_not_apify(db):
 @pytest.mark.asyncio
 async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
     """Re-classify runs source_contacts (poster merge, contacted flags) — no Apify."""
-    from src.pipelines import run_reclassify_pipeline
-    from src.db.jobs import add_job, enrich_job
+    from src.core.enrichment.contact_sample import company_cache_slug
     from src.core.enrichment.coordinator import begin_enrichment
     from src.db.cache import set_contact_sample
-    from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.jobs import add_job, enrich_job
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = add_job({
         "title": "QA Engineer",
@@ -216,9 +217,9 @@ async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
 
 @pytest.mark.asyncio
 async def test_reclassify_uses_complete_message_format_when_setting_disabled(db):
-    from src.pipelines import run_reclassify_pipeline
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = _make_accepted_job_with_contacts(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
@@ -260,8 +261,9 @@ def test_reclassify_post_returns_task_id(db):
 
 @pytest.mark.asyncio
 async def test_run_reclassify_task_with_logs_writes_results(db):
-    from src.web.server import run_reclassify_task_with_logs, TaskState, active_tasks
     import uuid
+
+    from src.web.server import TaskState, active_tasks, run_reclassify_task_with_logs
 
     job_id = _make_accepted_job_with_contacts(db)
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
@@ -334,7 +336,7 @@ def test_load_more_contacts_gated_on_company_url():
 # --- Dashboard: reclassifyJob is exported to window ---
 
 def test_dashboard_exports_reclassify_job():
-    from kanban_js import read_dashboard_html, get_script_section
+    from kanban_js import get_script_section, read_dashboard_html
     script = get_script_section(read_dashboard_html())
     assert "reclassifyJob" in script, \
         "dashboard.html must define and export reclassifyJob"
@@ -376,8 +378,8 @@ async def test_reclassify_settings_read_failure_no_cache_completes_with_note(db)
 @pytest.mark.asyncio
 async def test_reclassify_settings_read_failure_cache_hit_completes_with_note(db):
     """Settings read failure on cache-hit path completes without crash."""
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
 
     job_id = _make_accepted_job_with_contacts(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
@@ -419,8 +421,8 @@ async def test_reclassify_template_generation_failure_persists_note(db):
 @pytest.mark.asyncio
 async def test_reclassify_contact_sourcing_failure_persists_note(db):
     """Contact sourcing failure on cache-hit path persists note and templates."""
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
 
     job_id = _make_accepted_job_with_contacts(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
@@ -445,8 +447,9 @@ async def test_reclassify_contact_sourcing_failure_persists_note(db):
 @pytest.mark.asyncio
 async def test_run_reclassify_task_settings_failure_reaches_terminal_state(db):
     """Dashboard re-classify task completes (not stuck) when settings read fails."""
-    from src.web.server import run_reclassify_task_with_logs, TaskState, active_tasks
     import uuid
+
+    from src.web.server import TaskState, active_tasks, run_reclassify_task_with_logs
 
     job_id = _make_accepted_job_with_contacts(db)
     task_id = str(uuid.uuid4())

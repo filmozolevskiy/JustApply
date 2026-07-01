@@ -1,11 +1,12 @@
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-import sys
 import os
+import sys
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.cli import run_search, run_promote
+from src.cli import run_promote, run_search
 from src.schemas import Job
 
 
@@ -61,16 +62,6 @@ async def test_run_search_calls_evaluate_when_not_mock():
         }
     ]
 
-    mock_evaluation = {
-        "matchScore": 88,
-        "matchType": "match",
-        "shouldProceed": True,
-        "strengths": ["Python expertise"],
-        "gaps": ["No mobile testing"],
-        "remoteType": "hybrid",
-        "seniority": "senior",
-        "summary": "This is a concise summary of the QA Lead role."
-    }
 
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=mock_jobs), \
          patch("src.pipelines.load_resume", return_value="# Resume content"), \
@@ -96,7 +87,6 @@ async def test_run_promote_reads_found_jobs_and_sources_contacts():
         Job(id=3, title="QA Lead", company="ACME", shouldProceed=True, status="applied"),
     ]
 
-    mock_contacts = [{"name": "Jane Recruiter", "title": "Recruiter", "url": "https://linkedin.com/in/jane"}]
     enriched_job = Job(**{**seeded_jobs[0].model_dump(), "status": "accepted", "contacts": []})
 
     with patch("src.service.just_apply.init_db"), \

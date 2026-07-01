@@ -1,11 +1,16 @@
 """Backward-compatible facade for Enrichment modules."""
 
 from .enrichment import (
-    ApifyTimeoutError,
     CONTACT_SAMPLE_SIZE,
     FIT_LINE,
     RECRUITER_CTA,
     RUSSIAN_SPEAKER_CTA,
+    ApifyTimeoutError,
+    _fetch_apify_employees_at_url,
+    _normalize_apify_employee,
+    _run_apify_actor,
+    _run_apify_for_company_page,
+    _run_apify_for_slug,
     classify_contacts,
     company_cache_slug,
     company_slug_candidates,
@@ -17,11 +22,6 @@ from .enrichment import (
     normalize_linkedin_company_url,
     normalize_linkedin_url,
     source_contacts,
-    _fetch_apify_employees_at_url,
-    _normalize_apify_employee,
-    _run_apify_actor,
-    _run_apify_for_company_page,
-    _run_apify_for_slug,
 )
 
 __all__ = [

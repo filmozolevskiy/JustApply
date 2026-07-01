@@ -60,6 +60,17 @@ All commands below must be run from the **repo root** with the project virtualen
 
 **Troubleshooting:** If you see `No module named 'src'` or install errors, you are not in the repo directory or you activated the wrong venv. Run `cd` into the clone, then `source .venv/bin/activate`. Confirm with `which python3` — it should point to `.venv/bin/python3` inside the repo. Use `pip install -e ".[dev]"` from the repo root (not `requirements.txt` alone if you need pytest).
 
+### Quality checks (contributors)
+
+From the repo root with dev extras installed:
+
+```bash
+ruff check src tests
+pytest tests/
+```
+
+`ruff check` uses settings in `pyproject.toml`. Auto-fix safe issues with `ruff check src tests --fix`.
+
 ### Repo Layout
 ```text
 .

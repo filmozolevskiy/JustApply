@@ -1,20 +1,40 @@
-import os
-import sys
-import uuid
-import json
 import asyncio
+import json
+import os
 import re
+import sys
 import time
-from fastapi import FastAPI, BackgroundTasks, Query, HTTPException, UploadFile, File
+import uuid
+
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
+
 from ..schemas import Job, OutreachSettings
 
 # Add project root to path so database module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from ..db import init_db, get_jobs, get_job, update_job_status, update_job_comment, update_contact_status, get_outreach_settings, save_outreach_settings, update_outreach_template, archive_job, archive_stale_rejected_jobs, log_activity
+from ..core.batch_poller import poll_in_flight_batches
+from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
+from ..core.gemini_client import generate_text_from_pdf, get_api_key
+from ..db import (
+    archive_job,
+    archive_stale_rejected_jobs,
+    get_job,
+    get_jobs,
+    get_outreach_settings,
+    init_db,
+    log_activity,
+    save_outreach_settings,
+    update_contact_status,
+    update_job_comment,
+    update_job_status,
+    update_outreach_template,
+)
+from ..db import batch_jobs as batch_jobs_db
+from ..pipelines import run_load_more_contacts_pipeline, run_reclassify_pipeline
 from ..service import (
     RateLimitError,
     acquire_scrape_slot,
@@ -23,11 +43,6 @@ from ..service import (
     parse_remote_types,
     search_jobs,
 )
-from ..pipelines import run_reclassify_pipeline, run_load_more_contacts_pipeline
-from ..core.batch_poller import poll_in_flight_batches
-from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
-from ..core.gemini_client import generate_text_from_pdf, get_api_key
-from ..db import batch_jobs as batch_jobs_db
 
 # Initialize SQLite database
 init_db()
@@ -129,7 +144,7 @@ async def get_resumes():
         if filename.endswith(".md"):
             filepath = os.path.join(RESUMES_DIR, filename)
             try:
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(filepath, encoding="utf-8") as f:
                     content = f.read()
                 resumes.append({"name": filename, "content": content})
             except Exception:
@@ -448,8 +463,13 @@ async def cache_status(job_id: int):
     job = get_job(job_id)
     if not job:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
+    from ..core.enrichment.contact_sample import (
+        RECRUITER_SAMPLE_SIZE,
+        RUSSIAN_SAMPLE_SIZE,
+        company_cache_slug,
+        detect_country_from_location,
+    )
     from ..db.cache import get_contact_sample
-    from ..core.enrichment.contact_sample import company_cache_slug, RECRUITER_SAMPLE_SIZE, RUSSIAN_SAMPLE_SIZE, detect_country_from_location
 
     detected_country = detect_country_from_location(job.location)
     slug = company_cache_slug(job.company or "", job.companyUrl or "", country=detected_country)
@@ -498,8 +518,8 @@ async def load_more_preflight(job_id: int):
     job = get_job(job_id)
     if not job:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
-    from ..db.cache import get_contact_sample
     from ..core.enrichment.contact_sample import company_cache_slug, resolve_load_more_streams
+    from ..db.cache import get_contact_sample
 
     slug = company_cache_slug(job.company or "", job.companyUrl or "")
     settings = get_outreach_settings()

@@ -5,12 +5,12 @@ BOARD_RENDERER_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web"
 
 
 def _read_html():
-    with open(HTML_PATH, "r", encoding="utf-8") as f:
+    with open(HTML_PATH, encoding="utf-8") as f:
         return f.read()
 
 
 def _read_board_renderer():
-    with open(BOARD_RENDERER_PATH, "r", encoding="utf-8") as f:
+    with open(BOARD_RENDERER_PATH, encoding="utf-8") as f:
         return f.read()
 
 

@@ -1,33 +1,31 @@
+import json
 import os
 import sys
-import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src import db as database
-import src.db.connection as _db_connection
-import src.web.server as server_module
-from src.web.server import app
-from fastapi.testclient import TestClient
-
-import src.core.enrichment.source as source_module
 import src.core.enrichment.contact_sample as contact_sample_module
+import src.core.enrichment.source as source_module
+import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
+from src import db as database
 from src.core.outreach import (
-    source_contacts,
+    ApifyTimeoutError,
     _normalize_apify_employee,
     _run_apify_actor,
-    ApifyTimeoutError,
     classify_contacts,
-    normalize_linkedin_url,
-    company_slug_candidates,
-    normalize_company_slug,
-    linkedin_company_slug_from_url,
     company_cache_slug,
+    company_slug_candidates,
+    linkedin_company_slug_from_url,
+    normalize_company_slug,
+    normalize_linkedin_url,
+    source_contacts,
 )
 from src.schemas import OutreachSettings
+from src.web.server import app
 
 client = TestClient(app)
 
@@ -499,7 +497,6 @@ def test_contact_toggle_returns_404_for_missing_contact_idx(setup_test_db):
 
 @pytest.mark.asyncio
 async def test_classify_contacts_assigns_russian_speaker_flag(monkeypatch):
-    from src.core.outreach import classify_contacts
     from src.schemas import OutreachSettings
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -516,7 +513,6 @@ async def test_classify_contacts_assigns_russian_speaker_flag(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_classify_contacts_assigns_recruiter_flag(monkeypatch):
-    from src.core.outreach import classify_contacts
     from src.schemas import OutreachSettings
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -533,7 +529,6 @@ async def test_classify_contacts_assigns_recruiter_flag(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
-    from src.core.outreach import classify_contacts
     from src.schemas import OutreachSettings
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -550,7 +545,6 @@ async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_classify_contacts_keeps_all_matching_russian_speakers(monkeypatch):
-    from src.core.outreach import classify_contacts
     from src.schemas import OutreachSettings
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -567,7 +561,6 @@ async def test_classify_contacts_keeps_all_matching_russian_speakers(monkeypatch
 
 @pytest.mark.asyncio
 async def test_classify_contacts_returns_empty_when_llm_returns_no_matches(monkeypatch):
-    from src.core.outreach import classify_contacts
     from src.schemas import OutreachSettings
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")

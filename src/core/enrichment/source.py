@@ -4,6 +4,7 @@ import inspect
 
 from ...db.job_model import coerce_job
 from ...schemas import Job, OutreachSettings
+from .classifier import classify_contacts
 from .contact_sample import (
     CONTACT_SAMPLE_SIZE,
     RECRUITER_SAMPLE_SIZE,
@@ -15,10 +16,7 @@ from .contact_sample import (
     detect_country_from_location,
     normalize_linkedin_url,
     poster_to_apify_item,
-    ApifyTimeoutError,
-    ApifyInfrastructureError,
 )
-from .classifier import classify_contacts
 
 
 async def source_contacts(job: Job, settings=None, log_func=None, meta: dict | None = None) -> list:

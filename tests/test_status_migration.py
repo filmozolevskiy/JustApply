@@ -11,20 +11,20 @@ Covers:
 """
 
 import os
-import sys
 import sqlite3
+import sys
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, add_job, get_jobs, get_job, update_job_status, VALID_STATUSES
+from src.db import VALID_STATUSES, add_job, get_jobs, init_db, update_job_status
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
 
 def _read_html():
-    with open(HTML_PATH, "r", encoding="utf-8") as f:
+    with open(HTML_PATH, encoding="utf-8") as f:
         return f.read()
 
 

@@ -1,8 +1,9 @@
-import asyncio
-import sys
 import os
-from google import genai
+import sys
+
 from dotenv import load_dotenv
+from google import genai
+
 
 def main():
     load_dotenv(override=True)

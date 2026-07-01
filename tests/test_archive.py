@@ -1,13 +1,11 @@
 """Tests for manual archive on Rejected cards — issue #52."""
 import os
 import sys
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_jobs, update_job_status, add_job
+from src.db import add_job, get_jobs, init_db, update_job_status
 from src.db.jobs import archive_job, get_job
-
 
 # ---------------------------------------------------------------------------
 # DB-layer: schema migration
@@ -150,8 +148,8 @@ def test_job_exists_returns_true_for_archived_job(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_archive_endpoint_archives_rejected_job(tmp_path):
-    from fastapi.testclient import TestClient
     import src.db.connection as _db_connection
+    from fastapi.testclient import TestClient
     from src.db import init_db as _init_db
 
     _db_connection.DB_PATH = str(tmp_path / "test.db")
@@ -172,8 +170,8 @@ def test_archive_endpoint_archives_rejected_job(tmp_path):
 
 
 def test_archive_endpoint_rejects_non_rejected_job(tmp_path):
-    from fastapi.testclient import TestClient
     import src.db.connection as _db_connection
+    from fastapi.testclient import TestClient
     from src.db import init_db as _init_db
 
     _db_connection.DB_PATH = str(tmp_path / "test2.db")
@@ -189,8 +187,8 @@ def test_archive_endpoint_rejects_non_rejected_job(tmp_path):
 
 
 def test_archive_endpoint_nonexistent_job(tmp_path):
-    from fastapi.testclient import TestClient
     import src.db.connection as _db_connection
+    from fastapi.testclient import TestClient
     from src.db import init_db as _init_db
 
     _db_connection.DB_PATH = str(tmp_path / "test3.db")

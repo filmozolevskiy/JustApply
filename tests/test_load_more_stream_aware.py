@@ -1,16 +1,17 @@
 """Tests for stream-aware Load More Contacts — preflight endpoint and per-stream pipeline."""
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
 from src.db.cache import get_contact_sample, set_contact_sample
 from src.web.server import app
-from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -24,8 +25,8 @@ def db(tmp_path, monkeypatch):
 
 
 def _make_accepted_job(db, contacts=None, company_url="https://www.linkedin.com/company/acme/"):
-    from src.db.jobs import add_job, enrich_job
     from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.jobs import add_job, enrich_job
     job_id = add_job({
         "title": "QA Engineer",
         "company": "Acme",
@@ -198,8 +199,8 @@ def _make_job_with_per_stream_caches(db, contacts=None, recruiter_pages=1, russi
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_for_recruiters_when_recruiter_short(db):
     """Pipeline calls _run_apify_for_recruiters when recruiters stream is below cap."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_job_with_per_stream_caches(db, contacts=[
         {"name": "Alice", "title": "Recruiter", "url": "", "contacted": False,
          "russian_speaker": False, "is_recruiter": True},
@@ -217,8 +218,8 @@ async def test_pipeline_calls_apify_for_recruiters_when_recruiter_short(db):
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_for_russian_when_russian_short(db):
     """Pipeline calls _run_apify_for_russian_speakers when russian stream is below cap."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_job_with_per_stream_caches(db, contacts=[
         {"name": "Ivan", "title": "Dev", "url": "", "contacted": False,
          "russian_speaker": True, "is_recruiter": False},
@@ -240,8 +241,8 @@ async def test_pipeline_skips_exhausted_stream(db):
     set_contact_sample("acme", [], last_fetch_empty=True, stream="recruiters", db_path=db)
     database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     with patch.object(pipelines_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=[])) as mock_recruiters, \
          patch.object(pipelines_module, "source_contacts", new=AsyncMock(return_value=[])), \
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value={})):
@@ -254,8 +255,8 @@ async def test_pipeline_skips_exhausted_stream(db):
 @pytest.mark.asyncio
 async def test_pipeline_fetches_page_one_when_no_cache(db):
     """Pipeline calls Apify at page 1 when per-stream cache is missing."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_accepted_job(db, contacts=[])
     database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
@@ -271,9 +272,9 @@ async def test_pipeline_fetches_page_one_when_no_cache(db):
 @pytest.mark.asyncio
 async def test_pipeline_appends_to_per_stream_cache(db):
     """Pipeline appends new profiles to the correct per-stream cache entry."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_job_with_per_stream_caches(db, contacts=[], with_russian_cache=False)
     database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 
@@ -306,8 +307,8 @@ async def test_pipeline_raises_when_all_streams_exhausted(db):
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_with_correct_start_page(db):
     """Pipeline passes start_page = pages_fetched + 1 to the stream-specific Apify function."""
-    from src.pipelines import run_load_more_contacts_pipeline
     import src.pipelines as pipelines_module
+    from src.pipelines import run_load_more_contacts_pipeline
     job_id = _make_job_with_per_stream_caches(db, contacts=[], recruiter_pages=3, with_russian_cache=False)
     database.save_outreach_settings(target_recruiters=True, target_russian_speakers=False, db_path=db)
 

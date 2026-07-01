@@ -19,6 +19,7 @@ def db(tmp_path):
 def test_legacy_outreach_message_migrated_on_read(db):
     """Read-time migration: outreachMessage → recruiterOutreachTemplate."""
     import sqlite3
+
     from src.schemas import Job
 
     job_id = database.add_job(

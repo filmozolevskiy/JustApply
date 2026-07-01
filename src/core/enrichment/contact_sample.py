@@ -1,11 +1,12 @@
 """LinkedIn Scraper API integration: Contact Sample fetch via Apify."""
 
+import asyncio
+import inspect
 import os
 import re
 import time
+
 import httpx
-import asyncio
-import inspect
 from dotenv import load_dotenv
 
 

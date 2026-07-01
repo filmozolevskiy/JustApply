@@ -7,7 +7,7 @@ import inspect
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from google.genai import types
 
@@ -102,7 +102,7 @@ async def _create_batch_job_for_chunk(
     job_ids = [job["id"] for job in chunk]
     jsonl_content = build_batch_jsonl(chunk, resume_content)
     display_name = (
-        f"justapply-{kind}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{display_suffix}"
+        f"justapply-{kind}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{display_suffix}"
     )
     batch_name, state = await asyncio.to_thread(
         _submit_jsonl_batch,

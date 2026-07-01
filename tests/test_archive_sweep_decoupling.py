@@ -2,12 +2,10 @@
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_jobs, add_job, update_job_status
-from src.db.jobs import get_job, archive_stale_rejected_jobs
+from src.db import add_job, get_jobs, init_db, update_job_status
+from src.db.jobs import archive_stale_rejected_jobs, get_job
 
 
 def _add_rejected_job(db_str, backdated_days: int) -> int:

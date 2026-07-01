@@ -6,7 +6,7 @@ import asyncio
 import inspect
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .. import db as database
 from ..db import batch_jobs as batch_jobs_db
@@ -18,7 +18,6 @@ from .attribute_gating import (
 )
 from .gemini_client import get_client
 from .matcher import check_recruiter_by_name
-
 
 TERMINAL_FAILURE_STATES = frozenset({
     "JOB_STATE_FAILED",
@@ -52,7 +51,7 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _batch_state_name(batch_job) -> str:
@@ -64,16 +63,16 @@ def _batch_state_name(batch_job) -> str:
 
 def is_due_for_poll(batch_row: dict, *, now: datetime | None = None) -> bool:
     """True when enough time has passed since the last poll for this batch."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     submitted = _parse_iso(batch_row.get("submittedAt"))
     if submitted is None:
         return True
     if submitted.tzinfo is None:
-        submitted = submitted.replace(tzinfo=timezone.utc)
+        submitted = submitted.replace(tzinfo=UTC)
 
     last_polled = _parse_iso(batch_row.get("lastPolledAt"))
     if last_polled and last_polled.tzinfo is None:
-        last_polled = last_polled.replace(tzinfo=timezone.utc)
+        last_polled = last_polled.replace(tzinfo=UTC)
 
     reference = last_polled or submitted
     age_seconds = max(0.0, (now - submitted).total_seconds())
@@ -536,7 +535,7 @@ async def poll_in_flight_batches(
 ) -> list[CollectResult]:
     """Poll every in-flight batch that is due; never submits new batches."""
     results = []
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     for batch_row in batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
         if not is_due_for_poll(batch_row, now=now):
             continue
@@ -556,7 +555,7 @@ def seconds_until_next_poll(
     now: datetime | None = None,
 ) -> int:
     """Seconds until the earliest in-flight batch is due for another poll."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if not batch_rows:
         return 0
 
@@ -567,11 +566,11 @@ def seconds_until_next_poll(
             waits.append(1)
             continue
         if submitted.tzinfo is None:
-            submitted = submitted.replace(tzinfo=timezone.utc)
+            submitted = submitted.replace(tzinfo=UTC)
 
         last_polled = _parse_iso(batch_row.get("lastPolledAt"))
         if last_polled and last_polled.tzinfo is None:
-            last_polled = last_polled.replace(tzinfo=timezone.utc)
+            last_polled = last_polled.replace(tzinfo=UTC)
 
         reference = last_polled or submitted
         age_seconds = max(0.0, (now - submitted).total_seconds())

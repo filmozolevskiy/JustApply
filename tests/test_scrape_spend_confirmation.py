@@ -4,12 +4,11 @@ Client (static): triggerScrapeRun opens spend modal before POST /api/search,
 checkout-receipt layout with live cost recompute, limit sync back to settings.
 """
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from kanban_js import read_dashboard_html, get_script_section
+from kanban_js import get_script_section, read_dashboard_html
 
 
 def _dashboard_script() -> str:

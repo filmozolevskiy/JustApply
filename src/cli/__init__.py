@@ -1,1 +1,1 @@
-from .cli import run_search, run_promote, main, database
+from .cli import main, run_promote, run_search

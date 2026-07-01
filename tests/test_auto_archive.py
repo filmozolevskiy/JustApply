@@ -1,14 +1,11 @@
 """Tests for auto-archive of stale Rejected jobs — issue #53."""
 import os
 import sys
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_jobs, update_job_status, add_job, archive_stale_rejected_jobs
-from src.db.jobs import get_job, archive_job
-import src.db.connection as _db_conn
-
+from src.db import add_job, archive_stale_rejected_jobs, get_jobs, init_db, update_job_status
+from src.db.jobs import archive_job, get_job
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -140,8 +137,8 @@ def test_already_archived_job_not_double_archived(tmp_path):
 
 def test_api_get_jobs_triggers_auto_archive(tmp_path):
     """GET /api/jobs must auto-archive stale rejected jobs before returning results."""
-    from fastapi.testclient import TestClient
     import src.db.connection as _db_connection
+    from fastapi.testclient import TestClient
     from src.db import init_db as _init_db
 
     _db_connection.DB_PATH = str(tmp_path / "test.db")

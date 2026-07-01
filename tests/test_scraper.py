@@ -1,23 +1,22 @@
+import json
 import os
 import sys
+
 import pytest
-import json
-import asyncio
 from fastapi.testclient import TestClient
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src import db as database
 import src.db.connection as _db_connection
-import src.web.server as server_module
-from src.web.server import app
+from src import db as database
 from src.core.scraper import (
-    scrape_linkedin_jobs, 
-    normalize_brightdata_job, 
-    match_company_size, 
     is_eastern_timezone,
+    match_company_size,
     matches_position_keywords,
+    normalize_brightdata_job,
+    scrape_linkedin_jobs,
 )
+from src.web.server import app
 
 client = TestClient(app)
 
@@ -186,7 +185,7 @@ def test_api_search_and_sse_logs():
 def test_api_logs_replay_reconnection():
     # Create a task state manually in active_tasks
     task_id = "test-reconnect-task-id"
-    from src.web.server import active_tasks, TaskState
+    from src.web.server import TaskState, active_tasks
     
     state = TaskState({"query": "test"})
     # Manually append some logs
@@ -224,7 +223,7 @@ def test_api_logs_replay_reconnection():
 
 @pytest.mark.asyncio
 async def test_scraper_trigger_fails_immediately(monkeypatch):
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     # Configure environment so we enter the real path
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
@@ -253,7 +252,7 @@ async def test_scraper_trigger_fails_immediately(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     # Configure environment
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
@@ -301,8 +300,8 @@ async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
             return mock_snapshot_resp
         raise Exception(f"Unexpected GET URL: {url}")
         
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
-         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get) as mock_get_patched, \
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get), \
          patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
          
         jobs = await scrape_linkedin_jobs(
@@ -323,7 +322,7 @@ async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scraper_polling_fails_persistently(monkeypatch):
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     # Configure environment
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
@@ -338,7 +337,7 @@ async def test_scraper_polling_fails_persistently(monkeypatch):
     mock_progress_fail.status_code = 500
     mock_progress_fail.text = "Persistent progress error"
     
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
          patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_progress_fail) as mock_get_patched, \
          patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
          
@@ -358,7 +357,7 @@ async def test_scraper_polling_fails_persistently(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     # Configure environment
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
@@ -404,9 +403,9 @@ async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
                 return mock_snapshot_success
         raise Exception(f"Unexpected GET URL: {url}")
         
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
-         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get) as mock_get_patched, \
-         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get), \
+         patch("asyncio.sleep", new_callable=AsyncMock):
          
         jobs = await scrape_linkedin_jobs(
             query="QA Engineer",
@@ -423,7 +422,7 @@ async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     # Configure environment
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
@@ -452,9 +451,9 @@ async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
             return mock_snapshot_fail
         raise Exception(f"Unexpected GET URL: {url}")
         
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp) as mock_post, \
-         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get) as mock_get_patched, \
-         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_post_resp), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=mock_get), \
+         patch("asyncio.sleep", new_callable=AsyncMock):
          
         with pytest.raises(Exception) as excinfo:
             await scrape_linkedin_jobs(
@@ -470,7 +469,7 @@ async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
 
@@ -531,7 +530,7 @@ async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
 @pytest.mark.asyncio
 async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
     """'running' repeated three times before 'ready' — 'Scraper status: running' logged once."""
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
 
@@ -579,7 +578,7 @@ async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
 @pytest.mark.asyncio
 async def test_scraper_poll_logs_failed_status_once(monkeypatch):
     """'failed' scraper status is logged once when status transitions to failed."""
-    from unittest.mock import patch, MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock, patch
     monkeypatch.setenv("MOCK_SCRAPER", "false")
     monkeypatch.setenv("BRIGHTDATA_API_KEY", "fake_key")
 

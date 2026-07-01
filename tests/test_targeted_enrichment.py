@@ -1,15 +1,15 @@
-import asyncio
-import unittest
-from unittest.mock import AsyncMock, patch, MagicMock
-import sys
 import os
+import sys
+import unittest
+from unittest.mock import patch
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.core.enrichment.source import source_contacts
-from src.schemas import Job, OutreachSettings, Contact
 from src.core.enrichment.contact_sample import company_cache_slug
+from src.core.enrichment.source import source_contacts
+from src.schemas import Job, OutreachSettings
+
 
 class TestTargetedEnrichmentCaching(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

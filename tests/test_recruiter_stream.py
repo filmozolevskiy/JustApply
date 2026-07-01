@@ -6,25 +6,26 @@ at 3 Recruiters.
 """
 import os
 import sys
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import src.db.connection as _db_connection
 import src.core.enrichment.source as source_module
+import src.db.connection as _db_connection
 from src import db as database
-from src.db.cache import (
-    get_contact_sample,
-    set_contact_sample,
-    delete_contact_sample,
-    append_contact_sample,
-)
 from src.core.enrichment.contact_sample import (
     RECRUITER_FUNCTION_IDS,
     RECRUITER_SAMPLE_SIZE,
 )
 from src.core.outreach import source_contacts
+from src.db.cache import (
+    append_contact_sample,
+    delete_contact_sample,
+    get_contact_sample,
+    set_contact_sample,
+)
 from src.schemas import OutreachSettings
 
 
@@ -271,8 +272,9 @@ async def test_recruiter_only_logs_stream_name(db, recruiter_only_settings):
 async def test_classifier_keeps_all_recruiters():
     """Classifier keeps all Recruiter contacts regardless of input size."""
     import json
-    from src.core.enrichment.classifier import classify_contacts
+
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": f"HR{i}", "lastName": "Person", "headline": "Recruiter",
@@ -294,8 +296,9 @@ async def test_classifier_keeps_all_recruiters():
 async def test_classifier_keeps_all_russian_speakers():
     """Classifier keeps all Russian Speaker contacts."""
     import json
-    from src.core.enrichment.classifier import classify_contacts
+
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": f"RU{i}", "lastName": "Person", "headline": "Engineer",

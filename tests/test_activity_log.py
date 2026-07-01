@@ -1,11 +1,10 @@
 """Tests for Job Activity Log DB behavior."""
 import os
 import sys
-import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, add_job, get_jobs, update_job_status, enrich_job
+from src.db import add_job, enrich_job, get_jobs, init_db, update_job_status
 from src.db.jobs import update_contact_status
 
 

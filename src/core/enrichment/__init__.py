@@ -1,21 +1,21 @@
 """Enrichment: Contact Sample sourcing, classification, and Connection Note generation."""
 
+from .classifier import _normalize_apify_employee, classify_contacts, normalize_apify_employee
 from .connection_note import (
     FIT_LINE,
     RECRUITER_CTA,
     RUSSIAN_SPEAKER_CTA,
     complete_outreach_fallback_template,
-    generate_connection_note_template,
     generate_complete_outreach_template,
+    generate_connection_note_template,
     generate_outreach_templates,
     minimal_fallback_template,
 )
-from .classifier import classify_contacts, normalize_apify_employee, _normalize_apify_employee
 from .contact_sample import (
-    ApifyTimeoutError,
     CONTACT_SAMPLE_SIZE,
     RECRUITER_FUNCTION_IDS,
     RECRUITER_SAMPLE_SIZE,
+    ApifyTimeoutError,
     _fetch_apify_employees_at_url,
     _run_apify_actor,
     _run_apify_for_company_page,
@@ -29,8 +29,8 @@ from .contact_sample import (
     normalize_linkedin_url,
     poster_to_apify_item,
 )
+from .coordinator import abort_enrichment, begin_enrichment, clear_enrichment_prior
 from .source import source_contacts
-from .coordinator import begin_enrichment, abort_enrichment, clear_enrichment_prior
 
 __all__ = [
     "FIT_LINE",

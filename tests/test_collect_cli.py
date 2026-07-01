@@ -1,8 +1,8 @@
 import json
 import os
 import sys
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -138,7 +138,7 @@ async def test_collect_works_while_evaluation_lock_active(tmp_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_collect_wait_loops_until_terminal(tmp_db, monkeypatch):
     job_id = _seed_scraped_job(tmp_db)
-    batch_row = batch_jobs.create_batch_job(
+    batch_jobs.create_batch_job(
         batch_name="batches/wait-loop",
         display_name="wait-loop",
         state="JOB_STATE_RUNNING",
@@ -146,7 +146,7 @@ async def test_collect_wait_loops_until_terminal(tmp_db, monkeypatch):
         job_ids=[job_id],
         search_remote_types=["remote"],
         search_seniorities="any",
-        submitted_at=datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat(),
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
         db_path=str(tmp_db),
     )
 

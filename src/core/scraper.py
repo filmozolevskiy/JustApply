@@ -1,7 +1,8 @@
+import asyncio
+import json
 import os
 import re
-import json
-import asyncio
+
 import httpx
 from dotenv import load_dotenv
 
@@ -506,7 +507,7 @@ async def scrape_linkedin_jobs(
     # Post-filtering phase
     await log(f"Processing and filtering {len(raw_jobs)} raw results...", "info")
     
-    keywords = get_keywords_for_position(query)
+    get_keywords_for_position(query)
     filtered_jobs = []
 
     for raw_job in raw_jobs:

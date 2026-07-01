@@ -4,7 +4,7 @@ HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboa
 
 
 def _read_html():
-    with open(HTML_PATH, "r", encoding="utf-8") as f:
+    with open(HTML_PATH, encoding="utf-8") as f:
         return f.read()
 
 

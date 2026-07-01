@@ -1,13 +1,14 @@
 """Tests for per-stream cache behavior in run_reclassify_pipeline (issue #76)."""
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import db as database
 import src.db.connection as _db_connection
+from src import db as database
 
 
 @pytest.fixture
@@ -19,8 +20,8 @@ def db(tmp_path, monkeypatch):
 
 
 def _make_accepted_job(db):
-    from src.db.jobs import add_job, enrich_job
     from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.jobs import add_job, enrich_job
     job_id = add_job({
         "title": "QA Engineer",
         "company": "Acme",
@@ -43,10 +44,10 @@ def _make_accepted_job(db):
 @pytest.mark.asyncio
 async def test_reclassify_recruiter_stream_cache_hit_no_apify(db):
     """Re-classify with recruiter-only settings + cached recruiters stream → no Apify."""
-    from src.pipelines import run_reclassify_pipeline
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     from src.db.settings import save_outreach_settings
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
@@ -78,10 +79,10 @@ async def test_reclassify_recruiter_stream_cache_hit_no_apify(db):
 @pytest.mark.asyncio
 async def test_reclassify_russian_stream_cache_hit_no_apify(db):
     """Re-classify with russian-only settings + cached russian stream → no Apify."""
-    from src.pipelines import run_reclassify_pipeline
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     from src.db.settings import save_outreach_settings
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
@@ -113,10 +114,10 @@ async def test_reclassify_russian_stream_cache_hit_no_apify(db):
 @pytest.mark.asyncio
 async def test_reclassify_dual_audience_both_caches_no_apify(db):
     """Re-classify with both toggles on + both stream caches present → no Apify."""
-    from src.pipelines import run_reclassify_pipeline
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     from src.db.settings import save_outreach_settings
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
@@ -156,8 +157,8 @@ async def test_reclassify_dual_audience_both_caches_no_apify(db):
 @pytest.mark.asyncio
 async def test_reclassify_recruiter_settings_no_recruiter_cache_template_only(db):
     """Re-classify with recruiter-only settings + no cached recruiters stream → template-only."""
-    from src.pipelines import run_reclassify_pipeline
     from src.db.settings import save_outreach_settings
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = _make_accepted_job(db)
     save_outreach_settings(target_russian_speakers=False, target_recruiters=True, db_path=db)
@@ -178,10 +179,10 @@ async def test_reclassify_recruiter_settings_no_recruiter_cache_template_only(db
 @pytest.mark.asyncio
 async def test_reclassify_both_toggles_off_uses_legacy_stream_cache(db):
     """Re-classify with both toggles off uses legacy stream='' cache for cache check."""
-    from src.pipelines import run_reclassify_pipeline
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     from src.db.settings import save_outreach_settings
+    from src.pipelines import run_reclassify_pipeline
 
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")

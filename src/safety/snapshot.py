@@ -10,7 +10,6 @@ This module intentionally depends only on the standard library so it can be
 imported from a hook subprocess without dragging in the rest of the app.
 """
 
-import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path

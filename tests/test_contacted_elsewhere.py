@@ -1,6 +1,5 @@
 """Tests for Contacted Elsewhere cross-job outreach warnings."""
 
-import json
 import os
 import sys
 
@@ -9,7 +8,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
-
 from src.db import add_job, get_job, get_jobs, init_db, update_contact_status
 from src.db import connection as _db_connection
 from src.db.contacted_elsewhere import (

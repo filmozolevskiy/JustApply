@@ -7,8 +7,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_jobs, add_job
 import src.db.connection as _connection
+from src.db import add_job, get_jobs, init_db
 from src.safety import gate, snapshot
 
 _REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")

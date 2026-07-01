@@ -7,19 +7,20 @@ classifies the combined batch once, and applies caps:
   - up to 3 Recruiters
 Dual-classified contacts count toward the Recruiter cap only.
 """
+import json
 import os
 import sys
-import json
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import src.db.connection as _db_connection
 import src.core.enrichment.source as source_module
+import src.db.connection as _db_connection
 from src import db as database
-from src.db.cache import get_contact_sample, set_contact_sample
 from src.core.outreach import source_contacts
+from src.db.cache import get_contact_sample, set_contact_sample
 from src.schemas import OutreachSettings
 
 
@@ -258,8 +259,8 @@ async def test_dual_audience_deduplicates_overlapping_profiles(db, dual_settings
 @pytest.mark.asyncio
 async def test_dual_audience_keeps_all_recruiters():
     """Classifier with both toggles on keeps all Recruiters."""
-    from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": f"HR{i}", "lastName": "P", "headline": "Recruiter",
@@ -281,8 +282,8 @@ async def test_dual_audience_keeps_all_recruiters():
 @pytest.mark.asyncio
 async def test_dual_audience_keeps_all_non_hr_russian():
     """Classifier with both toggles on keeps all non-HR Russian Speakers."""
-    from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": f"RU{i}", "lastName": "P", "headline": "Engineer",
@@ -305,8 +306,8 @@ async def test_dual_audience_keeps_all_non_hr_russian():
 @pytest.mark.asyncio
 async def test_dual_audience_dual_classified_counts_toward_recruiter_only():
     """A dual-classified contact counts toward Recruiter only; Russian Speaker pool excludes recruiters."""
-    from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     # 1 dual-classified + 5 pure Russian speakers
     items = [
@@ -340,8 +341,8 @@ async def test_dual_audience_dual_classified_counts_toward_recruiter_only():
 @pytest.mark.asyncio
 async def test_dual_audience_dual_classified_appears_once_in_output():
     """A dual-classified contact appears exactly once in the result list."""
-    from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": "Dual", "headline": "HR Russian", "linkedinUrl": "/in/dual",

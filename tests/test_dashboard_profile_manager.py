@@ -3,7 +3,7 @@
 import os
 import re
 
-from tests.kanban_js import get_script_section, read_dashboard_html
+from tests.kanban_js import get_script_section
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 

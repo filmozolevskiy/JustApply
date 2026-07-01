@@ -1,8 +1,9 @@
-import os
-import json
 import asyncio
 import inspect
+import json
+import os
 import re
+
 from dotenv import load_dotenv
 
 from .gemini_client import generate_text as gemini_generate_text
@@ -33,7 +34,7 @@ def load_resume(name: str) -> str:
     filepath = os.path.join(RESUMES_DIR, name)
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Resume not found: {name}")
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         return f.read()
 
 

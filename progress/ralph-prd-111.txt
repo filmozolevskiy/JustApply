@@ -6,3 +6,9 @@
 - Updated README setup: `pip install -e ".[dev]"` for contributors, runtime-only `pip install -e .`, documented pin policy (no lock file).
 - Tests: 817 passed.
 - Commit: e8211ea
+
+## #126 — Add Ruff lint gate with baseline passing on src/
+- Added `[tool.ruff]` to `pyproject.toml`: py311 target, line-length 100, E/F/I/UP rules with E501 deferred; per-file ignores for `__init__.py` re-exports and `cli.py` load_dotenv import order.
+- Auto-fixed unused imports, import sorting, and pyupgrade-safe modernizations across `src/` and `tests/`; removed stale `database` re-export from `src/cli/__init__.py`.
+- Documented `ruff check src tests` in README (Quality checks) and CLAUDE.md command table.
+- Tests: 817 passed; `ruff check src tests` exits 0.

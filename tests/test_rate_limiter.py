@@ -1,11 +1,11 @@
-import pytest
 from unittest.mock import patch
-from fastapi.testclient import TestClient
 
-from src.web.server import app
-from src.cli import run_search
+import pytest
 import src.rate_limiter as rate_limiter_module
+from fastapi.testclient import TestClient
+from src.cli import run_search
 from src.rate_limiter import RateLimiter, RateLimitError
+from src.web.server import app
 
 client = TestClient(app)
 

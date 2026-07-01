@@ -1,4 +1,5 @@
-from typing import Literal, Optional
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -33,7 +34,7 @@ class Contact(BaseModel):
 
 
 class Job(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     title: str
     company: str
     companyUrl: str = ""

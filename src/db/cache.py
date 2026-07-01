@@ -1,7 +1,7 @@
 """Contact Sample Cache — per-company, per-stream store of raw Apify profiles."""
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import connection
 
@@ -58,7 +58,7 @@ def set_contact_sample(
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             company_slug, stream, json.dumps(profiles),
-            datetime.now(timezone.utc).isoformat(), display_name, pages_fetched,
+            datetime.now(UTC).isoformat(), display_name, pages_fetched,
             1 if last_fetch_empty else 0,
         ),
     )

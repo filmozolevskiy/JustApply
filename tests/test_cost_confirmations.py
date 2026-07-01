@@ -6,14 +6,15 @@ Client (static): enrichJob confirms on cache miss, loadMoreContacts always confi
 """
 import os
 import sys
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import db as database
 import src.db.connection as _db_connection
-from src.web.server import app
 from fastapi.testclient import TestClient
+from src import db as database
+from src.web.server import app
 
 client = TestClient(app)
 
@@ -27,8 +28,8 @@ def db(tmp_path, monkeypatch):
 
 
 def _make_accepted_job(db, company="Acme", company_url="https://www.linkedin.com/company/acme/"):
-    from src.db.jobs import add_job
     from src.core.enrichment.coordinator import begin_enrichment
+    from src.db.jobs import add_job
     job_id = add_job({"title": "QA", "company": company, "companyUrl": company_url, "status": "scraped"}, db_path=db)
     begin_enrichment(job_id, db)
     return job_id
@@ -50,8 +51,8 @@ def test_cache_status_returns_has_cache_false_when_no_cache(db):
 
 
 def test_cache_status_returns_has_cache_true_when_all_active_streams_cached(db):
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
     set_contact_sample(slug, [{"name": "Alice"}], pages_fetched=2, stream="recruiters", db_path=db)
@@ -79,8 +80,8 @@ def test_cache_status_billable_streams_both_on_full_cache_miss(db):
 
 
 def test_cache_status_partial_cache_hit_only_uncached_stream_billable(db):
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
     set_contact_sample(slug, [{"name": "Alice"}], stream="recruiters", db_path=db)
@@ -101,8 +102,8 @@ def test_cache_status_estimated_cost_two_runs(db):
 
 
 def test_cache_status_estimated_cost_one_run(db):
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
     set_contact_sample(slug, [{"name": "Alice"}], stream="recruiters", db_path=db)
@@ -220,8 +221,8 @@ def test_cache_status_will_call_apify_true_when_company_url_set_and_no_cache(db)
 
 
 def test_cache_status_will_call_apify_false_when_all_active_streams_cached(db):
-    from src.db.cache import set_contact_sample
     from src.core.enrichment.contact_sample import company_cache_slug
+    from src.db.cache import set_contact_sample
     job_id = _make_accepted_job(db)
     slug = company_cache_slug("Acme", "https://www.linkedin.com/company/acme/")
     set_contact_sample(slug, [{"name": "Bob"}], stream="recruiters", db_path=db)

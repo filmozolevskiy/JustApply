@@ -1,12 +1,11 @@
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi.testclient import TestClient
 import src.web.server as server_module
+from fastapi.testclient import TestClient
 from src.web.server import app
 
 client = TestClient(app)

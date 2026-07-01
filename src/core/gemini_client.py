@@ -3,9 +3,9 @@
 import asyncio
 import os
 
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 DEFAULT_TIMEOUT_SECONDS = 30.0

@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from unittest.mock import AsyncMock, patch
@@ -9,7 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src import db as database
 from src.pipelines import run_reassess_pipeline
-from src.service.just_apply import reassess_all_jobs, reassess_job
+from src.service.just_apply import reassess_all_jobs
 
 
 @pytest.fixture
@@ -102,7 +101,7 @@ async def test_reassess_all_jobs(tmp_db):
         "src.pipelines.evaluate_job",
         new=AsyncMock(return_value=evaluation),
     ):
-        updated = await reassess_all_jobs(log_func=lambda m, l="info": None)
+        updated = await reassess_all_jobs(log_func=lambda m, level="info": None)
 
     by_id = {j.id: j for j in updated}
     assert by_id[id1].matchScore == 75

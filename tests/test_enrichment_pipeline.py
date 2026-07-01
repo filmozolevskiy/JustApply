@@ -1,12 +1,13 @@
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, get_job, enrich_job
 from src.core.enrichment.coordinator import begin_enrichment
+from src.db import enrich_job, get_job, init_db
 
 
 def _enriching_job(db, job_id=1):

@@ -6,10 +6,10 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import db as database
 import src.db.connection as _db_connection
-from src.web.server import app
 from fastapi.testclient import TestClient
+from src import db as database
+from src.web.server import app
 
 client = TestClient(app)
 

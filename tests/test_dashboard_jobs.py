@@ -1,14 +1,14 @@
 import os
 import sys
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import db as database
 import src.db.connection as _db_connection
-import src.web.server as server_module
+from src import db as database
 from src.web.server import app
 
 client = TestClient(app)
@@ -154,9 +154,10 @@ def test_post_job_enrich_nonexistent():
 
 @pytest.mark.asyncio
 async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_db):
-    from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
-    from src.core.enrichment.coordinator import begin_enrichment
     import uuid
+
+    from src.core.enrichment.coordinator import begin_enrichment
+    from src.web.server import TaskState, active_tasks, run_enrichment_task_with_logs
     begin_enrichment(1, setup_test_db)
     task_id = str(uuid.uuid4())
     state = TaskState({"job_id": 1})
@@ -178,8 +179,9 @@ async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_
 
 @pytest.mark.asyncio
 async def test_run_enrichment_task_with_logs_noop_for_missing_job():
-    from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
     import uuid
+
+    from src.web.server import TaskState, active_tasks, run_enrichment_task_with_logs
     task_id = str(uuid.uuid4())
     state = TaskState({"job_id": 99999})
     active_tasks[task_id] = state
@@ -228,9 +230,10 @@ def test_put_template_endpoint_nonexistent_job():
 @pytest.mark.asyncio
 async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
     """Failed enrichment task leaves job in Accepted (abort is a no-op)."""
-    from src.web.server import run_enrichment_task_with_logs, TaskState, active_tasks
-    from src.core.enrichment.coordinator import begin_enrichment
     import uuid
+
+    from src.core.enrichment.coordinator import begin_enrichment
+    from src.web.server import TaskState, active_tasks, run_enrichment_task_with_logs
 
     begin_enrichment(1, setup_test_db)
     task_id = str(uuid.uuid4())

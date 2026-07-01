@@ -1,6 +1,6 @@
 """PRD #105: explicit Post/Cancel for Job Comment and Outreach Message Template."""
 
-from kanban_js import load_kanban_js, read_drawer_controller
+from kanban_js import read_drawer_controller
 
 
 def _drawer():

@@ -1,13 +1,11 @@
+import argparse
 import asyncio
 import sys
-import argparse
-import os
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from .. import db as database
 from ..core.evaluation_lock import EvaluationLockError
 from ..service import (
     RateLimitError,

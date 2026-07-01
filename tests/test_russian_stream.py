@@ -4,27 +4,28 @@ Issue #75: Russian-only enrichment path uses (company_slug, 'russian') cache key
 calls Apify with Russian search + HR exclusion filters and maxItems=5, and caps contacts
 at 5 Russian Speakers who are not Recruiters.
 """
+import json
 import os
 import sys
-import json
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import src.db.connection as _db_connection
 import src.core.enrichment.source as source_module
+import src.db.connection as _db_connection
 from src import db as database
+from src.core.enrichment.contact_sample import (
+    RUSSIAN_EXCLUDE_FUNCTION_IDS,
+    RUSSIAN_SAMPLE_SIZE,
+    RUSSIAN_SEARCH_QUERY,
+)
+from src.core.outreach import source_contacts
 from src.db.cache import (
     get_contact_sample,
     set_contact_sample,
 )
-from src.core.enrichment.contact_sample import (
-    RUSSIAN_SAMPLE_SIZE,
-    RUSSIAN_SEARCH_QUERY,
-    RUSSIAN_EXCLUDE_FUNCTION_IDS,
-)
-from src.core.outreach import source_contacts
 from src.schemas import OutreachSettings
 
 
@@ -224,8 +225,8 @@ async def test_russian_only_logs_stream_name(db, russian_only_settings):
 @pytest.mark.asyncio
 async def test_russian_speaker_non_recruiter_keeps_all_matches():
     """Classifier keeps all non-HR Russian Speaker contacts in Russian-only mode."""
-    from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": f"RU{i}", "lastName": "Person", "headline": "Engineer",
@@ -247,8 +248,8 @@ async def test_russian_speaker_non_recruiter_keeps_all_matches():
 @pytest.mark.asyncio
 async def test_recruiter_classified_excluded_from_russian_pool():
     """Profiles classified as Recruiter are excluded from the Russian Speaker pool."""
-    from src.core.enrichment.classifier import classify_contacts
     import src.core.gemini_client as gemini_mod
+    from src.core.enrichment.classifier import classify_contacts
 
     items = [
         {"firstName": f"RU{i}", "lastName": "Person", "headline": "Engineer",
@@ -276,8 +277,8 @@ async def test_recruiter_classified_excluded_from_russian_pool():
 @pytest.mark.asyncio
 async def test_apify_input_for_russian_speakers():
     """_run_apify_for_russian_speakers sends searchQuery=Russian and excludeFunctionIds=['12']."""
-    from src.core.enrichment.contact_sample import _run_apify_for_russian_speakers
     import src.core.enrichment.contact_sample as contact_sample_mod
+    from src.core.enrichment.contact_sample import _run_apify_for_russian_speakers
 
     captured_inputs = []
 

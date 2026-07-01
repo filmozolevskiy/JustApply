@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, add_job, get_job
+from src.db import add_job, get_job, init_db
 
 
 def _fresh_db(tmp_path):
@@ -58,7 +58,7 @@ def test_begin_enrichment_is_idempotent_no_duplicate_activity_log(tmp_path):
 
 def test_abort_enrichment_leaves_job_accepted(tmp_path):
     """abort_enrichment on an Accepted job keeps it Accepted."""
-    from src.core.enrichment.coordinator import begin_enrichment, abort_enrichment
+    from src.core.enrichment.coordinator import abort_enrichment, begin_enrichment
 
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme", "status": "scraped"}, db_str)
@@ -74,7 +74,6 @@ def test_abort_enrichment_leaves_job_accepted(tmp_path):
 @pytest.mark.asyncio
 async def test_pipeline_rejects_non_accepted_job():
     """run_enrichment_pipeline assumes accepted status; coordinator owns transitions."""
-    from unittest.mock import patch
     from src.pipelines import run_enrichment_pipeline
 
     job = {

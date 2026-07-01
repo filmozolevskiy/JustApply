@@ -1,26 +1,21 @@
-import asyncio
 import inspect
 
 from . import db as database
-from .core.scraper import scrape_linkedin_jobs
-from .core.matcher import load_resume, evaluate_job, check_recruiter_by_name
-from .core.batch_evaluation import submit_batch_evaluation, submit_backfill_batches
-from .core.enrichment import source_contacts, generate_outreach_templates, company_cache_slug
-from .core.enrichment.contact_sample import detect_country_from_location
-from .core.enrichment.coordinator import clear_enrichment_prior
+from .core.attribute_gating import (
+    merge_job_attributes,
+)
+from .core.batch_evaluation import submit_backfill_batches, submit_batch_evaluation
+from .core.enrichment import company_cache_slug, generate_outreach_templates, source_contacts
 from .core.enrichment.contact_sample import (
-    _run_apify_actor,
     _run_apify_for_recruiters,
     _run_apify_for_russian_speakers,
+    detect_country_from_location,
 )
-from .core.attribute_gating import (
-    is_unclassified,
-    merge_job_attributes,
-    passes_attribute_gate,
-    format_attribute_mismatch,
-)
-from .schemas import Job, OutreachSettings
+from .core.enrichment.coordinator import clear_enrichment_prior
+from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
+from .core.scraper import scrape_linkedin_jobs
 from .db.job_model import coerce_job
+from .schemas import Job, OutreachSettings
 
 
 async def run_search_pipeline(
@@ -254,7 +249,7 @@ async def run_reassess_pipeline(
         try:
             resume_content = load_resume("general_cv.md")
             active_resume = "general_cv.md"
-            await log(f"Resume not found, falling back to general_cv.md", "warning")
+            await log("Resume not found, falling back to general_cv.md", "warning")
         except FileNotFoundError:
             raise ValueError("No resume profile found for reassessment")
 
@@ -432,12 +427,12 @@ async def run_reclassify_pipeline(job_id: int, log_func=None) -> Job:
 
 async def run_load_more_contacts_pipeline(job_id: int, log_func=None) -> Job:
     """Fetch next Apify page for billable streams, append to per-stream cache, and re-classify."""
-    from .db.cache import get_contact_sample, append_contact_sample
     from .core.enrichment.contact_sample import (
         company_cache_slug,
-        resolve_load_more_streams,
         detect_country_from_location,
+        resolve_load_more_streams,
     )
+    from .db.cache import append_contact_sample, get_contact_sample
 
     job = database.get_job(job_id)
     if not job:

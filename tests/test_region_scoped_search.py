@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import db as database
 import src.db.connection as _db_connection
+from src import db as database
 from src.core.regions import clamp_per_region_limit, validate_search_regions
 from src.core.scraper import scrape_linkedin_jobs
 from src.web.server import app
