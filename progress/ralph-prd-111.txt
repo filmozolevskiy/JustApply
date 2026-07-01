@@ -26,4 +26,4 @@
 - Added `[tool.pytest.ini_options]` (`asyncio_mode = auto`), `[tool.coverage.run]` (source `src`, omit dashboard HTML/JS), and `[tool.coverage.report]` (`fail_under = 84`) to `pyproject.toml`.
 - Documented `pytest tests/ --cov=src --cov-report=term-missing` in README Quality checks and CLAUDE.md command table.
 - Tests: 817 passed with coverage gate; threshold 84% reached (84.61%).
-- Commit: (pending)
+- Commit: e5cdd23
