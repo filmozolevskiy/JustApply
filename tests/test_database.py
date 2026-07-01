@@ -6,7 +6,7 @@ import pytest
 # Add root directory to path to import database
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.db import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, start_enrichment, enrich_job
+from src.db import init_db, get_jobs, update_job_status, add_job, VALID_STATUSES, enrich_job
 
 def test_database_lifecycle(tmp_path):
     test_db = tmp_path / "test_just_apply.db"
@@ -192,24 +192,6 @@ def test_job_exists(tmp_path):
         link="https://some-new-link.com",
         db_path=db_str
     ) is False
-
-
-def test_start_enrichment(tmp_path):
-    db_str = str(tmp_path / "test_just_apply.db")
-    init_db(db_str)
-
-    updated = start_enrichment(1, db_str)
-    assert updated is not None
-    assert updated.status == "accepted"
-
-    job = next(j for j in get_jobs(db_str) if j.id == 1)
-    assert job.status == "accepted"
-
-
-def test_start_enrichment_nonexistent(tmp_path):
-    db_str = str(tmp_path / "test_just_apply.db")
-    init_db(db_str)
-    assert start_enrichment(999, db_str) is None
 
 
 def test_enrich_job_persists_contacts_and_message(tmp_path):

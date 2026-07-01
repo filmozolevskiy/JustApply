@@ -210,10 +210,6 @@ def get_job(job_id, db_path=None):
     return parse_job_row_enriched(row, db_path=db_path)
 
 
-def start_enrichment(job_id, db_path=None):
-    return update_job_status(job_id, "accepted", db_path)
-
-
 def enrich_job(
     job_id,
     contacts,

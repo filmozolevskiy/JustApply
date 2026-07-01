@@ -196,15 +196,13 @@ async def test_run_enrichment_pipeline_runs_when_already_accepted():
     )
     enriched = Job(**{**job.model_dump(), "status": "accepted", "outreachMessage": "Hi"})
 
-    with patch("src.pipelines.database.start_enrichment") as mock_start, \
-         patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
+    with patch("src.pipelines.source_contacts", new=AsyncMock(return_value=[])), \
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value={"recruiter": "Hi", "russian_speaker": ""})), \
          patch("src.pipelines.database.enrich_job", return_value=enriched), \
          patch("src.pipelines.database.get_outreach_settings", return_value={"target_russian_speakers": True, "target_recruiters": True}):
 
         result = await run_enrichment_pipeline(job)
 
-    mock_start.assert_not_called()
     assert result.status == "accepted"
 
 

@@ -5,7 +5,7 @@ import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from src.db import init_db, add_job, get_jobs, update_job_status, start_enrichment, enrich_job
+from src.db import init_db, add_job, get_jobs, update_job_status, enrich_job
 from src.db.jobs import update_contact_status
 
 

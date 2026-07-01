@@ -10,7 +10,6 @@ from .jobs import (
     update_job_comment,
     update_contact_status,
     get_job,
-    start_enrichment,
     enrich_job,
     job_exists,
     update_job_evaluation,

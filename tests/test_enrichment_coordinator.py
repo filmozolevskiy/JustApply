@@ -72,7 +72,7 @@ def test_abort_enrichment_leaves_job_accepted(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_does_not_call_start_enrichment():
+async def test_pipeline_rejects_non_accepted_job():
     """run_enrichment_pipeline assumes accepted status; coordinator owns transitions."""
     from unittest.mock import patch
     from src.pipelines import run_enrichment_pipeline
@@ -85,8 +85,6 @@ async def test_pipeline_does_not_call_start_enrichment():
         "contacts": [],
     }
 
-    with patch("src.pipelines.database.start_enrichment") as mock_start:
-        result = await run_enrichment_pipeline(job)
+    result = await run_enrichment_pipeline(job)
 
-    mock_start.assert_not_called()
     assert result is None
