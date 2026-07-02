@@ -44,9 +44,6 @@ from ..service import (
     search_jobs,
 )
 
-# Initialize SQLite database
-init_db()
-
 app = FastAPI(title="JustApply")
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
@@ -89,10 +86,11 @@ async def run_batch_poller_loop():
 
 
 @app.on_event("startup")
-async def start_batch_poller():
+async def start_application():
     global batch_poller_queue, _batch_poller_task
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
+    init_db()
     batch_poller_queue = asyncio.Queue()
     _batch_poller_task = asyncio.create_task(run_batch_poller_loop())
 

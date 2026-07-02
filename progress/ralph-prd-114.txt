@@ -1,0 +1,13 @@
+# Ralph Loop Progress — PRD #114
+
+Started: 2026-07-02
+Parent PRD: #114 (Kanban Dashboard Maintainability)
+Queue: 7 ready-for-agent issues (#131–#137)
+
+## #131 — Move Job Tracker Database init to FastAPI startup and add health smoke test
+- Removed module-import `init_db()` from `src/web/server.py`; runs in startup hook alongside Batch Poller (skipped under pytest via `PYTEST_CURRENT_TEST`)
+- Added `tests/test_server_lifecycle.py`: import does not init DB, `/api/health` smoke test, startup creates jobs table
+- Quality gates: ruff, mypy, pytest (820 passed, 84.47% coverage)
+- Closed #131
+
+Remaining queue: #132–#137
