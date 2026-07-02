@@ -6,7 +6,20 @@ temp_linkedin/
 
 # Python
 __pycache__/
+*.py[cod]
+*$py.class
 .venv/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Test / lint / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Node
 node_modules/
