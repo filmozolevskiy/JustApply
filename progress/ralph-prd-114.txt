@@ -11,3 +11,12 @@ Queue: 7 ready-for-agent issues (#131–#137)
 - Closed #131
 
 Remaining queue: #132–#137
+
+## #132 — Remove sys.path hacks from dashboard web entrypoints
+- Removed `sys.path.insert` from `src/web/server.py` and `src/web/run_dashboard.py`; package-relative imports already resolve via `python3 -m src.web.run_dashboard`
+- Simplified `run_dashboard.py` to use `Path(__file__).resolve().parents[2]` for reload dirs
+- Added `test_web_modules_do_not_mutate_sys_path` in `tests/test_server_lifecycle.py`
+- Quality gates: ruff, mypy, pytest (821 passed, 84.67% coverage)
+- Closed #132
+
+Remaining queue: #133–#137

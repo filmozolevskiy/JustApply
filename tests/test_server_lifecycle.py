@@ -58,3 +58,12 @@ def test_import_server_module_does_not_call_init_db():
     with patch("src.db.init_db") as mock_init:
         importlib.import_module("src.web.server")
         mock_init.assert_not_called()
+
+
+def test_web_modules_do_not_mutate_sys_path():
+    path_before = list(sys.path)
+    for module_name in ("src.web.server", "src.web.run_dashboard"):
+        sys.modules.pop(module_name, None)
+    importlib.import_module("src.web.server")
+    importlib.import_module("src.web.run_dashboard")
+    assert sys.path == path_before

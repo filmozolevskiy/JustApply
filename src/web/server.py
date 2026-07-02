@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import re
-import sys
 import time
 import uuid
 
@@ -12,10 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from ..schemas import Job, OutreachSettings
-
-# Add project root to path so database module is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from ..core.batch_poller import poll_in_flight_batches
 from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
 from ..core.gemini_client import generate_text_from_pdf, get_api_key
@@ -35,6 +30,7 @@ from ..db import (
 )
 from ..db import batch_jobs as batch_jobs_db
 from ..pipelines import run_load_more_contacts_pipeline, run_reclassify_pipeline
+from ..schemas import Job, OutreachSettings
 from ..service import (
     RateLimitError,
     acquire_scrape_slot,

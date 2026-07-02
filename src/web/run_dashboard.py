@@ -1,14 +1,9 @@
-import os
-import sys
 from pathlib import Path
 
 import uvicorn
 
-# Ensure project root is in the path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-
 if __name__ == "__main__":
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    project_root = Path(__file__).resolve().parents[2]
 
     # Keep the server log OUT of the watched tree. Writing it under data/ made the
     # reloader fire on the app's own log writes, restarting the server on every
@@ -35,7 +30,7 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=8000,
         reload=True,
-        reload_dirs=[os.path.join(project_root, "src")],
+        reload_dirs=[str(project_root / "src")],
         reload_excludes=["*.db", "*.db-wal", "*.db-shm", "*.log", "data/*"],
         log_config=log_config,
     )
