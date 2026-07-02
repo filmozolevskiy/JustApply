@@ -105,6 +105,12 @@ def _make_accepted_job_with_cache(db):
         stream="recruiters",
         db_path=db,
     )
+    # Recruiter-only toggles: load-more tests seed the recruiters stream cache.
+    database.save_outreach_settings(
+        target_recruiters=True,
+        target_russian_speakers=False,
+        db_path=db,
+    )
     return job_id
 
 

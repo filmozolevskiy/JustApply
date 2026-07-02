@@ -167,7 +167,8 @@ async def test_source_contacts_preserves_contacted_status_by_normalized_url():
     employees = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": contact_url}]
     classified = [{"name": "Ivan Petrov", "title": "Dev", "url": contact_url, "russian_speaker": True, "is_recruiter": False, "contacted": False, "currentPosition": "", "location": ""}]
 
-    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+    with patch.object(source_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "_run_apify_for_russian_speakers", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=classified)):
         result = await source_contacts(job)
 
@@ -437,7 +438,8 @@ async def test_source_contacts_sets_meta_no_audience_match_when_classified_empty
     job = {"title": "QA Engineer", "company": "Acme", "companyUrl": "https://www.linkedin.com/company/acme/", "contacts": []}
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Engineer", "linkedinUrl": ""}]
     meta = {}
-    with patch.object(source_module, "_run_apify_actor", new=AsyncMock(return_value=employees)), \
+    with patch.object(source_module, "_run_apify_for_recruiters", new=AsyncMock(return_value=employees)), \
+         patch.object(source_module, "_run_apify_for_russian_speakers", new=AsyncMock(return_value=[])), \
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         result = await source_contacts(job, meta=meta)
     assert result == []
