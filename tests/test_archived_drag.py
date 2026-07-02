@@ -6,14 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import add_job, get_jobs, init_db, update_job_status
 from src.db.jobs import archive_job, get_job
-
-HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-
-
-def _read_html():
-    with open(HTML_PATH, encoding="utf-8") as f:
-        return f.read()
-
+from tests.kanban_js import load_dashboard_js
 
 # ---------------------------------------------------------------------------
 # Dashboard HTML: drag is status-only, no enrichment triggered
@@ -21,7 +14,7 @@ def _read_html():
 
 def test_drag_is_status_only():
     """Lane drop must call moveJobStage and never route to enrichJob."""
-    content = _read_html()
+    content = load_dashboard_js()
     assert "moveJobStage(jobId, lane)" in content, (
         "Non-archived cards must still call moveJobStage on drop"
     )

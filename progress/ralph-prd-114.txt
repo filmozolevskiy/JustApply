@@ -49,3 +49,12 @@ Remaining queue: #135–#137
 - Closed #135
 
 Remaining queue: #136–#137
+
+## #136 — Extract board orchestration and search client JS into static modules
+- Extracted inline JS into focused ES modules: `perRegionLimit.js`, `spendConfirmation.js`, `evaluationLock.js`, `jobSearchSettings.js`, `boardOrchestration.js`, `dashboardApp.js`
+- HTML shell reduced to minimal bootstrap importing `dashboardApp.js`; Profile Manager and outreach settings remain in bootstrap module (#137 scope)
+- Updated `tests/kanban_js.py` with `load_dashboard_js()` helper; dashboard HTML/JS tests reference new module paths
+- Quality gates: ruff, mypy, pytest (830 passed, 84.76% coverage)
+- Closed #136
+
+Remaining queue: #137

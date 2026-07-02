@@ -345,7 +345,7 @@ def test_drawer_load_more_shows_spinner_while_loading():
 # --- Dashboard JS export ---
 
 def test_dashboard_exports_load_more_contacts():
-    from kanban_js import get_script_section, read_dashboard_html
-    script = get_script_section(read_dashboard_html())
+    from kanban_js import load_dashboard_js
+    script = load_dashboard_js()
     assert "loadMoreContacts" in script, \
-        "dashboard.html must define and export loadMoreContacts"
+        "dashboard must define and export loadMoreContacts"

@@ -136,8 +136,8 @@ def _get_function_body(content: str, func_name: str, window: int = 2000) -> str:
 
 
 def _dashboard_script() -> str:
-    from kanban_js import get_script_section, read_dashboard_html
-    return get_script_section(read_dashboard_html())
+    from kanban_js import load_dashboard_js
+    return load_dashboard_js()
 
 
 def test_enrich_job_fetches_cache_status_before_enrich():

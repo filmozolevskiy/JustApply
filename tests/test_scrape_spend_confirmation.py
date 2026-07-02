@@ -8,11 +8,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from kanban_js import get_script_section, read_dashboard_html
+from kanban_js import load_dashboard_js, read_dashboard_html
 
 
 def _dashboard_script() -> str:
-    return get_script_section(read_dashboard_html())
+    return load_dashboard_js()
 
 
 def _get_function_body(content: str, func_name: str, window: int = 12000) -> str:

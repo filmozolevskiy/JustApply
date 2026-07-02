@@ -12,7 +12,9 @@ from src.web.server import app
 
 from kanban_js import (
     get_drawer_body,
+    load_dashboard_js,
     load_kanban_js,
+    read_dashboard_html,
     read_drawer_controller,
 )
 
@@ -81,74 +83,68 @@ def test_outreach_settings_round_trip():
 
 
 def test_dashboard_html_contains_outreach_settings_panel():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
+    content = read_dashboard_html()
+    dashboard_js = load_dashboard_js()
     assert 'id="toggle-russian-speakers"' in content, "Missing Russian speakers toggle"
     assert 'id="toggle-recruiters"' in content, "Missing recruiters toggle"
     assert 'id="toggle-short-connection-note"' in content, "Missing short connection note toggle"
     assert "Short connection note" in content, "Missing short connection note label"
     assert "Contact Search Settings" in content, "Missing Contact Search Settings section heading"
-    assert "saveOutreachSettings" in content, "Missing saveOutreachSettings JS function"
-    assert "loadOutreachSettings" in content, "Missing loadOutreachSettings JS function"
+    assert "saveOutreachSettings" in dashboard_js, "Missing saveOutreachSettings JS function"
+    assert "loadOutreachSettings" in dashboard_js, "Missing loadOutreachSettings JS function"
 
 
 def test_dashboard_html_outreach_settings_have_delayed_tooltips():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    assert "initOutreachSettingsTooltips" in content, "Missing delayed tooltip initializer"
+    content = read_dashboard_html()
+    dashboard_js = load_dashboard_js()
+    assert "initOutreachSettingsTooltips" in dashboard_js, "Missing delayed tooltip initializer"
     assert 'data-tooltip="' in content, "Outreach toggles must include data-tooltip attributes"
-    assert "settings-tooltip-floating" in content, "Tooltips must use a floating layer to escape panel overflow"
+    assert "settings-tooltip-floating" in dashboard_js, "Tooltips must use a floating layer to escape panel overflow"
     assert "200 characters" in content, "Short connection note tooltip must mention 200-char limit"
 
 
 def test_contact_search_settings_audience_cards_layout():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
+    content = read_dashboard_html()
+    dashboard_js = load_dashboard_js()
     assert "contact-audience-grid" in content, "Contact Search Settings must use audience card grid"
     assert "contact-audience-card" in content
     assert "contact-audience-toggle" in content, "Toggle must sit in the card top-right"
     assert "contact-audience-status" not in content, "Off/Enabled labels removed; card color shows state"
-    assert "syncOutreachCardVisuals" in content
-    assert "initOutreachToggleHandlers" in content
+    assert "syncOutreachCardVisuals" in dashboard_js
+    assert "initOutreachToggleHandlers" in dashboard_js
 
 
 def test_dashboard_html_enrichment_uses_sse():
     """enrichJob opens an EventSource using a task_id returned by the enrich endpoint."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    assert "task_id" in content, "enrichJob must use task_id from enrich endpoint"
-    enrich_job_start = content.find("function enrichJob(")
+    dashboard_js = load_kanban_js()
+    assert "task_id" in dashboard_js, "enrichJob must use task_id from enrich endpoint"
+    enrich_job_start = dashboard_js.find("async function enrichJob(")
     assert enrich_job_start != -1, "enrichJob function not found"
-    enrich_job_body = content[enrich_job_start:enrich_job_start + 2000]
-    assert "EventSource" in enrich_job_body, "enrichJob must open an EventSource for SSE"
+    enrich_job_body = dashboard_js[enrich_job_start:enrich_job_start + 2000]
+    assert "EventSource" in enrich_job_body or "connectTaskLogStream" in enrich_job_body, (
+        "enrichJob must open SSE via connectTaskLogStream"
+    )
 
 
 def test_dashboard_html_enrich_job_uses_server_status_not_optimistic():
     """enrichJob applies server-returned job status instead of optimistic lane mutation."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    enrich_job_start = content.find("function enrichJob(")
+    dashboard_js = load_kanban_js()
+    enrich_job_start = dashboard_js.find("async function enrichJob(")
     assert enrich_job_start != -1
-    enrich_job_body = content[enrich_job_start:enrich_job_start + 2500]
+    enrich_job_body = dashboard_js[enrich_job_start:enrich_job_start + 2500]
     assert "job.status = 'enriching'" not in enrich_job_body
     assert "data.job" in enrich_job_body
 
 
 def test_dashboard_html_polling_loop_not_called_from_enrich():
     """enrichJob must not start the polling loop (SSE replaces it)."""
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path) as f:
-        content = f.read()
-    enrich_job_start = content.find("function enrichJob(")
+    dashboard_js = load_kanban_js()
+    enrich_job_start = dashboard_js.find("async function enrichJob(")
     assert enrich_job_start != -1
-    enrich_job_body = content[enrich_job_start:enrich_job_start + 2000]
-    assert "startPollingEnrichingJobs" not in enrich_job_body, \
+    enrich_job_body = dashboard_js[enrich_job_start:enrich_job_start + 2000]
+    assert "startPollingEnrichingJobs" not in enrich_job_body, (
         "enrichJob must not call startPollingEnrichingJobs; SSE handles card updates"
+    )
 
 
 def test_dashboard_html_card_activity_log_not_enrichment_strip():

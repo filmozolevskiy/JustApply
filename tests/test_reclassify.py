@@ -336,10 +336,10 @@ def test_load_more_contacts_gated_on_company_url():
 # --- Dashboard: reclassifyJob is exported to window ---
 
 def test_dashboard_exports_reclassify_job():
-    from kanban_js import get_script_section, read_dashboard_html
-    script = get_script_section(read_dashboard_html())
+    from kanban_js import load_dashboard_js
+    script = load_dashboard_js()
     assert "reclassifyJob" in script, \
-        "dashboard.html must define and export reclassifyJob"
+        "dashboard must define and export reclassifyJob"
 
 
 # --- Hardening: infrastructure failures (issue #118) ---

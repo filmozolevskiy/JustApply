@@ -202,11 +202,12 @@ async def test_cli_backfill_refuses_when_lock_active(tmp_db, monkeypatch):
 
 
 def test_dashboard_html_has_evaluation_lock_ui():
-    html_path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
-    with open(html_path, encoding="utf-8") as handle:
-        html = handle.read()
+    from tests.kanban_js import load_dashboard_js, read_dashboard_html
+
+    html = read_dashboard_html()
+    dashboard_js = load_dashboard_js()
 
     assert 'id="evaluation-lock-indicator"' in html
     assert "Assessing" in html
-    assert "cancelEvaluation" in html
-    assert "/api/evaluation-lock" in html
+    assert "cancelEvaluation" in dashboard_js
+    assert "/api/evaluation-lock" in dashboard_js

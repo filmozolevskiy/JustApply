@@ -1,11 +1,12 @@
 import os
 
+from tests.kanban_js import load_dashboard_js, read_dashboard_html
+
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
 
 def _read_html():
-    with open(HTML_PATH, encoding="utf-8") as f:
-        return f.read()
+    return read_dashboard_html()
 
 
 def test_panel_order():
@@ -73,11 +74,12 @@ def test_board_controls_refine_drawer_layout():
 def test_board_controls_has_search_reset_and_empty_hint():
     """Board Controls exposes search, reset-all, clear, and zero-results hint."""
     content = _read_html()
+    dashboard_js = load_dashboard_js()
     assert 'id="board-filter-search"' in content
     assert 'placeholder="Search jobs…"' in content
     assert 'id="board-filter-search-clear"' in content
     assert 'id="board-controls-reset"' in content
-    assert "resetBoardControls" in content
+    assert "resetBoardControls" in dashboard_js
     assert "Reset filters" in content
     assert 'id="board-search-empty-hint"' in content
     assert "No jobs match your search." in content
@@ -128,7 +130,8 @@ def test_job_search_settings_collapsed_by_default():
 def test_job_search_settings_show_hide_toggle():
     """Job Search Settings uses a Show/Hide toggle instead of a Scraper Settings label."""
     content = _read_html()
-    assert "toggleJobSearchSettings" in content
+    dashboard_js = load_dashboard_js()
+    assert "toggleJobSearchSettings" in dashboard_js
     assert 'id="job-search-settings-toggle"' in content
     assert "Scraper Settings" not in content
     assert "> Show" in content or "> Show<" in content
@@ -136,9 +139,9 @@ def test_job_search_settings_show_hide_toggle():
 
 def test_job_search_settings_init_restores_state():
     """Job Search Settings collapse state is restored on page load."""
-    content = _read_html()
-    assert "initJobSearchSettingsState" in content
-    assert "initJobSearchSettingsState()" in content
+    dashboard_js = load_dashboard_js()
+    assert "initJobSearchSettingsState" in dashboard_js
+    assert "initJobSearchSettingsState()" in dashboard_js
 
 
 def test_contact_search_settings_no_cyan_tint():

@@ -1,6 +1,6 @@
 import os
 
-from tests.kanban_js import read_dashboard_css, read_dashboard_html
+from tests.kanban_js import load_dashboard_js, read_dashboard_css, read_dashboard_html
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
@@ -86,25 +86,25 @@ def test_collapsed_lane_hides_cards():
 
 
 def test_toggle_lane_collapse_function_defined():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "function toggleLaneCollapse" in content, \
         "toggleLaneCollapse function must be defined in JavaScript"
 
 
 def test_init_lane_collapse_function_defined():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "function initLaneCollapse" in content, \
         "initLaneCollapse function must be defined for restoring state on page load"
 
 
 def test_init_lane_collapse_called_at_init():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "initLaneCollapse()" in content, \
         "initLaneCollapse() must be called during page initialisation"
 
 
 def test_storage_key_uses_kanban_lane_prefix():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "kanban-lane-" in content, \
         "Local storage key for collapsed lane must use 'kanban-lane-' prefix"
 
@@ -131,7 +131,7 @@ def test_kanban_cards_wrapper_fills_column():
 
 
 def test_collapsed_column_is_valid_drop_target():
-    content = _read_html()
+    content = load_dashboard_js()
     # DnD drop handler is registered on .kanban-column — collapsed columns
     # are still .kanban-column, so no extra wiring is needed; assert the
     # drop wiring targets the column (not only the wrapper).

@@ -326,15 +326,15 @@ async def test_pipeline_calls_apify_with_correct_start_page(db):
 
 def test_dashboard_load_more_fetches_preflight():
     """loadMoreContacts JS fetches the load-more-preflight endpoint."""
-    from kanban_js import read_dashboard_html
-    content = read_dashboard_html()
+    from kanban_js import load_dashboard_js
+    content = load_dashboard_js()
     assert "load-more-preflight" in content
 
 
 def test_dashboard_load_more_uses_blocked_reason():
     """loadMoreContacts shows specific acknowledgement from blocked_reason, not generic cap message."""
-    from kanban_js import read_dashboard_html
-    content = read_dashboard_html()
+    from kanban_js import load_dashboard_js
+    content = load_dashboard_js()
     idx = content.find("loadMoreContacts")
     assert idx != -1
     nearby = content[idx:idx + 1200]
@@ -346,8 +346,8 @@ def test_dashboard_load_more_uses_blocked_reason():
 
 def test_dashboard_load_more_confirm_includes_stream_and_page():
     """loadMoreContacts confirm builds lines from billable_streams and includes page number."""
-    from kanban_js import read_dashboard_html
-    content = read_dashboard_html()
+    from kanban_js import load_dashboard_js
+    content = load_dashboard_js()
     idx = content.find("loadMoreContacts")
     assert idx != -1
     nearby = content[idx:idx + 1200]

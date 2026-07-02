@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
 from src.web.server import app
-from tests.kanban_js import DASHBOARD_CSS_PATH, read_dashboard_css
+from tests.kanban_js import DASHBOARD_CSS_PATH, load_dashboard_js, read_dashboard_css
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JOB_STORE_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "jobStore.js")
@@ -424,16 +424,14 @@ def test_board_renderer_active_archived_bypass_combines_with_other_filters():
 
 def test_dashboard_load_jobs_uses_archived_fetch_resolver():
     """loadJobs uses resolveJobsArchivedFetchParam for search-aware fetch under Active."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = load_dashboard_js()
     assert "resolveJobsArchivedFetchParam" in content
     assert "getJobsFetchArchivedParam" in content
 
 
 def test_dashboard_clear_board_search_reloads_jobs():
     """Clearing Board Search reloads jobs so archived rows drop under Active visibility."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = load_dashboard_js()
     clear_fn = content[content.find("function clearBoardSearch"): content.find("function resetBoardControls")]
     assert "loadJobs()" in clear_fn
 
@@ -509,7 +507,8 @@ def test_dashboard_drawer_has_prev_next_navigation():
         content = f.read()
     assert 'id="drawer-nav-prev"' in content
     assert 'id="drawer-nav-next"' in content
-    assert "navigateDrawerJob" in content
+    dashboard_js = load_dashboard_js()
+    assert "navigateDrawerJob" in dashboard_js
 
     with open(DRAWER_CONTROLLER_PATH, encoding="utf-8") as f:
         drawer = f.read()
@@ -652,19 +651,10 @@ def test_task_log_client_routes_sse_message_types():
 
 def test_dashboard_has_no_inline_mock_job_database():
     """Kanban Dashboard loads jobs from the API — no static masterJobs mock array."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
-    for marker in ('<script type="module">', '<script>'):
-        script_start = content.find(marker)
-        if script_start != -1:
-            break
-    else:
-        raise AssertionError("<script> block not found")
-    script_end = content.rindex("</script>")
-    script = content[script_start:script_end]
-    assert "let masterJobs = [" not in script
-    assert "Senior QA Automation Engineer" not in script
-    assert "Using static fallback database" not in script
+    content = load_dashboard_js()
+    assert "let masterJobs = [" not in content
+    assert "Senior QA Automation Engineer" not in content
+    assert "Using static fallback database" not in content
 
 
 def test_dashboard_loads_kanban_modules():
@@ -672,10 +662,16 @@ def test_dashboard_loads_kanban_modules():
     with open(HTML_PATH, encoding="utf-8") as f:
         content = f.read()
     assert 'type="module"' in content
-    assert "/static/js/jobStore.js" in content
-    assert "/static/js/boardRenderer.js" in content
-    assert "/static/js/drawerController.js" in content
-    assert "/static/js/taskLogClient.js" in content
+    assert "/static/js/dashboardApp.js" in content
+    dashboard_js = load_dashboard_js()
+    assert "/static/js/jobStore.js" in dashboard_js or "from './jobStore.js'" in dashboard_js
+    assert "/static/js/boardRenderer.js" in dashboard_js or "from './boardRenderer.js'" in dashboard_js
+    assert "/static/js/drawerController.js" in dashboard_js or "from './drawerController.js'" in dashboard_js
+    assert "/static/js/taskLogClient.js" in dashboard_js or "from './taskLogClient.js'" in dashboard_js
+    assert "boardOrchestration.js" in dashboard_js
+    assert "jobSearchSettings.js" in dashboard_js
+    assert "spendConfirmation.js" in dashboard_js
+    assert "evaluationLock.js" in dashboard_js
 
 
 def test_dashboard_links_stylesheet():
@@ -703,6 +699,11 @@ def test_server_serves_kanban_static_modules():
         "/static/js/boardRenderer.js",
         "/static/js/drawerController.js",
         "/static/js/taskLogClient.js",
+        "/static/js/boardOrchestration.js",
+        "/static/js/jobSearchSettings.js",
+        "/static/js/spendConfirmation.js",
+        "/static/js/evaluationLock.js",
+        "/static/js/dashboardApp.js",
     ):
         resp = client.get(path)
         assert resp.status_code == 200, path
@@ -803,8 +804,7 @@ def test_drawer_shows_reclassify_progress_banner():
 
 def test_drawer_inline_handlers_exported_to_window():
     """Inline oninput/onclick in drawer HTML require globals on window."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = load_dashboard_js()
     window_block = content[content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3]
     for name in (
         "postJobComment",
