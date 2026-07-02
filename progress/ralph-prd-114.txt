@@ -20,3 +20,13 @@ Remaining queue: #132–#137
 - Closed #132
 
 Remaining queue: #133–#137
+
+## #133 — Prune completed SSE active_tasks after terminal state and TTL
+- Added `TASK_PRUNE_TTL_SECONDS` (default 60s, overridable via env) and `_schedule_active_task_prune` to remove terminal tasks after SSE disconnect + TTL when no streams remain
+- Track `stream_count` on `TaskState`; schedule prune from SSE `finally` block for completed/failed tasks
+- Fixed reconnect replay: terminal tasks with empty queue no longer block on `queue.get()` during TTL window
+- Added pruning unit and integration tests in `tests/test_log_stream.py`
+- Quality gates: ruff, mypy, pytest (826 passed, 84.76% coverage)
+- Closed #133
+
+Remaining queue: #134–#137

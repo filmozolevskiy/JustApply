@@ -1,6 +1,8 @@
 import json
 import os
 import sys
+import time
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.db.connection as _db_connection
 from src import db as database
-from src.web.server import TaskState, active_tasks, app
+from src.web.server import TaskState, _schedule_active_task_prune, active_tasks, app
 
 client = TestClient(app)
 
@@ -180,3 +182,54 @@ def test_live_stream_yields_incremental_job_results():
     assert len(results) == 1
     assert results[0]["job"]["id"] == 42
     assert any(m.get("type") == "done" for m in msgs)
+
+
+# --- active_tasks pruning after terminal SSE ---
+
+
+@pytest.mark.asyncio
+async def test_schedule_active_task_prune_removes_terminal_task(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    state = TaskState({"job_id": 1})
+    state.status = "completed"
+    active_tasks["prune-me"] = state
+    await _schedule_active_task_prune("prune-me")
+    assert "prune-me" not in active_tasks
+
+
+@pytest.mark.asyncio
+async def test_schedule_active_task_prune_keeps_running_task(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    state = TaskState({"job_id": 1})
+    state.status = "running"
+    active_tasks["keep-me"] = state
+    await _schedule_active_task_prune("keep-me")
+    assert "keep-me" in active_tasks
+
+
+@pytest.mark.asyncio
+async def test_schedule_active_task_prune_skips_when_stream_active(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    state = TaskState({"job_id": 1})
+    state.status = "completed"
+    state.stream_count = 1
+    active_tasks["streaming"] = state
+    await _schedule_active_task_prune("streaming")
+    assert "streaming" in active_tasks
+
+
+def test_completed_task_pruned_after_stream_and_ttl(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    active_tasks["t8"] = _make_completed_state(["Step 1"])
+    _collect_messages("t8")
+    time.sleep(0.05)
+    assert "t8" not in active_tasks
+
+
+def test_completed_task_replayable_during_prune_ttl():
+    active_tasks["t9"] = _make_completed_state(["A", "B"])
+    _collect_messages("t9")
+    assert "t9" in active_tasks
+    msgs = _collect_messages("t9", skip=0)
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["message"] for m in logs] == ["A", "B"]

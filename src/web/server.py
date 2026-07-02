@@ -52,6 +52,9 @@ if os.path.isdir(STATIC_DIR):
 # In-memory storage for active scraping sessions
 active_tasks = {}
 
+# Grace period after the last SSE disconnect before pruning terminal tasks.
+TASK_PRUNE_TTL_SECONDS = float(os.environ.get("TASK_PRUNE_TTL_SECONDS", "60"))
+
 batch_poller_logs: list[dict] = []
 batch_poller_queue: asyncio.Queue | None = None
 _batch_poller_task: asyncio.Task | None = None
@@ -565,6 +568,19 @@ class TaskState:
         self.jobs = []
         self.result = None  # Generic result payload for non-search tasks
         self.status = "running"
+        self.stream_count = 0
+
+
+async def _schedule_active_task_prune(task_id: str) -> None:
+    await asyncio.sleep(TASK_PRUNE_TTL_SECONDS)
+    state = active_tasks.get(task_id)
+    if state is None:
+        return
+    if state.status not in ("completed", "failed"):
+        return
+    if state.stream_count > 0:
+        return
+    active_tasks.pop(task_id, None)
 
 
 class SearchRegionItem(BaseModel):
@@ -752,6 +768,7 @@ async def logs_stream(task_id: str, skip: int = 0):
         def _yield_result(item: dict):
             return {"data": json.dumps(item)}
 
+        state.stream_count += 1
         try:
             for log in state.logs[skip:]:
                 yield _yield_log(log["level"], log["message"])
@@ -775,7 +792,12 @@ async def logs_stream(task_id: str, skip: int = 0):
                 yield _yield_result(item)
 
             while True:
-                item = await state.queue.get()
+                try:
+                    item = state.queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    if state.status in ("completed", "failed"):
+                        break
+                    item = await state.queue.get()
                 if item is None:
                     break
                 if item.get("type") == "result":
@@ -799,6 +821,10 @@ async def logs_stream(task_id: str, skip: int = 0):
 
         except asyncio.CancelledError:
             pass
+        finally:
+            state.stream_count -= 1
+            if state.status in ("completed", "failed"):
+                asyncio.create_task(_schedule_active_task_prune(task_id))
 
     return EventSourceResponse(event_generator())
 
