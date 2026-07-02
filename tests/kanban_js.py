@@ -15,6 +15,7 @@ DASHBOARD_MODULE_PATHS = (
     "evaluationLock.js",
     "jobSearchSettings.js",
     "boardOrchestration.js",
+    "profileManager.js",
     "dashboardApp.js",
 )
 

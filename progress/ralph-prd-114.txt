@@ -58,3 +58,12 @@ Remaining queue: #136–#137
 - Closed #136
 
 Remaining queue: #137
+
+## #137 — Extract Profile Manager client logic into static module
+- Extracted Profile Manager into `src/web/static/js/profileManager.js` with `createProfileManagerController` factory
+- `dashboardApp.js` now imports profile manager and wires `getActiveResume` to job search settings and `onActiveResumeChanged` to board variant rendering
+- Updated `tests/kanban_js.py` and `tests/test_dashboard_modules.py` with new module path and static serve test
+- Quality gates: ruff, mypy, pytest (830 passed, 84.71% coverage)
+- Closed #137
+
+Remaining queue: none — PRD #114 complete

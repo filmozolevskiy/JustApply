@@ -672,6 +672,7 @@ def test_dashboard_loads_kanban_modules():
     assert "jobSearchSettings.js" in dashboard_js
     assert "spendConfirmation.js" in dashboard_js
     assert "evaluationLock.js" in dashboard_js
+    assert "profileManager.js" in dashboard_js
 
 
 def test_dashboard_links_stylesheet():
@@ -703,6 +704,7 @@ def test_server_serves_kanban_static_modules():
         "/static/js/jobSearchSettings.js",
         "/static/js/spendConfirmation.js",
         "/static/js/evaluationLock.js",
+        "/static/js/profileManager.js",
         "/static/js/dashboardApp.js",
     ):
         resp = client.get(path)
