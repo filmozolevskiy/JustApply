@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
 from src.web.server import app
+from tests.kanban_js import DASHBOARD_CSS_PATH, read_dashboard_css
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JOB_STORE_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "jobStore.js")
@@ -677,6 +678,23 @@ def test_dashboard_loads_kanban_modules():
     assert "/static/js/taskLogClient.js" in content
 
 
+def test_dashboard_links_stylesheet():
+    """dashboard.html links extracted CSS from the static mount."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert "/static/css/dashboard.css" in content
+    assert "<style" not in content
+
+
+def test_server_serves_dashboard_stylesheet():
+    """FastAPI serves extracted dashboard CSS."""
+    client = TestClient(app)
+    resp = client.get("/static/css/dashboard.css")
+    assert resp.status_code == 200
+    assert ":root {" in resp.text
+    assert ".kanban-board-container" in resp.text
+
+
 def test_server_serves_kanban_static_modules():
     """FastAPI serves extracted dashboard JS modules."""
     client = TestClient(app)
@@ -759,10 +777,10 @@ def test_board_renderer_shows_reclassify_badge_for_active_task():
 
 def test_dashboard_has_summary_log_level_style():
     """Task Logs summary level has distinct styling in dashboard CSS."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = read_dashboard_css()
     assert ".terminal-text.summary" in content
     assert "border-top" in content
+    assert os.path.isfile(DASHBOARD_CSS_PATH)
 
 
 def test_board_renderer_includes_unclassified_badge():

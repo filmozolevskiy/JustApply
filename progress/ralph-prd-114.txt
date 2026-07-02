@@ -39,3 +39,13 @@ Remaining queue: #134–#137
 - Closed #134
 
 Remaining queue: #135–#137
+
+## #135 — Extract Kanban dashboard CSS into static stylesheet
+- Moved ~2,050 lines of inline CSS from `dashboard.html` to `src/web/static/css/dashboard.css`
+- HTML shell links `/static/css/dashboard.css`; no inline `<style>` block remains
+- Added `read_dashboard_css()` helper in `tests/kanban_js.py`; updated lane collapse, DnD, and module tests to read CSS from the static asset
+- Added `test_dashboard_links_stylesheet` and `test_server_serves_dashboard_stylesheet`
+- Quality gates: ruff, mypy, pytest (830 passed, 84.76% coverage)
+- Closed #135
+
+Remaining queue: #136–#137

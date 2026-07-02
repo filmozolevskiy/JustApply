@@ -4,12 +4,18 @@ import os
 
 WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "web")
 HTML_PATH = os.path.join(WEB_DIR, "dashboard.html")
+DASHBOARD_CSS_PATH = os.path.join(WEB_DIR, "static", "css", "dashboard.css")
 DRAWER_PATH = os.path.join(WEB_DIR, "static", "js", "drawerController.js")
 TASK_LOG_PATH = os.path.join(WEB_DIR, "static", "js", "taskLogClient.js")
 
 
 def read_dashboard_html() -> str:
     with open(HTML_PATH, encoding="utf-8") as f:
+        return f.read()
+
+
+def read_dashboard_css() -> str:
+    with open(DASHBOARD_CSS_PATH, encoding="utf-8") as f:
         return f.read()
 
 

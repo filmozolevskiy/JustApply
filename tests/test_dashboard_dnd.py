@@ -1,12 +1,17 @@
 import os
 
+from tests.kanban_js import read_dashboard_css, read_dashboard_html
+
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 BOARD_RENDERER_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
 
 
 def _read_html():
-    with open(HTML_PATH, encoding="utf-8") as f:
-        return f.read()
+    return read_dashboard_html()
+
+
+def _read_css():
+    return read_dashboard_css()
 
 
 def _read_board_renderer():
@@ -51,7 +56,7 @@ def test_drop_handler_wired():
 
 
 def test_hover_reject_css_defined():
-    content = _read_html()
+    content = _read_css()
     assert ".hover-reject" in content, "hover-reject CSS class must be defined"
 
 
