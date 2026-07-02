@@ -656,16 +656,50 @@ async def run_scraping_task(task_id: str):
         await state.queue.put(None)
 
 
-@app.post("/api/search")
-async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
-    from ..core.regions import clamp_per_region_limit, validate_search_regions
-
+def _evaluation_lock_response() -> JSONResponse | None:
     lock_status = get_evaluation_lock_status()
     if lock_status["active"]:
         return JSONResponse(
             status_code=409,
-            content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
+            content={
+                "message": (
+                    f"Evaluation in progress: {lock_status['jobCount']} job(s) are being "
+                    "assessed. Wait for completion or cancel from the dashboard."
+                ),
+            },
         )
+    return None
+
+
+def _trigger_scrape_task(
+    params: dict,
+    background_tasks: BackgroundTasks,
+    *,
+    mock_eval: bool,
+    mock_scraper: bool | None,
+) -> dict | JSONResponse:
+    lock_response = _evaluation_lock_response()
+    if lock_response is not None:
+        return lock_response
+
+    try:
+        acquire_scrape_slot(mock_eval, mock_scraper)
+    except RateLimitError as e:
+        return JSONResponse(
+            status_code=429,
+            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState(params)
+    active_tasks[task_id] = state
+    background_tasks.add_task(run_scraping_task, task_id)
+    return {"status": "triggered", "task_id": task_id}
+
+
+@app.post("/api/search")
+async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
+    from ..core.regions import clamp_per_region_limit, validate_search_regions
 
     country_list = [c.strip() for c in request.countries.split(",") if c.strip()]
     region_pairs = [(item.country, item.region) for item in request.search_regions]
@@ -674,27 +708,23 @@ async def trigger_search(request: SearchRequest, background_tasks: BackgroundTas
     except ValueError as e:
         return JSONResponse(status_code=422, content={"message": str(e)})
 
-    clamped_limit = clamp_per_region_limit(request.per_region_limit)
-
-    try:
-        acquire_scrape_slot(request.mock_eval, request.mock_scraper)
-    except RateLimitError as e:
-        return JSONResponse(
-            status_code=429,
-            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
-        )
-
-    task_id = str(uuid.uuid4())
     params = request.model_dump()
     params["search_regions"] = normalized_regions
-    params["per_region_limit"] = clamped_limit
-    state = TaskState(params)
-    active_tasks[task_id] = state
-    background_tasks.add_task(run_scraping_task, task_id)
-    return {"status": "triggered", "task_id": task_id}
+    params["per_region_limit"] = clamp_per_region_limit(request.per_region_limit)
+    return _trigger_scrape_task(
+        params,
+        background_tasks,
+        mock_eval=request.mock_eval,
+        mock_scraper=request.mock_scraper,
+    )
 
 
-@app.post("/api/scrape")
+@app.post(
+    "/api/scrape",
+    deprecated=True,
+    summary="Trigger job scrape (deprecated)",
+    description="Deprecated alias for POST /api/search. Prefer POST /api/search with a JSON body.",
+)
 async def trigger_scrape(
     background_tasks: BackgroundTasks,
     query: str = Query("Senior QA Automation"),
@@ -710,22 +740,6 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
-    lock_status = get_evaluation_lock_status()
-    if lock_status["active"]:
-        return JSONResponse(
-            status_code=409,
-            content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
-        )
-
-    try:
-        acquire_scrape_slot(mock_eval, mock_scraper)
-    except RateLimitError as e:
-        return JSONResponse(
-            status_code=429,
-            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
-        )
-
-    task_id = str(uuid.uuid4())
     params = {
         "query": query,
         "location": location,
@@ -740,10 +754,12 @@ async def trigger_scrape(
         "countries": countries,
         "time_range": time_range,
     }
-    state = TaskState(params)
-    active_tasks[task_id] = state
-    background_tasks.add_task(run_scraping_task, task_id)
-    return {"status": "triggered", "task_id": task_id}
+    return _trigger_scrape_task(
+        params,
+        background_tasks,
+        mock_eval=mock_eval,
+        mock_scraper=mock_scraper,
+    )
 
 
 @app.get("/api/logs/{task_id}")

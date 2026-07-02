@@ -30,3 +30,12 @@ Remaining queue: #133–#137
 - Closed #133
 
 Remaining queue: #134–#137
+
+## #134 — Consolidate duplicate job scrape HTTP endpoints behind one handler
+- Extracted `_evaluation_lock_response` and `_trigger_scrape_task` shared helpers in `src/web/server.py`; both `/api/search` and `/api/scrape` route through the same task trigger logic
+- Marked `/api/scrape` as `deprecated=True` in OpenAPI with description pointing callers to POST `/api/search`
+- Added OpenAPI deprecation and shared-handler response-shape tests in `tests/test_server_lifecycle.py`
+- Quality gates: ruff, mypy, pytest (828 passed, 84.76% coverage)
+- Closed #134
+
+Remaining queue: #135–#137

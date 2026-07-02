@@ -67,3 +67,35 @@ def test_web_modules_do_not_mutate_sys_path():
     importlib.import_module("src.web.server")
     importlib.import_module("src.web.run_dashboard")
     assert sys.path == path_before
+
+
+def test_scrape_route_deprecated_in_openapi():
+    schema = client.get("/openapi.json").json()
+    scrape_post = schema["paths"]["/api/scrape"]["post"]
+    assert scrape_post["deprecated"] is True
+    assert "Deprecated" in scrape_post["description"]
+
+
+def test_both_scrape_routes_share_handler_response_shape():
+    with patch("src.web.server.run_scraping_task"):
+        search_payload = {
+            "query": "QA Engineer",
+            "search_regions": [{"country": "US", "region": "California"}],
+            "per_region_limit": 200,
+            "platform": "brightdata_linkedin",
+            "active_resume": "qa.md",
+            "mock_eval": True,
+            "remote_type": "any",
+            "seniority": "any",
+            "salary": "",
+            "company_size": "any",
+        }
+        search_response = client.post("/api/search", json=search_payload)
+        scrape_response = client.post("/api/scrape?mock_eval=true&active_resume=qa.md&query=QA+Engineer")
+
+    assert search_response.status_code == 200
+    assert scrape_response.status_code == 200
+    for response in (search_response, scrape_response):
+        body = response.json()
+        assert body["status"] == "triggered"
+        assert body["task_id"]
