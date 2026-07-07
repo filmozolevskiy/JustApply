@@ -40,3 +40,18 @@
 **Quality gates:** ruff ✓ | mypy ✓ | pytest 896 passed, 84.73% coverage ✓
 
 **Commit:** Enable SQLite WAL mode and busy timeout on database connections (#149)
+
+## 2026-07-07 — Issue #150: Document migration failure recovery via Database Snapshot
+
+**Task:** Document migration failure recovery via Database Snapshot (#150)
+
+**Summary:**
+- Added **Migration Failure Recovery** glossary entry to `CONTEXT.md` with step-by-step restore from `~/.just_apply/backups/`
+- Clarified snapshot timing (before **Destructive Database Operation**, at `--search`/`--promote` start) and contrast with removed in-DB **Job Backup**
+- Linked versioned migration runner (`PRAGMA user_version`, `src/db/migrations.py`) in recovery flow
+- Added agent cross-link in `CLAUDE.md` MUST section pointing to CONTEXT.md recovery steps
+- Extended `tests/test_context_glossary.py` via TDD for recovery docs and CLAUDE.md link
+
+**Quality gates:** ruff ✓ | mypy ✓ | pytest 898 passed, 84.73% coverage ✓
+
+**Commit:** Document migration failure recovery via Database Snapshot (#150)
