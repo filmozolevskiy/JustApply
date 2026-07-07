@@ -38,6 +38,7 @@ function sectionHeaderHtml({ data = null, showActions = false, jobId = null } = 
     showActions && jobId
       ? `<div class="cr-actions">
       <button type="button" class="cr-btn-ghost" onclick="researchCompany(${jobId})"><i class="fa-solid fa-rotate"></i> Refresh</button>
+      <button type="button" class="cr-btn-ghost warn" onclick="repickCompany(${jobId})"><i class="fa-solid fa-building-circle-xmark"></i> Wrong company?</button>
     </div>`
       : '';
   return `

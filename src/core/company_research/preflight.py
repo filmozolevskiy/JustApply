@@ -98,3 +98,25 @@ def resolve_company_research_slices(
 
 def slice_labels(slices: list[str]) -> list[str]:
     return [SLICE_LABELS.get(s, s) for s in slices]
+
+
+def resolve_repick_slices(
+    company: str,
+    listing_title: str,
+    glassdoor_job_title: str,
+    glassdoor_company_id: str,
+    matched_name: str,
+) -> dict:
+    """Resolve billable slices after user picks a Glassdoor employer."""
+    partial_cache = {
+        "glassdoorCompanyId": glassdoor_company_id,
+        "matchedName": matched_name,
+        "salariesByTitle": {},
+        "interviewsByTitle": {},
+    }
+    return resolve_company_research_slices(
+        company,
+        listing_title,
+        glassdoor_job_title=glassdoor_job_title,
+        cache_row=partial_cache,
+    )

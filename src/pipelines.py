@@ -13,6 +13,7 @@ from .core.company_research.glassdoor_intel import (
     build_job_company_research_snapshot,
     default_apify_runner,
     format_activity_log_message,
+    format_repick_activity_log_message,
     normalize_salary_row,
     parse_overview_row,
 )
@@ -646,6 +647,7 @@ async def run_company_research_pipeline(
     log_func=None,
     apify_runner=None,
     db_path=None,
+    activity_log_override: str | None = None,
 ) -> Job:
     """Fetch Glassdoor employer intel, update cache, and persist job snapshot."""
 
@@ -772,7 +774,11 @@ async def run_company_research_pipeline(
         updated = database.update_company_research(job_id, snapshot, db_path=db_path)
         if not updated:
             raise ValueError("Failed to persist company research snapshot")
-        database.log_activity(job_id, format_activity_log_message(snapshot), db_path=db_path)
+        database.log_activity(
+            job_id,
+            activity_log_override or format_activity_log_message(snapshot),
+            db_path=db_path,
+        )
         await log("Company research complete.", "success")
         return database.get_job(job_id, db_path=db_path) or updated
 
@@ -784,3 +790,42 @@ async def run_company_research_pipeline(
         database.log_activity(job_id, f"Company research failed · {exc}", db_path=db_path)
         await log(f"Company research failed: {exc}", "error")
         raise
+
+
+async def run_company_research_repick_pipeline(
+    job_id: int,
+    glassdoor_job_title: str,
+    glassdoor_company_id: str,
+    matched_name: str,
+    log_func=None,
+    apify_runner=None,
+    db_path=None,
+) -> Job:
+    """Repick Glassdoor employer — clear cache, seed new match, fetch billable slices."""
+    from .db.company_research_cache import delete_company_research_cache, normalize_company_name
+
+    job = database.get_job(job_id, db_path=db_path)
+    if not job:
+        raise ValueError(f"Job id={job_id} not found")
+    if not company_research_allowed(job.status, job.archived):
+        raise ValueError("Company research is only available for Matched and later lanes")
+
+    company_key = normalize_company_name(job.company or "")
+    delete_company_research_cache(company_key, db_path=db_path)
+    database.set_company_research_cache(
+        company_key,
+        {
+            "glassdoorCompanyId": glassdoor_company_id,
+            "matchedName": matched_name,
+        },
+        db_path=db_path,
+    )
+
+    return await run_company_research_pipeline(
+        job_id,
+        glassdoor_job_title,
+        log_func=log_func,
+        apify_runner=apify_runner,
+        db_path=db_path,
+        activity_log_override=format_repick_activity_log_message(matched_name),
+    )

@@ -246,6 +246,7 @@ export function bootstrapDashboard() {
     postOutreachTemplate: board.postOutreachTemplate,
     reclassifyJob: board.reclassifyJob,
     rejectJobFromDrawer: board.rejectJobFromDrawer,
+    repickCompany: board.repickCompany,
     researchCompany: board.researchCompany,
     resetBoardControls: board.resetBoardControls,
     resetKbFilters: jobSearchSettings.resetKbFilters,

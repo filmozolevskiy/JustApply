@@ -2097,6 +2097,13 @@
     .cr-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .cr-btn-ghost { padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer; }
     .cr-btn-ghost:hover { border-color: var(--border-hover); color: var(--text-primary); }
+    .cr-btn-ghost.warn { color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.35); }
+    .cr-btn-ghost.warn:hover { color: #fbbf24; border-color: rgba(245, 158, 11, 0.55); }
+    .spend-picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .spend-picker-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; }
+    .spend-picker-option:has(input:checked) { border-color: var(--accent-cyan); background: rgba(6, 182, 212, 0.06); }
+    .spend-picker-label { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--text-secondary); }
+    .spend-picker-sub { font-size: 0.75rem; color: var(--text-muted); }
     .cr-na { color: var(--text-muted); font-style: italic; }
     .cr-loading { display: flex; align-items: center; gap: 10px; padding: 16px; border-radius: 10px; background: rgba(6, 182, 212, 0.06); border: 1px solid rgba(6, 182, 212, 0.2); font-size: 0.85rem; color: var(--accent-cyan); }
     .cr-a-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }

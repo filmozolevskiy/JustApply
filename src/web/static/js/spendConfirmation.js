@@ -341,10 +341,45 @@ function showScrapeSpendConfirmModal({ query, searchRegions, timeRange, perRegio
   });
 }
 
+function buildCompanyPickerBodyHtml(candidates) {
+  const options = candidates
+    .map(
+      (candidate, index) => `
+    <label class="spend-picker-option">
+      <input type="radio" name="company-picker" value="${index}"${index === 0 ? ' checked' : ''} />
+      <span class="spend-picker-label">
+        <strong>${escapeSpendHtml(candidate.matchedName)}</strong>
+        ${candidate.previewSize ? `<span class="spend-picker-sub">${escapeSpendHtml(candidate.previewSize)}</span>` : ''}
+      </span>
+    </label>`,
+    )
+    .join('');
+  return `
+    <div class="spend-modal-message">Pick the correct Glassdoor employer for this company.</div>
+    <div class="spend-picker-list">${options}</div>
+  `;
+}
+
+function showCompanyPickerModal(candidates) {
+  return openSpendModal({
+    title: 'Wrong company?',
+    subtitle: 'Glassdoor employer match',
+    bodyHtml: buildCompanyPickerBodyHtml(candidates),
+    confirmLabel: 'Continue',
+    showCancel: true,
+  }).then((confirmed) => {
+    if (!confirmed) return null;
+    const selected = document.querySelector('input[name="company-picker"]:checked');
+    if (!selected) return null;
+    return candidates[Number(selected.value)] || null;
+  });
+}
+
 export {
   dismissSpendModalFromOverlay,
   showSpendConfirmModal,
   showSpendAckModal,
+  showCompanyPickerModal,
   confirmDiscardUnsavedEdits,
   showScrapeSpendConfirmModal,
   buildApifySpendBodyHtml,

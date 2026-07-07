@@ -31,6 +31,7 @@ from ..db import (
 from ..db import batch_jobs as batch_jobs_db
 from ..pipelines import (
     run_company_research_pipeline,
+    run_company_research_repick_pipeline,
     run_load_more_contacts_pipeline,
     run_reclassify_pipeline,
 )
@@ -478,6 +479,42 @@ async def run_company_research_task_with_logs(
         await state.queue.put(None)
 
 
+async def run_company_research_repick_task_with_logs(
+    task_id: str,
+    job_id: int,
+    glassdoor_job_title: str,
+    glassdoor_company_id: str,
+    matched_name: str,
+):
+    state = active_tasks.get(task_id)
+    if not state:
+        return
+
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        updated = await run_company_research_repick_pipeline(
+            job_id,
+            glassdoor_job_title,
+            glassdoor_company_id,
+            matched_name,
+            log_func=log_callback,
+        )
+        state.result = {"type": "result", "job": updated.model_dump()}
+        state.status = "completed"
+    except ValueError as e:
+        state.status = "failed"
+        await log_callback(f"Company research repick failed: {str(e)}", "error")
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Company research repick task failed: {str(e)}", "error")
+    finally:
+        await state.queue.put(None)
+
+
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     updated = begin_enrichment(job_id)
@@ -674,6 +711,134 @@ async def company_research_run(
         task_id,
         job_id,
         title,
+    )
+    return {"task_id": task_id, "job_id": job_id}
+
+
+class CompanyResearchRepickRequest(BaseModel):
+    glassdoorCompanyId: str
+    matchedName: str
+    glassdoorJobTitle: str = ""
+
+
+@app.post("/api/jobs/{job_id}/company-research/candidates")
+async def company_research_candidates(job_id: int):
+    from ..core.company_research.glassdoor_intel import fetch_glassdoor_company_candidates
+    from ..core.company_research.preflight import company_research_allowed
+    from ..db.company_research_cache import delete_company_research_cache, normalize_company_name
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+    if not job.companyResearch or not job.companyResearch.get("glassdoorCompanyId"):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research must be completed before repicking employer"},
+        )
+
+    company_key = normalize_company_name(job.company or "")
+    delete_company_research_cache(company_key)
+    try:
+        candidates = await fetch_glassdoor_company_candidates(job.company or "")
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"message": f"Glassdoor company search failed: {exc}"},
+        )
+    return {"candidates": candidates}
+
+
+@app.get("/api/jobs/{job_id}/company-research/repick-preflight")
+async def company_research_repick_preflight(
+    job_id: int,
+    glassdoorCompanyId: str = Query(...),
+    matchedName: str = Query(...),
+    glassdoorJobTitle: str = Query(default=""),
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+        resolve_repick_slices,
+        slice_labels,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
+    resolved = resolve_repick_slices(
+        job.company or "",
+        job.title or "",
+        title,
+        glassdoorCompanyId,
+        matchedName,
+    )
+    estimated_runs = resolved["estimated_runs"]
+    return {
+        "will_call_apify": resolved["will_call_apify"],
+        "estimated_runs": estimated_runs,
+        "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
+        "cached_slices": slice_labels(resolved["cached_slices"]),
+        "billable_slices": slice_labels(resolved["billable_slices"]),
+        "default_glassdoor_job_title": resolved["default_glassdoor_job_title"],
+    }
+
+
+@app.post("/api/jobs/{job_id}/company-research/repick")
+async def company_research_repick(
+    job_id: int,
+    body: CompanyResearchRepickRequest,
+    background_tasks: BackgroundTasks,
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+    if not body.glassdoorCompanyId or not body.matchedName:
+        return JSONResponse(
+            status_code=422,
+            content={"message": "glassdoorCompanyId and matchedName are required"},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=body.glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
+    background_tasks.add_task(
+        run_company_research_repick_task_with_logs,
+        task_id,
+        job_id,
+        title,
+        body.glassdoorCompanyId,
+        body.matchedName,
     )
     return {"task_id": task_id, "job_id": job_id}
 

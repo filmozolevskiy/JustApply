@@ -293,6 +293,39 @@ def format_activity_log_message(snapshot: dict[str, Any]) -> str:
     return f"Company research · {rating_str} · {recommend_str} · {salary_str}"
 
 
+def format_repick_activity_log_message(matched_name: str) -> str:
+    return f"Company research · employer changed to {matched_name}"
+
+
+def format_search_candidates(rows: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for row in rows[:limit]:
+        company_id = str(
+            _first_value(row, "companyId", "id", "employerId") or ""
+        )
+        matched_name = _row_name(row) or str(row.get("companyName") or "")
+        preview_size = _first_value(row, "size", "companySize", "detailsSize", "employeeSize")
+        candidates.append(
+            {
+                "glassdoorCompanyId": company_id,
+                "matchedName": matched_name,
+                "previewSize": preview_size or "",
+            }
+        )
+    return candidates
+
+
+async def fetch_glassdoor_company_candidates(
+    company_name: str,
+    *,
+    apify_runner: ApifyRunner | None = None,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    runner = apify_runner or default_apify_runner
+    rows = await runner("companySearch", company_name=company_name)
+    return format_search_candidates(rows, limit=limit)
+
+
 async def default_apify_runner(
     operation: str,
     *,

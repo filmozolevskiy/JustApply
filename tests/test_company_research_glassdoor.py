@@ -9,6 +9,8 @@ from src.core.company_research.glassdoor_intel import (
     _summarize_interviews,
     build_job_company_research_snapshot,
     format_activity_log_message,
+    format_repick_activity_log_message,
+    format_search_candidates,
     normalize_salary_row,
     parse_overview_row,
 )
@@ -103,3 +105,24 @@ def test_activity_log_message_sparse_salary():
     assert "2.8★" in msg
     assert "40% recommend" in msg
     assert "salary n/a" in msg
+
+
+def test_format_search_candidates_caps_at_three():
+    rows = [
+        {"companyId": "1", "companyName": "Alpha", "size": "1 to 50"},
+        {"companyId": "2", "companyName": "Beta", "size": "51 to 200"},
+        {"companyId": "3", "companyName": "Gamma"},
+        {"companyId": "4", "companyName": "Delta"},
+    ]
+    candidates = format_search_candidates(rows, limit=3)
+    assert len(candidates) == 3
+    assert candidates[0]["glassdoorCompanyId"] == "1"
+    assert candidates[0]["matchedName"] == "Alpha"
+    assert candidates[0]["previewSize"] == "1 to 50"
+    assert candidates[2]["matchedName"] == "Gamma"
+
+
+def test_format_repick_activity_log_message():
+    assert format_repick_activity_log_message("QualiTest Group") == (
+        "Company research · employer changed to QualiTest Group"
+    )

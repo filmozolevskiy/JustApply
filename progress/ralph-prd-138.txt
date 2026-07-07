@@ -29,3 +29,18 @@
 **Quality gates:** ruff ✓ · mypy ✓ · pytest 866 passed · coverage 84.76%
 
 **Commit:** 20be118
+
+## Iteration 3 — Company Research — Wrong company repick (#141)
+
+**Status:** closed
+
+**Summary:**
+- Added `POST /api/jobs/{id}/company-research/candidates` — clears employer **Company Research Cache**, runs Glassdoor `companySearch`, returns top 3 picker candidates.
+- Added `GET .../repick-preflight` and `POST .../repick` with background task; `run_company_research_repick_pipeline` seeds picked employer then fetches billable overview/title slices.
+- Repick logs **Job Activity Log** as `Company research · employer changed to {matchedName}`.
+- Drawer **Wrong company?** button opens employer picker modal; spend confirmation when repick is billable; task log streaming mirrors refresh flow.
+- Core helpers: `format_search_candidates`, `format_repick_activity_log_message`, `resolve_repick_slices`.
+
+**Quality gates:** ruff ✓ · mypy ✓ · pytest 875 passed · coverage 84.68%
+
+**Commit:** (pending)

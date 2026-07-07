@@ -10,6 +10,7 @@ import {
 import {
   buildApifySpendBodyHtml,
   buildGlassdoorSpendBodyHtml,
+  showCompanyPickerModal,
   showSpendAckModal,
   showSpendConfirmModal,
 } from './spendConfirmation.js';
@@ -629,6 +630,127 @@ export function createBoardOrchestrator({
     }
   }
 
+  async function repickCompany(id) {
+    const job = findJob(id);
+    if (!job) return;
+
+    try {
+      const candidatesResp = await fetch(`/api/jobs/${id}/company-research/candidates`, {
+        method: 'POST',
+      });
+      if (!candidatesResp.ok) {
+        const err = await candidatesResp.json().catch(() => ({}));
+        await showSpendAckModal({
+          title: 'Cannot search employers',
+          message: err.message || 'Glassdoor company search failed.',
+        });
+        return;
+      }
+
+      const { candidates } = await candidatesResp.json();
+      if (!candidates?.length) {
+        await showSpendAckModal({
+          title: 'No employers found',
+          message: 'Glassdoor returned no company matches for this employer name.',
+        });
+        return;
+      }
+
+      const selected = await showCompanyPickerModal(candidates);
+      if (!selected) return;
+
+      const preflightParams = new URLSearchParams({
+        glassdoorCompanyId: selected.glassdoorCompanyId,
+        matchedName: selected.matchedName,
+      });
+      const existingTitle = job.companyResearch?.glassdoorJobTitle;
+      if (existingTitle) {
+        preflightParams.set('glassdoorJobTitle', existingTitle);
+      }
+
+      const preflightResp = await fetch(
+        `/api/jobs/${id}/company-research/repick-preflight?${preflightParams}`,
+      );
+      if (!preflightResp.ok) {
+        const err = await preflightResp.json().catch(() => ({}));
+        await showSpendAckModal({
+          title: 'Cannot repick employer',
+          message: err.message || 'Company research repick is unavailable for this job.',
+        });
+        return;
+      }
+
+      const preflightData = await preflightResp.json();
+      let glassdoorJobTitle = preflightData.default_glassdoor_job_title || job.title;
+
+      if (preflightData.will_call_apify) {
+        const ok = await showSpendConfirmModal({
+          title: 'Repick Glassdoor Employer',
+          subtitle: 'Glassdoor via Apify',
+          bodyHtml: buildGlassdoorSpendBodyHtml(preflightData),
+          confirmLabel: 'Proceed',
+        });
+        if (!ok) return;
+        const titleInput = document.getElementById('spend-glassdoor-job-title');
+        if (titleInput && titleInput.value.trim()) {
+          glassdoorJobTitle = titleInput.value.trim();
+        }
+      }
+
+      activeCompanyResearchJobId = id;
+      renderActiveVariant();
+      drawer.refreshDrawerIfOpen(id);
+      addLogLine(
+        `Repicking Glassdoor employer for [${job.title} @ ${job.company}] → ${selected.matchedName}…`,
+        'info',
+      );
+      expandLogsConsole();
+
+      const resp = await fetch(`/api/jobs/${id}/company-research/repick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          glassdoorCompanyId: selected.glassdoorCompanyId,
+          matchedName: selected.matchedName,
+          glassdoorJobTitle,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        addLogLine(`Company research repick failed: ${err.message || resp.status}`, 'error');
+        return;
+      }
+
+      const data = await resp.json();
+      const taskId = data.task_id;
+      localStorage.setItem(ACTIVE_COMPANY_RESEARCH_TASK_KEY, taskId);
+      localStorage.setItem(ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY, '0');
+      taskLog.setEnrichEventSource(connectTaskLogStream(taskId, {
+        skipKey: ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY,
+        taskKey: ACTIVE_COMPANY_RESEARCH_TASK_KEY,
+        existingSource: taskLog.getEnrichEventSource(),
+        onResult(logData) {
+          if (logData.job) updateJob(logData.job.id, logData.job);
+          drawer.refreshDrawerIfOpen(id);
+          renderActiveVariant();
+        },
+        onDone() {
+          activeCompanyResearchJobId = null;
+          drawer.refreshDrawerIfOpen(id);
+          renderActiveVariant();
+        },
+      }));
+    } catch (err) {
+      addLogLine(`Company research repick failed: ${err.message}`, 'error');
+    } finally {
+      if (!localStorage.getItem(ACTIVE_COMPANY_RESEARCH_TASK_KEY)) {
+        activeCompanyResearchJobId = null;
+        renderActiveVariant();
+        drawer.refreshDrawerIfOpen(id);
+      }
+    }
+  }
+
   async function loadMoreContacts(id) {
     const job = findJob(id);
     if (!job) return;
@@ -874,6 +996,7 @@ export function createBoardOrchestrator({
     postOutreachTemplate,
     reclassifyJob,
     rejectJobFromDrawer,
+    repickCompany,
     researchCompany,
     renderActiveVariant,
     resetBoardControls,

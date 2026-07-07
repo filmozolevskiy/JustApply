@@ -72,6 +72,27 @@ def test_research_company_skips_spend_when_fully_cached():
     assert research_fn.index("will_call_apify") < research_fn.index("showSpendConfirmModal")
 
 
+def test_drawer_wrong_company_button_in_researched_section():
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "src", "web", "static", "js", "companyResearchUi.js"
+    )
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    assert "Wrong company?" in content
+    assert "repickCompany" in content
+
+
+def test_board_orchestration_repick_company_action():
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardOrchestration.js"
+    )
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    assert "repickCompany" in content
+    assert "company-research/candidates" in content
+    assert "company-research/repick" in content
+
+
 def test_research_company_passes_existing_glassdoor_title_to_preflight():
     path = os.path.join(
         os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardOrchestration.js"

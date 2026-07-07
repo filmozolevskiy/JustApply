@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from src import db as database
 from src.db.company_research_cache import set_company_research_cache
 from src.db.jobs import add_job, update_job_evaluation
-from src.pipelines import run_company_research_pipeline
+from src.pipelines import run_company_research_pipeline, run_company_research_repick_pipeline
 from src.web.server import app
 
 client = TestClient(app)
@@ -399,3 +399,149 @@ async def test_two_jobs_same_company_different_titles(db):
     cached = database.get_company_research_cache("flighthub", db_path=db)
     assert cached["salariesByTitle"]["qa engineer"]["medianBaseSalary"] == 85000
     assert cached["salariesByTitle"]["data analyst"]["medianBaseSalary"] == 92000
+
+
+QUALITEST_SEARCH = [
+    {"companyId": "111", "companyName": "QualiTest Group", "size": "51 to 200 Employees"},
+    {"companyId": "222", "companyName": "Qualitest Global", "size": "10000+ Employees"},
+    {"companyId": "333", "companyName": "QualiTest India", "size": "201 to 500 Employees"},
+    {"companyId": "444", "companyName": "Other Corp"},
+]
+
+
+def _seed_researched_job(db, company="Qualitest", title="QA Engineer"):
+    job_id = _make_matched_job(db, company=company, title=title)
+    database.update_company_research(
+        job_id,
+        {
+            "glassdoorCompanyId": "222",
+            "matchedName": "Qualitest Global",
+            "glassdoorJobTitle": "QA Engineer",
+            "rating": 3.5,
+            "reviewCount": 1000,
+            "recommendPercent": 55.0,
+            "companySize": "10000+ Employees",
+        },
+        db_path=db,
+    )
+    set_company_research_cache(
+        "qualitest",
+        {
+            "glassdoorCompanyId": "222",
+            "matchedName": "Qualitest Global",
+            "companySize": "10000+ Employees",
+            "rating": 3.5,
+            "reviewCount": 1000,
+            "recommendPercent": 55.0,
+            "salariesByTitle": {"qa engineer": None},
+            "interviewsByTitle": {"qa engineer": []},
+        },
+        db_path=db,
+    )
+    return job_id
+
+
+def test_candidates_clears_cache_and_returns_top_three(db, monkeypatch):
+    job_id = _seed_researched_job(db)
+
+    async def fake_fetch(company_name, apify_runner=None):
+        assert company_name == "Qualitest"
+        return [
+            {"glassdoorCompanyId": "111", "matchedName": "QualiTest Group", "previewSize": "51 to 200 Employees"},
+            {"glassdoorCompanyId": "222", "matchedName": "Qualitest Global", "previewSize": "10000+ Employees"},
+            {"glassdoorCompanyId": "333", "matchedName": "QualiTest India", "previewSize": "201 to 500 Employees"},
+        ]
+
+    import src.core.company_research.glassdoor_intel as glassdoor_module
+
+    monkeypatch.setattr(glassdoor_module, "fetch_glassdoor_company_candidates", fake_fetch)
+    resp = client.post(f"/api/jobs/{job_id}/company-research/candidates")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["candidates"]) == 3
+    assert data["candidates"][0]["matchedName"] == "QualiTest Group"
+    assert database.get_company_research_cache("qualitest", db_path=db) is None
+
+
+def test_candidates_requires_researched_job(db):
+    job_id = _make_matched_job(db)
+    resp = client.post(f"/api/jobs/{job_id}/company-research/candidates")
+    assert resp.status_code == 422
+
+
+def test_repick_preflight_bills_overview_and_title_slices(db):
+    job_id = _seed_researched_job(db)
+    resp = client.get(
+        f"/api/jobs/{job_id}/company-research/repick-preflight",
+        params={
+            "glassdoorCompanyId": "111",
+            "matchedName": "QualiTest Group",
+            "glassdoorJobTitle": "QA Engineer",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["will_call_apify"] is True
+    assert data["estimated_runs"] == 3
+    assert "Company search" in data["cached_slices"]
+    assert "Company overview" in data["billable_slices"]
+    assert "Salaries" in data["billable_slices"]
+    assert "Interviews" in data["billable_slices"]
+
+
+def test_repick_endpoint_returns_task_id(db):
+    job_id = _seed_researched_job(db)
+    resp = client.post(
+        f"/api/jobs/{job_id}/company-research/repick",
+        json={
+            "glassdoorCompanyId": "111",
+            "matchedName": "QualiTest Group",
+            "glassdoorJobTitle": "QA Engineer",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "task_id" in data
+    assert data["job_id"] == job_id
+
+
+@pytest.mark.asyncio
+async def test_repick_pipeline_updates_employer_and_logs(db):
+    job_id = _seed_researched_job(db)
+    runner = _mock_runner(
+        {
+            "companyOverview": [
+                {
+                    "size": "51 to 200 Employees",
+                    "rating": 4.1,
+                    "reviewCount": 120,
+                    "recommendToFriendPercent": 72,
+                }
+            ],
+            "companySalaries": [{"medianBaseSalary": 78000, "currency": "USD"}],
+            "companyInterviews": [
+                {
+                    "jobTitle": "QA Engineer",
+                    "difficulty": "Average",
+                    "outcome": "Accepted offer",
+                    "processDescription": "Phone screen.",
+                }
+            ],
+        }
+    )
+    updated = await run_company_research_repick_pipeline(
+        job_id,
+        "QA Engineer",
+        "111",
+        "QualiTest Group",
+        apify_runner=runner,
+        db_path=db,
+    )
+    assert updated.companyResearch["matchedName"] == "QualiTest Group"
+    assert updated.companyResearch["glassdoorCompanyId"] == "111"
+    assert updated.companyResearch["rating"] == 4.1
+    cached = database.get_company_research_cache("qualitest", db_path=db)
+    assert cached["glassdoorCompanyId"] == "111"
+    assert cached["matchedName"] == "QualiTest Group"
+    messages = [e.message for e in updated.activityLog]
+    assert any("employer changed to QualiTest Group" in m for m in messages)
