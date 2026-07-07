@@ -21,6 +21,7 @@ _CONTACTED_PROFILES_DDL = """
 """
 
 def _load_all_jobs(db_path=None) -> list[Job]:
+    """Legacy full-table loader — must not be called from job read paths."""
     if db_path is None:
         db_path = DB_PATH
     conn = get_db_connection(db_path)
@@ -95,6 +96,53 @@ def _pick_most_recent(matches: list[dict]) -> dict | None:
     if not matches:
         return None
     return max(matches, key=lambda item: (item.get("contactedAt") or "", item.get("jobId") or 0))
+
+
+def _lookup_slugs_for_jobs(jobs: list[Job]) -> set[str]:
+    slugs: set[str] = set()
+    for job in jobs:
+        if job.id is None:
+            continue
+        for contact in job.contacts or []:
+            raw = contact.model_dump() if isinstance(contact, Contact) else dict(contact)
+            if raw.get("contacted"):
+                continue
+            slug = normalize_linkedin_url(_contact_profile_url(raw))
+            if slug:
+                slugs.add(slug)
+    return slugs
+
+
+def load_contacted_index_for_slugs(slugs: set[str], db_path=None) -> dict[str, list[dict]]:
+    """Load contacted-profile index rows for the given LinkedIn slugs only."""
+    if not slugs:
+        return {}
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    placeholders = ",".join("?" * len(slugs))
+    cursor.execute(
+        f"""
+        SELECT profile_slug, job_id, company, title, contacted_at
+        FROM {CONTACTED_PROFILES_TABLE}
+        WHERE profile_slug IN ({placeholders})
+        """,
+        tuple(slugs),
+    )
+    index: dict[str, list[dict]] = {}
+    for row in cursor.fetchall():
+        slug = row["profile_slug"]
+        index.setdefault(slug, []).append(
+            {
+                "jobId": row["job_id"],
+                "company": row["company"],
+                "title": row["title"],
+                "contactedAt": row["contacted_at"] or "",
+            }
+        )
+    conn.close()
+    return index
 
 
 def contacted_elsewhere_for_contact(
@@ -199,8 +247,7 @@ def enrich_jobs_with_contacted_elsewhere(jobs: list[Job], db_path=None) -> list[
     if not jobs:
         return jobs
 
-    all_jobs = _load_all_jobs(db_path=db_path)
-    index = build_contacted_index(all_jobs)
+    index = load_contacted_index_for_slugs(_lookup_slugs_for_jobs(jobs), db_path=db_path)
 
     enriched: list[Job] = []
     for job in jobs:

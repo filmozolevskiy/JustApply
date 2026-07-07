@@ -498,6 +498,17 @@ def add_job(job, db_path=None):
     ))
     new_id = cursor.lastrowid
     _append_activity_log(cursor, new_id, "Found")
+    cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (new_id,))
+    activity_row = cursor.fetchone()
+    activity_log = _parse_activity_log(activity_row[0] if activity_row else None)
+    sync_job_contacted_profiles_index(
+        conn,
+        new_id,
+        company,
+        title,
+        fields["contacts"],
+        activity_log,
+    )
     conn.commit()
     conn.close()
     return new_id

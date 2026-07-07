@@ -17,3 +17,11 @@
 - Re-classify contact rewrites replace prior index rows for that job
 - Tests: toggle add/remove index rows; enrich and reclassify sync without rebuild
 - Quality gates: ruff, mypy, pytest (884 passed, 84.81% coverage)
+
+## #146 — Serve Contacted Elsewhere from index on job reads with regression guard
+
+- `enrich_jobs_with_contacted_elsewhere` now uses `load_contacted_index_for_slugs()` (batched IN query on `contacted_profiles`) instead of `_load_all_jobs` + `build_contacted_index`
+- `_lookup_slugs_for_jobs()` collects slugs only from non-contacted contacts on returned jobs
+- Hooked `add_job` into index sync so jobs inserted with contacted contacts populate the index (needed for read path correctness)
+- Regression tests spy on `_load_all_jobs` to ensure `get_job` and `get_jobs` never reintroduce full-table scans
+- Quality gates: ruff, mypy, pytest (886 passed, 84.71% coverage)

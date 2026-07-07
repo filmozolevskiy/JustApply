@@ -427,6 +427,65 @@ def test_reclassify_replaces_index_rows_for_job(db):
     assert rows[0]["contacted_at"] == "2026-05-01T08:00:00+00:00"
 
 
+def test_get_job_does_not_load_all_jobs_for_contacted_elsewhere(db, monkeypatch):
+    """Regression: single-job reads must not scan every job row."""
+    from src.db import contacted_elsewhere as ce
+
+    calls: list[int] = []
+    original = ce._load_all_jobs
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ce, "_load_all_jobs", spy)
+
+    source_id = _add_job_with_contact(
+        db,
+        title="Source Role",
+        company="SourceCo",
+        contacted=True,
+        contacted_at="2026-02-01T08:00:00+00:00",
+    )
+    target_id = _add_job_with_contact(db, title="Target Role", company="TargetCo")
+    for i in range(20):
+        add_job({"title": f"Noise {i}", "company": "NoiseCo", "status": "matched"}, db_path=db)
+
+    job = get_job(target_id, db_path=db)
+    assert job.contacts[0].model_dump()["contactedElsewhere"]["jobId"] == source_id
+    assert calls == []
+
+
+def test_get_jobs_does_not_load_all_jobs_for_contacted_elsewhere(db, monkeypatch):
+    """Regression: list reads enrich via index lookups, not full-table rescans."""
+    from src.db import contacted_elsewhere as ce
+
+    calls: list[int] = []
+    original = ce._load_all_jobs
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ce, "_load_all_jobs", spy)
+
+    source_id = _add_job_with_contact(
+        db,
+        title="Source Role",
+        company="SourceCo",
+        contacted=True,
+        contacted_at="2026-02-01T08:00:00+00:00",
+    )
+    target_id = _add_job_with_contact(db, title="Target Role", company="TargetCo")
+    for i in range(20):
+        add_job({"title": f"Noise {i}", "company": "NoiseCo", "status": "matched"}, db_path=db)
+
+    jobs = get_jobs(db_path=db)
+    target = next(j for j in jobs if j.id == target_id)
+    assert target.contacts[0].model_dump()["contactedElsewhere"]["jobId"] == source_id
+    assert calls == []
+
+
 def test_update_job_status_returns_contacted_elsewhere(db, monkeypatch):
     monkeypatch.setattr(_db_connection, "DB_PATH", db)
     client = TestClient(app)
