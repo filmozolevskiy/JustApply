@@ -277,4 +277,8 @@ def init_db(db_path=None, allow_seed=False):
     cursor.execute("UPDATE jobs SET status = 'applied' WHERE status = 'contacted'")
     conn.commit()
 
+    from .contacted_elsewhere import ensure_contacted_profiles_index
+
+    ensure_contacted_profiles_index(conn)
+
     conn.close()

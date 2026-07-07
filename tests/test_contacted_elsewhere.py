@@ -15,6 +15,7 @@ from src.db.contacted_elsewhere import (
     contacted_elsewhere_for_contact,
     contacted_timestamp,
     enrich_jobs_with_contacted_elsewhere,
+    list_contacted_profile_rows,
 )
 from src.web.server import app
 
@@ -54,6 +55,85 @@ def _add_job_with_contact(db_path, *, title, company, contacted=False, contacted
         conn.commit()
         conn.close()
     return job_id
+
+
+def test_init_db_backfills_contacted_profiles_index(tmp_path):
+    """Upgrade path: legacy DB without index gets backfilled from contacted contacts."""
+    db_path = str(tmp_path / "legacy_contacted.db")
+    open(db_path, "a").close()
+    init_db(db_path)
+    active_id = _add_job_with_contact(
+        db_path,
+        title="Role A",
+        company="Acme",
+        contacted=True,
+        contacted_at="2026-01-01T08:00:00+00:00",
+    )
+    archived_id = _add_job_with_contact(
+        db_path,
+        title="Role B",
+        company="Beta",
+        contacted=True,
+        contacted_at="2026-02-01T08:00:00+00:00",
+        archived=True,
+    )
+    _add_job_with_contact(db_path, title="Role C", company="Gamma", contacted=False)
+
+    from src.db.connection import get_db_connection
+
+    conn = get_db_connection(db_path)
+    conn.execute("DROP TABLE IF EXISTS contacted_profiles")
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)
+    rows = list_contacted_profile_rows(db_path)
+    assert len(rows) == 2
+    by_job = {row["job_id"]: row for row in rows}
+    assert by_job[active_id] == {
+        "profile_slug": "/in/jane-doe",
+        "job_id": active_id,
+        "company": "Acme",
+        "title": "Role A",
+        "contacted_at": "2026-01-01T08:00:00+00:00",
+    }
+    assert by_job[archived_id]["company"] == "Beta"
+    assert by_job[archived_id]["contacted_at"] == "2026-02-01T08:00:00+00:00"
+
+
+def test_init_db_backfill_normalizes_linkedin_url_variants(tmp_path):
+    db_path = str(tmp_path / "url_variants.db")
+    open(db_path, "a").close()
+    init_db(db_path)
+    job_id = add_job(
+        {
+            "title": "Role",
+            "company": "Acme",
+            "status": "accepted",
+            "contacts": [
+                {
+                    "name": "Jane Doe",
+                    "title": "Recruiter",
+                    "url": "https://www.linkedin.com/in/jane-doe?trk=foo",
+                    "contacted": True,
+                    "contacted_at": "2026-03-01T08:00:00+00:00",
+                }
+            ],
+        },
+        db_path=db_path,
+    )
+    from src.db.connection import get_db_connection
+
+    conn = get_db_connection(db_path)
+    conn.execute("DROP TABLE IF EXISTS contacted_profiles")
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)
+    rows = list_contacted_profile_rows(db_path)
+    assert len(rows) == 1
+    assert rows[0]["profile_slug"] == "/in/jane-doe"
+    assert rows[0]["job_id"] == job_id
 
 
 def test_contacted_timestamp_prefers_contacted_at(db):

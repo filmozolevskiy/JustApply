@@ -7,6 +7,18 @@ from ..schemas import Contact, Job
 from .connection import DB_PATH, get_db_connection
 from .job_model import parse_job_row
 
+CONTACTED_PROFILES_TABLE = "contacted_profiles"
+
+_CONTACTED_PROFILES_DDL = """
+    CREATE TABLE IF NOT EXISTS contacted_profiles (
+        profile_slug TEXT NOT NULL,
+        job_id INTEGER NOT NULL,
+        company TEXT NOT NULL,
+        title TEXT NOT NULL,
+        contacted_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (profile_slug, job_id)
+    )
+"""
 
 def _load_all_jobs(db_path=None) -> list[Job]:
     if db_path is None:
@@ -137,3 +149,81 @@ def enrich_jobs_with_contacted_elsewhere(jobs: list[Job], db_path=None) -> list[
             updated_contacts.append(Contact(**payload))
         enriched.append(job.model_copy(update={"contacts": updated_contacts}))
     return enriched
+
+
+def backfill_contacted_profiles_index(conn) -> None:
+    """Rebuild the contacted-profiles index from all jobs in the database."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM jobs ORDER BY id DESC")
+    jobs: list[Job] = []
+    for row in cursor.fetchall():
+        try:
+            jobs.append(parse_job_row(row))
+        except (KeyError, TypeError, ValueError):
+            continue
+    index = build_contacted_index(jobs)
+    cursor.execute(f"DELETE FROM {CONTACTED_PROFILES_TABLE}")
+    for slug, entries in index.items():
+        for entry in entries:
+            cursor.execute(
+                f"""
+                INSERT INTO {CONTACTED_PROFILES_TABLE}
+                    (profile_slug, job_id, company, title, contacted_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    slug,
+                    entry["jobId"],
+                    entry["company"],
+                    entry["title"],
+                    entry.get("contactedAt") or "",
+                ),
+            )
+    conn.commit()
+
+
+def ensure_contacted_profiles_index(conn) -> None:
+    """Create the index table and backfill once when missing or empty."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (CONTACTED_PROFILES_TABLE,),
+    )
+    existed_before = cursor.fetchone() is not None
+    cursor.execute(_CONTACTED_PROFILES_DDL)
+    conn.commit()
+
+    if not existed_before:
+        backfill_contacted_profiles_index(conn)
+        return
+
+    cursor.execute(f"SELECT COUNT(*) FROM {CONTACTED_PROFILES_TABLE}")
+    if cursor.fetchone()[0] == 0:
+        backfill_contacted_profiles_index(conn)
+
+
+def list_contacted_profile_rows(db_path=None) -> list[dict]:
+    """Return persisted contacted-profile index rows for tests and read paths."""
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        f"""
+        SELECT profile_slug, job_id, company, title, contacted_at
+        FROM {CONTACTED_PROFILES_TABLE}
+        ORDER BY job_id
+        """
+    )
+    rows = [
+        {
+            "profile_slug": row["profile_slug"],
+            "job_id": row["job_id"],
+            "company": row["company"],
+            "title": row["title"],
+            "contacted_at": row["contacted_at"],
+        }
+        for row in cursor.fetchall()
+    ]
+    conn.close()
+    return rows

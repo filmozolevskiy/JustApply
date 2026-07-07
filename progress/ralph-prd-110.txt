@@ -1,0 +1,10 @@
+# Ralph Loop Progress — PRD #110
+
+## #144 — Add contacted-profiles index table and backfill from existing jobs
+
+- Added `contacted_profiles` SQLite table (profile_slug, job_id, company, title, contacted_at)
+- `ensure_contacted_profiles_index()` runs on `init_db`: creates table and backfills when missing/empty
+- Backfill reuses `build_contacted_index()` with same `/in/{slug}` normalization; includes archived jobs
+- Skips legacy rows that cannot be parsed into full Job models (minimal-schema fixtures)
+- Tests: backfill after DROP TABLE upgrade path; URL variant normalization
+- Quality gates: ruff, mypy, pytest (880 passed, 84.83% coverage)
