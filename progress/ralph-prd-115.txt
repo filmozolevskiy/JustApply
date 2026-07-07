@@ -1,0 +1,15 @@
+# Ralph Loop Progress — PRD #115
+
+Started: 2026-07-07
+Parent PRD: #115 (Internal Code Consistency Cleanup)
+Queue: 10 ready-for-agent issues (#151–#160)
+
+Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
+
+## #159 — Remove ephemeral agent progress files and obsolete prototypes from repo (2026-07-07)
+
+- Removed 11 tracked `progress/ralph-prd-*.txt` files; added `progress/ralph-prd-*.txt` to `.gitignore`
+- Deleted obsolete `dashboard_profile_manager.prototype.*` files (Profile Manager lives in static modules)
+- Removed one-off `scripts/probe_brightdata_fields.py` and `scripts/probe_brightdata_company.py`
+- Removed legacy `_load_all_jobs` from `contacted_elsewhere.py`; regression tests now spy on `load_contacted_index_for_slugs`
+- Quality gates: ruff, mypy, pytest (898 passed, 84.88% coverage)

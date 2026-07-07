@@ -43,6 +43,7 @@ uvicorn.log
 # Local scripts & progress
 ralph.sh
 progress.txt
+progress/ralph-prd-*.txt
 
 # Local resume profiles (not versioned)
 resumes/

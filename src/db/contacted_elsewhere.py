@@ -20,18 +20,6 @@ _CONTACTED_PROFILES_DDL = """
     )
 """
 
-def _load_all_jobs(db_path=None) -> list[Job]:
-    """Legacy full-table loader — must not be called from job read paths."""
-    if db_path is None:
-        db_path = DB_PATH
-    conn = get_db_connection(db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM jobs ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return [parse_job_row(r) for r in rows]
-
-
 def _contact_profile_url(contact: Contact | dict) -> str:
     if isinstance(contact, Contact):
         return contact.url or contact.linkedin or ""

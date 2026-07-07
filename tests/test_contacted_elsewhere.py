@@ -427,18 +427,18 @@ def test_reclassify_replaces_index_rows_for_job(db):
     assert rows[0]["contacted_at"] == "2026-05-01T08:00:00+00:00"
 
 
-def test_get_job_does_not_load_all_jobs_for_contacted_elsewhere(db, monkeypatch):
-    """Regression: single-job reads must not scan every job row."""
+def test_get_job_uses_contacted_index_for_contacted_elsewhere(db, monkeypatch):
+    """Regression: single-job reads enrich via indexed slug lookups."""
     from src.db import contacted_elsewhere as ce
 
-    calls: list[int] = []
-    original = ce._load_all_jobs
+    calls: list[set[str]] = []
+    original = ce.load_contacted_index_for_slugs
 
-    def spy(*args, **kwargs):
-        calls.append(1)
-        return original(*args, **kwargs)
+    def spy(slugs, db_path=None):
+        calls.append(set(slugs))
+        return original(slugs, db_path=db_path)
 
-    monkeypatch.setattr(ce, "_load_all_jobs", spy)
+    monkeypatch.setattr(ce, "load_contacted_index_for_slugs", spy)
 
     source_id = _add_job_with_contact(
         db,
@@ -453,21 +453,22 @@ def test_get_job_does_not_load_all_jobs_for_contacted_elsewhere(db, monkeypatch)
 
     job = get_job(target_id, db_path=db)
     assert job.contacts[0].model_dump()["contactedElsewhere"]["jobId"] == source_id
-    assert calls == []
+    assert len(calls) == 1
+    assert calls[0] == {"/in/jane-doe"}
 
 
-def test_get_jobs_does_not_load_all_jobs_for_contacted_elsewhere(db, monkeypatch):
-    """Regression: list reads enrich via index lookups, not full-table rescans."""
+def test_get_jobs_uses_contacted_index_for_contacted_elsewhere(db, monkeypatch):
+    """Regression: list reads enrich via indexed slug lookups."""
     from src.db import contacted_elsewhere as ce
 
-    calls: list[int] = []
-    original = ce._load_all_jobs
+    calls: list[set[str]] = []
+    original = ce.load_contacted_index_for_slugs
 
-    def spy(*args, **kwargs):
-        calls.append(1)
-        return original(*args, **kwargs)
+    def spy(slugs, db_path=None):
+        calls.append(set(slugs))
+        return original(slugs, db_path=db_path)
 
-    monkeypatch.setattr(ce, "_load_all_jobs", spy)
+    monkeypatch.setattr(ce, "load_contacted_index_for_slugs", spy)
 
     source_id = _add_job_with_contact(
         db,
@@ -483,7 +484,8 @@ def test_get_jobs_does_not_load_all_jobs_for_contacted_elsewhere(db, monkeypatch
     jobs = get_jobs(db_path=db)
     target = next(j for j in jobs if j.id == target_id)
     assert target.contacts[0].model_dump()["contactedElsewhere"]["jobId"] == source_id
-    assert calls == []
+    assert len(calls) == 1
+    assert "/in/jane-doe" in calls[0]
 
 
 def test_update_job_status_returns_contacted_elsewhere(db, monkeypatch):
