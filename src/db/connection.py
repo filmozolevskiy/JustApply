@@ -7,12 +7,19 @@ from .seed import _seed_db
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = os.path.join(_PROJECT_ROOT, "data", "just_apply.db")
 
+# Milliseconds to wait on locked tables before raising OperationalError.
+# WAL + timeout reduce contention when the Kanban Dashboard and Batch Poller
+# read while CLI enrichment writes overlap on the same local database file.
+_BUSY_TIMEOUT_MS = 5000
+
 
 def get_db_connection(db_path=None):
     if db_path is None:
         db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
     return conn
 
 

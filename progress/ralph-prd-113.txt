@@ -27,3 +27,16 @@
 **Quality gates:** ruff ✓ | mypy ✓ | pytest 894 passed, 84.72% coverage ✓
 
 **Commit:** Remove in-database Job Backup from domain glossary (#148)
+
+## 2026-07-06 — Issue #149: SQLite WAL mode and busy timeout
+
+**Task:** Enable SQLite WAL mode and busy timeout on database connections (#149)
+
+**Summary:**
+- Updated `get_db_connection` to set `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` on each open
+- Added module comment explaining WAL reduces lock contention for dashboard reads overlapping CLI/enrichment writes
+- Added `tests/test_connection.py` asserting WAL and busy timeout via TDD
+
+**Quality gates:** ruff ✓ | mypy ✓ | pytest 896 passed, 84.73% coverage ✓
+
+**Commit:** Enable SQLite WAL mode and busy timeout on database connections (#149)
