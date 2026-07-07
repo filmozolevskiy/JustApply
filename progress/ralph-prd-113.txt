@@ -13,3 +13,17 @@
 **Quality gates:** ruff ✓ | mypy ✓ | pytest 892 passed, 84.67% coverage ✓
 
 **Commit:** Add versioned migration runner for Job Tracker Database (#147)
+
+## 2026-07-06 — Issue #148: Remove in-database Job Backup from domain glossary
+
+**Task:** Remove in-database Job Backup from domain glossary (#148)
+
+**Summary:**
+- Removed **Job Backup** entry from `CONTEXT.md` (no `jobs_backup` table was ever implemented)
+- Updated **Database Snapshot** to state it is the sole disaster-recovery path; kept `jobs_backup` only in `_Avoid_` terms
+- Updated `docs/prd/contacted-elsewhere-performance.md` to index live `jobs` contacts only
+- Added `tests/test_context_glossary.py` asserting glossary hygiene via TDD
+
+**Quality gates:** ruff ✓ | mypy ✓ | pytest 894 passed, 84.72% coverage ✓
+
+**Commit:** Remove in-database Job Backup from domain glossary (#148)

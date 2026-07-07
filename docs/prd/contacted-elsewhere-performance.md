@@ -42,7 +42,7 @@ Replace the full-table scan with an indexed or cached lookup keyed by normalized
 - Alternative acceptable approach: in-memory cache with explicit invalidation on contact mutations, if persistence is unnecessary — prefer persistent index if it simplifies correctness across dashboard restarts.
 - **Single-job fetch** must not load all jobs; **list jobs** may batch-enrich only the returned page's contacts using the shared index.
 - Normalization rules must match existing **Contacted Elsewhere** tests (URL variants, same slug).
-- **Job Backup** rows in `jobs_backup` (if present) remain excluded per domain glossary — index only live job contacts unless tests specify otherwise.
+- Index only live job contacts from the `jobs` table unless tests specify otherwise.
 - Index maintenance hooks belong at contact update, enrichment persist, load-more append, and re-classify paths that rewrite contact arrays.
 
 ## Testing Decisions
