@@ -57,4 +57,4 @@
 
 **Quality gates:** ruff ✓ · mypy ✓ · pytest 878 passed · coverage 84.73%
 
-**Commit:** (pending)
+**Commit:** 8e54a14
