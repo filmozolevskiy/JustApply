@@ -548,7 +548,14 @@ export function createBoardOrchestrator({
     const job = findJob(id);
     if (!job) return;
 
-    const preflightResp = await fetch(`/api/jobs/${id}/company-research-preflight`);
+    const preflightParams = new URLSearchParams();
+    const existingTitle = job.companyResearch?.glassdoorJobTitle;
+    if (existingTitle) {
+      preflightParams.set('glassdoorJobTitle', existingTitle);
+    }
+    const preflightQuery = preflightParams.toString();
+    const preflightUrl = `/api/jobs/${id}/company-research-preflight${preflightQuery ? `?${preflightQuery}` : ''}`;
+    const preflightResp = await fetch(preflightUrl);
     if (!preflightResp.ok) {
       const err = await preflightResp.json().catch(() => ({}));
       await showSpendAckModal({

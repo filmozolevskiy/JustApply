@@ -22,6 +22,20 @@ def company_research_allowed(status: str, archived: bool = False) -> bool:
     return status in COMPANY_RESEARCH_LANES and not archived
 
 
+def effective_glassdoor_job_title(
+    listing_title: str,
+    *,
+    glassdoor_job_title: str | None = None,
+    existing_research: dict | None = None,
+) -> str:
+    """Resolve the title used for cache keys and drawer labels."""
+    if glassdoor_job_title and glassdoor_job_title.strip():
+        return glassdoor_job_title.strip()
+    if existing_research and existing_research.get("glassdoorJobTitle"):
+        return str(existing_research["glassdoorJobTitle"]).strip()
+    return (listing_title or "").strip()
+
+
 def resolve_company_research_slices(
     company: str,
     listing_title: str,

@@ -14,4 +14,18 @@
 
 **Quality gates:** ruff ✓ · mypy ✓ · pytest 859 passed · coverage 84.59%
 
-**Commit:** 557ff03
+**Commit:** 0dedf7d
+
+## Iteration 2 — Company Research — cache-aware reuse and Refresh (#140)
+
+**Status:** closed
+
+**Summary:**
+- Added `effective_glassdoor_job_title()` so preflight/run default to the job's stored **Glassdoor job title** on refresh (not the listing title).
+- Preflight and run endpoints use existing `companyResearch.glassdoorJobTitle` when no override is passed.
+- `researchCompany()` passes stored title to preflight so full cache hits skip **Spend Confirmation** on refresh.
+- Tests: preflight full/partial hit math, partial pipeline (title slices only), infrastructure error not cached, two jobs same employer different titles, drawer Refresh + spend-skip wiring.
+
+**Quality gates:** ruff ✓ · mypy ✓ · pytest 866 passed · coverage 84.76%
+
+**Commit:** 20be118

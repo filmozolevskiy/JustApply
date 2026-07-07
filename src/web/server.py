@@ -602,6 +602,7 @@ async def company_research_preflight(
 ):
     from ..core.company_research.preflight import (
         company_research_allowed,
+        effective_glassdoor_job_title,
         resolve_company_research_slices,
         slice_labels,
     )
@@ -615,10 +616,15 @@ async def company_research_preflight(
             content={"message": "Company research is only available for Matched and later lanes"},
         )
 
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
     resolved = resolve_company_research_slices(
         job.company or "",
         job.title or "",
-        glassdoor_job_title=glassdoorJobTitle or None,
+        glassdoor_job_title=title,
     )
     estimated_runs = resolved["estimated_runs"]
     result = {
@@ -641,7 +647,10 @@ async def company_research_run(
     body: CompanyResearchRunRequest,
     background_tasks: BackgroundTasks,
 ):
-    from ..core.company_research.preflight import company_research_allowed
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+    )
 
     job = get_job(job_id)
     if not job:
@@ -655,7 +664,11 @@ async def company_research_run(
     task_id = str(uuid.uuid4())
     state = TaskState({"job_id": job_id})
     active_tasks[task_id] = state
-    title = (body.glassdoorJobTitle or job.title or "").strip()
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=body.glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
     background_tasks.add_task(
         run_company_research_task_with_logs,
         task_id,

@@ -4,6 +4,7 @@ import sys
 from unittest.mock import AsyncMock
 
 import pytest
+from src.core.company_research.glassdoor_intel import GlassdoorInfrastructureError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -239,3 +240,162 @@ async def test_pipeline_rejects_scraped_lane(db):
     job_id = add_job({"title": "QA", "company": "Acme", "status": "scraped"}, db_path=db)
     with pytest.raises(ValueError, match="Matched"):
         await run_company_research_pipeline(job_id, "QA Engineer", db_path=db)
+
+
+def test_preflight_defaults_to_existing_research_title(db):
+    job_id = _make_matched_job(db, title="Senior QA Engineer (Hybrid)")
+    database.update_company_research(
+        job_id,
+        {
+            "glassdoorCompanyId": "882104",
+            "matchedName": "FlightHub",
+            "glassdoorJobTitle": "QA Engineer",
+            "rating": 2.8,
+        },
+        db_path=db,
+    )
+    set_company_research_cache(
+        "flighthub",
+        {
+            "glassdoorCompanyId": "882104",
+            "matchedName": "FlightHub",
+            "companySize": "51 to 200 Employees",
+            "rating": 2.8,
+            "reviewCount": 246,
+            "recommendPercent": 40.0,
+            "salariesByTitle": {"qa engineer": None},
+            "interviewsByTitle": {"qa engineer": []},
+        },
+        db_path=db,
+    )
+    resp = client.get(f"/api/jobs/{job_id}/company-research-preflight")
+    data = resp.json()
+    assert data["default_glassdoor_job_title"] == "QA Engineer"
+    assert data["will_call_apify"] is False
+
+
+@pytest.mark.asyncio
+async def test_pipeline_partial_cache_fetches_title_slices_only(db):
+    job_id = _make_matched_job(db)
+    set_company_research_cache(
+        "flighthub",
+        {
+            "glassdoorCompanyId": "882104",
+            "matchedName": "FlightHub",
+            "companySize": "51 to 200 Employees",
+            "rating": 2.8,
+            "reviewCount": 246,
+            "recommendPercent": 40.0,
+            "salariesByTitle": {"qa engineer": {"medianBaseSalary": 85000, "currency": "USD"}},
+            "interviewsByTitle": {"qa engineer": []},
+        },
+        db_path=db,
+    )
+    calls: list[str] = []
+
+    async def runner(operation: str, **kwargs):
+        calls.append(operation)
+        if operation == "companySalaries":
+            return [{"medianBaseSalary": 92000, "currency": "USD", "numSalaries": 12}]
+        if operation == "companyInterviews":
+            return [
+                {
+                    "jobTitle": "Data Analyst",
+                    "difficulty": "Average",
+                    "outcome": "Accepted offer",
+                    "processDescription": "Phone screen then onsite.",
+                }
+            ]
+        raise AssertionError(f"Unexpected operation: {operation}")
+
+    updated = await run_company_research_pipeline(
+        job_id,
+        "Data Analyst",
+        apify_runner=runner,
+        db_path=db,
+    )
+    assert calls == ["companySalaries", "companyInterviews"]
+    assert updated.companyResearch["glassdoorJobTitle"] == "Data Analyst"
+    assert updated.companyResearch["salary"]["medianBaseSalary"] == 92000
+    assert len(updated.companyResearch["interviews"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_infrastructure_error_does_not_cache(db):
+    job_id = _make_matched_job(db)
+    set_company_research_cache(
+        "flighthub",
+        {
+            "glassdoorCompanyId": "882104",
+            "matchedName": "FlightHub",
+            "companySize": "51 to 200 Employees",
+            "rating": 2.8,
+            "reviewCount": 246,
+            "recommendPercent": 40.0,
+            "salariesByTitle": {},
+            "interviewsByTitle": {},
+        },
+        db_path=db,
+    )
+
+    async def runner(operation: str, **kwargs):
+        if operation == "companySalaries":
+            raise GlassdoorInfrastructureError("Apify timeout")
+        return []
+
+    with pytest.raises(GlassdoorInfrastructureError):
+        await run_company_research_pipeline(
+            job_id,
+            "QA Engineer",
+            apify_runner=runner,
+            db_path=db,
+        )
+    cached = database.get_company_research_cache("flighthub", db_path=db)
+    assert "qa engineer" not in cached["salariesByTitle"]
+
+
+@pytest.mark.asyncio
+async def test_two_jobs_same_company_different_titles(db):
+    job_a = _make_matched_job(db, title="Senior QA Engineer")
+    job_b = _make_matched_job(db, title="Data Analyst Lead")
+    qa_runner = _mock_runner(
+        {
+            "companySearch": FLIGHTHUB_SEARCH,
+            "companyOverview": FLIGHTHUB_OVERVIEW,
+            "companySalaries": [{"medianBaseSalary": 85000, "currency": "USD"}],
+            "companyInterviews": [
+                {
+                    "jobTitle": "QA Engineer",
+                    "difficulty": "Easy",
+                    "outcome": "Accepted offer",
+                    "processDescription": "QA interview loop.",
+                }
+            ],
+        }
+    )
+    await run_company_research_pipeline(job_a, "QA Engineer", apify_runner=qa_runner, db_path=db)
+
+    da_runner = _mock_runner(
+        {
+            "companySalaries": [{"medianBaseSalary": 92000, "currency": "USD"}],
+            "companyInterviews": [
+                {
+                    "jobTitle": "Data Analyst",
+                    "difficulty": "Hard",
+                    "outcome": "No offer",
+                    "processDescription": "DA interview loop.",
+                }
+            ],
+        }
+    )
+    await run_company_research_pipeline(job_b, "Data Analyst", apify_runner=da_runner, db_path=db)
+
+    job_a_updated = database.get_job(job_a, db_path=db)
+    job_b_updated = database.get_job(job_b, db_path=db)
+    assert job_a_updated.companyResearch["glassdoorJobTitle"] == "QA Engineer"
+    assert job_a_updated.companyResearch["salary"]["medianBaseSalary"] == 85000
+    assert job_b_updated.companyResearch["glassdoorJobTitle"] == "Data Analyst"
+    assert job_b_updated.companyResearch["salary"]["medianBaseSalary"] == 92000
+    cached = database.get_company_research_cache("flighthub", db_path=db)
+    assert cached["salariesByTitle"]["qa engineer"]["medianBaseSalary"] == 85000
+    assert cached["salariesByTitle"]["data analyst"]["medianBaseSalary"] == 92000
