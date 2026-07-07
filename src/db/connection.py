@@ -1,6 +1,7 @@
 import os
 import sqlite3
 
+from .migrations import apply_pipeline_status_backfill, apply_rejected_at_backfill, run_migrations
 from .seed import _seed_db
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,245 +38,17 @@ def init_db(db_path=None, allow_seed=False):
     db_existed = os.path.exists(os.path.abspath(db_path))
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = get_db_connection(db_path)
+    run_migrations(conn)
+
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS jobs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            company TEXT NOT NULL,
-            size TEXT,
-            link TEXT,
-            date TEXT,
-            location TEXT,
-            remoteType TEXT,
-            seniority TEXT,
-            salary TEXT,
-            description TEXT,
-            matchScore INTEGER,
-            matchType TEXT,
-            shouldProceed INTEGER DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'scraped',
-            resumeUsed TEXT,
-            strengths TEXT,
-            gaps TEXT,
-            contacts TEXT,
-            outreachMessage TEXT,
-            comment TEXT,
-            isRecruiter INTEGER DEFAULT 0,
-            enrichmentNote TEXT DEFAULT '',
-            recruiterOutreachTemplate TEXT DEFAULT '',
-            russianSpeakerOutreachTemplate TEXT DEFAULT ''
-        )
-    """)
-    conn.commit()
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN isRecruiter INTEGER DEFAULT 0")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN enrichmentNote TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN recruiterOutreachTemplate TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN russianSpeakerOutreachTemplate TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN activityLog TEXT DEFAULT '[]'")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN companyUrl TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN archived INTEGER DEFAULT 0")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN rejectedAt TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN autoArchiveExempt INTEGER DEFAULT 0")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN enrichmentNoteKind TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN unclassified INTEGER DEFAULT 0")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN batchAttempts INTEGER DEFAULT 0")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS batch_jobs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            batchName TEXT NOT NULL UNIQUE,
-            displayName TEXT NOT NULL,
-            state TEXT NOT NULL,
-            kind TEXT NOT NULL,
-            submittedAt TEXT NOT NULL,
-            lastPolledAt TEXT,
-            resultFileName TEXT,
-            jobIds TEXT NOT NULL,
-            searchRemoteTypes TEXT,
-            searchSeniorities TEXT
-        )
-    """)
-    conn.commit()
-
-    for column, ddl in (
-        ("searchRemoteTypes", "ALTER TABLE batch_jobs ADD COLUMN searchRemoteTypes TEXT"),
-        ("searchSeniorities", "ALTER TABLE batch_jobs ADD COLUMN searchSeniorities TEXT"),
-    ):
-        cursor.execute("PRAGMA table_info(batch_jobs)")
-        batch_cols = {row[1] for row in cursor.fetchall()}
-        if column not in batch_cols:
-            try:
-                cursor.execute(ddl)
-                conn.commit()
-            except sqlite3.OperationalError:
-                pass
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS outreach_settings (
-            id INTEGER PRIMARY KEY,
-            target_russian_speakers INTEGER NOT NULL DEFAULT 1,
-            target_recruiters INTEGER NOT NULL DEFAULT 1,
-            short_connection_note INTEGER NOT NULL DEFAULT 1
-        )
-    """)
-    conn.commit()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS contact_sample_cache (
-            company_slug TEXT NOT NULL,
-            stream TEXT NOT NULL DEFAULT '',
-            profiles TEXT NOT NULL,
-            fetched_at TEXT NOT NULL,
-            display_name TEXT DEFAULT '',
-            pages_fetched INTEGER DEFAULT 1,
-            last_fetch_empty INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (company_slug, stream)
-        )
-    """)
-    conn.commit()
-
-    try:
-        cursor.execute(
-            "ALTER TABLE contact_sample_cache ADD COLUMN last_fetch_empty INTEGER NOT NULL DEFAULT 0"
-        )
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    # Migrate legacy single-PK cache table to compound (company_slug, stream) key
-    cursor.execute("PRAGMA table_info(contact_sample_cache)")
-    cols = [row[1] for row in cursor.fetchall()]
-    if "stream" not in cols:
-        cursor.executescript("""
-            CREATE TABLE IF NOT EXISTS contact_sample_cache_new (
-                company_slug TEXT NOT NULL,
-                stream TEXT NOT NULL DEFAULT '',
-                profiles TEXT NOT NULL,
-                fetched_at TEXT NOT NULL,
-                display_name TEXT DEFAULT '',
-                pages_fetched INTEGER DEFAULT 1,
-                PRIMARY KEY (company_slug, stream)
-            );
-            INSERT OR IGNORE INTO contact_sample_cache_new
-                (company_slug, stream, profiles, fetched_at, display_name, pages_fetched)
-            SELECT company_slug, '', profiles, fetched_at, display_name, pages_fetched
-            FROM contact_sample_cache;
-            DROP TABLE contact_sample_cache;
-            ALTER TABLE contact_sample_cache_new RENAME TO contact_sample_cache;
-        """)
-        conn.commit()
-
-    try:
-        cursor.execute("ALTER TABLE outreach_settings ADD COLUMN short_connection_note INTEGER NOT NULL DEFAULT 1")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS company_research_cache (
-            company_key TEXT PRIMARY KEY,
-            glassdoor_company_id TEXT DEFAULT '',
-            matched_name TEXT DEFAULT '',
-            company_size TEXT DEFAULT '',
-            rating REAL,
-            review_count INTEGER,
-            recommend_percent REAL,
-            salaries_by_title TEXT DEFAULT '{}',
-            interviews_by_title TEXT DEFAULT '{}',
-            fetched_at TEXT DEFAULT ''
-        )
-    """)
-    conn.commit()
-
-    try:
-        cursor.execute("ALTER TABLE jobs ADD COLUMN companyResearch TEXT DEFAULT ''")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass
-
     cursor.execute("SELECT COUNT(*) FROM jobs")
     count = cursor.fetchone()[0]
     if count == 0 and _seeding_allowed(db_existed, allow_seed):
         _seed_db(cursor)
         conn.commit()
 
-    # Backfill rejectedAt for Rejected jobs that predate this column
-    cursor.execute(
-        "UPDATE jobs SET rejectedAt = datetime('now') WHERE status = 'rejected' AND (rejectedAt IS NULL OR rejectedAt = '')"
-    )
-    conn.commit()
-
-    # Migrate legacy pipeline statuses to Scraped/Matched/Accepted model
-    # 1. Unscored found/rejected -> scraped
-    cursor.execute("UPDATE jobs SET status = 'scraped' WHERE (matchType = '' OR matchType IS NULL) AND status IN ('found', 'rejected')")
-    # 2. Scored found -> matched
-    cursor.execute("UPDATE jobs SET status = 'matched' WHERE (matchType != '' AND matchType IS NOT NULL) AND status = 'found'")
-    # 3. Legacy sourced/enriching/contacted cleanup
-    cursor.execute("UPDATE jobs SET status = 'scraped' WHERE status = 'sourced'")
-    cursor.execute("UPDATE jobs SET status = 'accepted' WHERE status IN ('enriching', 'enriched')")
-    cursor.execute("UPDATE jobs SET status = 'applied' WHERE status = 'contacted'")
-    conn.commit()
+    apply_pipeline_status_backfill(conn)
+    apply_rejected_at_backfill(conn)
 
     from .contacted_elsewhere import ensure_contacted_profiles_index
 

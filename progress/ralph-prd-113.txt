@@ -1,0 +1,15 @@
+# Ralph Loop Progress — PRD #113
+
+## 2026-07-06 — Issue #147: Versioned migration runner
+
+**Task:** Introduce versioned migration runner for Job Tracker Database (#147)
+
+**Summary:**
+- Added `src/db/migrations.py` with numbered migrations (v1–v9) tracked via `PRAGMA user_version`
+- Refactored `init_db()` to call `run_migrations()` instead of ad-hoc ALTER try/except chain
+- Preserved seeding guard, post-seed status/rejectedAt backfills, and contacted-profiles index hook
+- Added `tests/test_migrations.py` for fresh init, legacy upgrade, idempotency, and batch_jobs table
+
+**Quality gates:** ruff ✓ | mypy ✓ | pytest 892 passed, 84.67% coverage ✓
+
+**Commit:** Add versioned migration runner for Job Tracker Database (#147)
