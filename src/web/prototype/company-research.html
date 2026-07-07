@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PROTOTYPE — Company Research UI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="/static/css/prototype-company-research.css">
+</head>
+<body>
+
+  <div class="prototype-banner">
+    <div>
+      <strong>PROTOTYPE</strong> — Company Research drawer UI · pick a variant, then delete this route
+    </div>
+    <div class="prototype-controls">
+      <label>State</label>
+      <span id="prototype-state-chips"></span>
+    </div>
+  </div>
+
+  <div class="prototype-shell">
+    <div class="glass-panel prototype-drawer" id="prototype-drawer-body"></div>
+  </div>
+
+  <!-- Reuses dashboard Spend Confirmation shell -->
+  <div class="modal-overlay" id="spend-confirmation-modal" style="display:none;" onclick="if(event.target===this) this.style.display='none'">
+    <div class="modal-content spend-modal-content" onclick="event.stopPropagation()">
+      <div class="spend-modal-head">
+        <div class="spend-modal-icon"><i class="fa-solid fa-chart-line"></i></div>
+        <div>
+          <h3 class="spend-modal-title" id="spend-modal-title"></h3>
+          <div class="spend-modal-subtitle" id="spend-modal-subtitle"></div>
+        </div>
+      </div>
+      <div id="spend-modal-body"></div>
+      <div class="spend-modal-foot">
+        <button class="btn btn-secondary" type="button" id="spend-modal-cancel">Cancel</button>
+        <button class="btn btn-spend" type="button" id="spend-modal-confirm"><i class="fa-solid fa-play"></i> Proceed</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="prototype-switcher" id="prototype-switcher">
+    <button type="button" id="prototype-prev" aria-label="Previous variant">←</button>
+    <span class="prototype-switcher-label" id="prototype-variant-label">A — Metrics grid</span>
+    <button type="button" id="prototype-next" aria-label="Next variant">→</button>
+  </div>
+
+  <script type="module">
+    import { bootstrapCompanyResearchPrototype } from '/static/js/prototype/companyResearchUiPrototype.js';
+    bootstrapCompanyResearchPrototype();
+  </script>
+</body>
+</html>

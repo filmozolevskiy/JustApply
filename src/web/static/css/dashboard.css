@@ -30,6 +30,10 @@
       
       --transition-fast: 0.15s ease;
       --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+      --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+      --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+      --scrollbar-track: rgba(10, 14, 26, 0.5);
     }
 
     /* Reset & Base */
@@ -57,20 +61,26 @@
       letter-spacing: -0.02em;
     }
 
-    /* Scrollbars */
+    /* Scrollbars — Firefox + Chromium 121+ (scrollbar-* standard) */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    /* Scrollbars — WebKit (Safari, Chromium ::-webkit-scrollbar) */
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
     ::-webkit-scrollbar-track {
-      background: rgba(10, 14, 26, 0.5);
+      background: var(--scrollbar-track);
     }
     ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--scrollbar-thumb);
       border-radius: 3px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--scrollbar-thumb-hover);
     }
 
     /* Common Components & Glassmorphism Utilities */
@@ -862,6 +872,12 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    .kanban-cards-wrapper:hover {
+      scrollbar-color: var(--scrollbar-thumb-hover) var(--scrollbar-track);
     }
 
     .kanban-column.lane-collapsed {
@@ -1123,6 +1139,24 @@
       font-size: 0.95rem;
       margin-left: 4px;
       vertical-align: middle;
+    }
+
+    .drawer-company-glassdoor {
+      color: #0caa41;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      transition: color var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .drawer-company-glassdoor:hover {
+      color: #12c951;
+      transform: translateY(-1px);
+    }
+
+    .drawer-glassdoor-icon {
+      display: block;
     }
 
     .drawer-job-info-grid {
