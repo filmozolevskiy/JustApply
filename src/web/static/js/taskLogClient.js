@@ -6,6 +6,8 @@ export const ACTIVE_SCRAPE_TASK_KEY = 'activeScrapeTaskId';
 export const ACTIVE_SCRAPE_LOG_SKIP_KEY = 'activeScrapeTaskLogSkip';
 export const ACTIVE_ENRICH_TASK_KEY = 'activeEnrichTaskId';
 export const ACTIVE_ENRICH_LOG_SKIP_KEY = 'activeEnrichTaskLogSkip';
+export const ACTIVE_COMPANY_RESEARCH_TASK_KEY = 'activeCompanyResearchTaskId';
+export const ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY = 'activeCompanyResearchTaskLogSkip';
 export const ACTIVE_RECLASSIFY_TASKS_KEY = 'activeReclassifyTasks';
 
 export function reclassifyTaskLogSkipKey(taskId) {

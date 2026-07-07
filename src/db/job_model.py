@@ -46,6 +46,17 @@ def parse_job_row(row) -> Job:
     job["rejectedAt"] = job.get("rejectedAt") or ""
     job["autoArchiveExempt"] = bool(job.get("autoArchiveExempt", 0))
 
+    raw_company_research = job.get("companyResearch")
+    if raw_company_research in (None, ""):
+        job["companyResearch"] = None
+    elif isinstance(raw_company_research, dict):
+        job["companyResearch"] = raw_company_research
+    else:
+        try:
+            job["companyResearch"] = json.loads(str(raw_company_research))
+        except Exception:
+            job["companyResearch"] = None
+
     # Legacy migration: promote outreachMessage into recruiterOutreachTemplate on read.
     if not job["recruiterOutreachTemplate"] and job.get("outreachMessage"):
         job["recruiterOutreachTemplate"] = job["outreachMessage"]

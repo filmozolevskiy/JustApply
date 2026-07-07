@@ -5,11 +5,27 @@ from .core.attribute_gating import (
     merge_job_attributes,
 )
 from .core.batch_evaluation import submit_backfill_batches, submit_batch_evaluation
+from .core.company_research.glassdoor_intel import (
+    GlassdoorInfrastructureError,
+    GlassdoorIntelError,
+    _pick_company_match,
+    _summarize_interviews,
+    build_job_company_research_snapshot,
+    default_apify_runner,
+    format_activity_log_message,
+    normalize_salary_row,
+    parse_overview_row,
+)
+from .core.company_research.preflight import (
+    company_research_allowed,
+    resolve_company_research_slices,
+)
 from .core.enrichment import company_cache_slug, generate_outreach_templates, source_contacts
 from .core.enrichment.contact_sample import (
     _run_apify_for_recruiters,
     _run_apify_for_russian_speakers,
     detect_country_from_location,
+    linkedin_company_slug_from_url,
 )
 from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
@@ -622,3 +638,149 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
         else:
             await log(f"Enrichment complete for job id={job_id}.", "success")
     return enriched
+
+
+async def run_company_research_pipeline(
+    job_id: int,
+    glassdoor_job_title: str,
+    log_func=None,
+    apify_runner=None,
+    db_path=None,
+) -> Job:
+    """Fetch Glassdoor employer intel, update cache, and persist job snapshot."""
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    job = database.get_job(job_id, db_path=db_path)
+    if not job:
+        raise ValueError(f"Job id={job_id} not found")
+    if not company_research_allowed(job.status, job.archived):
+        raise ValueError("Company research is only available for Matched and later lanes")
+
+    title = (glassdoor_job_title or job.title or "").strip()
+    resolved = resolve_company_research_slices(
+        job.company or "",
+        job.title or "",
+        glassdoor_job_title=title,
+    )
+    company_key = resolved["company_key"]
+    title_key = resolved["title_key"]
+    cache_row = resolved.get("cache_row") or {}
+    billable = set(resolved["billable_slices"])
+
+    runner = apify_runner or default_apify_runner
+    linkedin_slug = linkedin_company_slug_from_url(job.companyUrl or "")
+
+    company_id = cache_row.get("glassdoorCompanyId") or ""
+    matched_name = cache_row.get("matchedName") or ""
+    overview = {
+        "companySize": cache_row.get("companySize"),
+        "rating": cache_row.get("rating"),
+        "reviewCount": cache_row.get("reviewCount"),
+        "recommendPercent": cache_row.get("recommendPercent"),
+    }
+    salary = (cache_row.get("salariesByTitle") or {}).get(title_key)
+    interviews = (cache_row.get("interviewsByTitle") or {}).get(title_key)
+
+    try:
+        if "companySearch" in billable:
+            await log(f"Glassdoor company search for '{job.company}'…")
+            search_rows = await runner("companySearch", company_name=job.company or "")
+            match = _pick_company_match(job.company or "", search_rows, linkedin_slug)
+            company_id = str(
+                match.get("companyId") or match.get("id") or match.get("employerId") or ""
+            )
+            if not company_id:
+                raise GlassdoorIntelError(f"Could not resolve Glassdoor company ID for '{job.company}'")
+            matched_name = str(
+                match.get("companyName") or match.get("name") or match.get("shortName") or job.company
+            )
+            await log(f"Matched Glassdoor employer: {matched_name}")
+            database.set_company_research_cache(
+                company_key,
+                {"glassdoorCompanyId": company_id, "matchedName": matched_name},
+                db_path=db_path,
+            )
+
+        if "companyOverview" in billable:
+            await log(f"Glassdoor overview for {matched_name}…")
+            overview_rows = await runner("companyOverview", company_id=company_id)
+            overview = parse_overview_row(overview_rows)
+            database.set_company_research_cache(
+                company_key,
+                {
+                    "glassdoorCompanyId": company_id,
+                    "matchedName": matched_name,
+                    **overview,
+                },
+                db_path=db_path,
+            )
+            await log("Overview cached")
+
+        if "companySalaries" in billable:
+            await log(f"Glassdoor salaries for '{title}'…")
+            salary_rows = await runner(
+                "companySalaries",
+                company_id=company_id,
+                job_title=title,
+            )
+            salary = None
+            for row in salary_rows:
+                salary = normalize_salary_row(row, title)
+                if salary:
+                    break
+            salaries_by_title = dict(cache_row.get("salariesByTitle") or {})
+            salaries_by_title[title_key] = salary
+            database.set_company_research_cache(
+                company_key,
+                {"salariesByTitle": salaries_by_title},
+                db_path=db_path,
+            )
+            await log("Salary slice cached" if salary else "Salary slice cached (empty)")
+
+        if "companyInterviews" in billable:
+            await log(f"Glassdoor interviews for '{title}'…")
+            interview_rows = await runner(
+                "companyInterviews",
+                company_id=company_id,
+                job_title=title,
+            )
+            interviews = _summarize_interviews(interview_rows, title)
+            interviews_by_title = dict(cache_row.get("interviewsByTitle") or {})
+            interviews_by_title[title_key] = interviews
+            database.set_company_research_cache(
+                company_key,
+                {"interviewsByTitle": interviews_by_title},
+                db_path=db_path,
+            )
+            await log(f"Interview slice cached ({len(interviews)} snippets)")
+
+        snapshot = build_job_company_research_snapshot(
+            glassdoor_company_id=company_id,
+            matched_name=matched_name,
+            overview=overview,
+            glassdoor_job_title=title,
+            salary=salary,
+            interviews=interviews or [],
+        )
+        updated = database.update_company_research(job_id, snapshot, db_path=db_path)
+        if not updated:
+            raise ValueError("Failed to persist company research snapshot")
+        database.log_activity(job_id, format_activity_log_message(snapshot), db_path=db_path)
+        await log("Company research complete.", "success")
+        return database.get_job(job_id, db_path=db_path) or updated
+
+    except GlassdoorInfrastructureError as exc:
+        database.log_activity(job_id, f"Company research failed · {exc}", db_path=db_path)
+        await log(f"Company research failed: {exc}", "error")
+        raise
+    except GlassdoorIntelError as exc:
+        database.log_activity(job_id, f"Company research failed · {exc}", db_path=db_path)
+        await log(f"Company research failed: {exc}", "error")
+        raise

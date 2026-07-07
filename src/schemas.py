@@ -67,3 +67,4 @@ class Job(BaseModel):
     archived: bool = False
     rejectedAt: str = ""
     autoArchiveExempt: bool = False
+    companyResearch: dict | None = None

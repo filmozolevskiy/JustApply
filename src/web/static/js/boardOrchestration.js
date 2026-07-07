@@ -9,12 +9,15 @@ import {
 } from './boardRenderer.js';
 import {
   buildApifySpendBodyHtml,
+  buildGlassdoorSpendBodyHtml,
   showSpendAckModal,
   showSpendConfirmModal,
 } from './spendConfirmation.js';
 import {
   ACTIVE_ENRICH_LOG_SKIP_KEY,
   ACTIVE_ENRICH_TASK_KEY,
+  ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY,
+  ACTIVE_COMPANY_RESEARCH_TASK_KEY,
   ACTIVE_RECLASSIFY_TASKS_KEY,
   ACTIVE_SCRAPE_LOG_SKIP_KEY,
   ACTIVE_SCRAPE_TASK_KEY,
@@ -37,6 +40,7 @@ export function createBoardOrchestrator({
 }) {
   let activeEnrichJobId = null;
   let activeLoadMoreJobId = null;
+  let activeCompanyResearchJobId = null;
   let activeReclassifyJobIds = [];
   let boardSearchDebounceTimer = null;
   let lastJobsFetchArchivedParam = null;
@@ -59,6 +63,7 @@ export function createBoardOrchestrator({
       ...getBoardFiltersFromDom(),
       enrichingJobId: activeEnrichJobId,
       loadMoreJobId: activeLoadMoreJobId,
+      companyResearchJobId: activeCompanyResearchJobId,
       reclassifyJobIds: activeReclassifyJobIds,
     };
   }
@@ -193,6 +198,7 @@ export function createBoardOrchestrator({
     confirmDiscardUnsavedEdits,
     getActiveReclassifyJobIds: () => activeReclassifyJobIds,
     getActiveLoadMoreJobId: () => activeLoadMoreJobId,
+    getActiveCompanyResearchJobId: () => activeCompanyResearchJobId,
     getBoardFilters: getBoardFiltersFromDom,
   });
   const {
@@ -538,6 +544,84 @@ export function createBoardOrchestrator({
     startReclassifyTask(id);
   }
 
+  async function researchCompany(id) {
+    const job = findJob(id);
+    if (!job) return;
+
+    const preflightResp = await fetch(`/api/jobs/${id}/company-research-preflight`);
+    if (!preflightResp.ok) {
+      const err = await preflightResp.json().catch(() => ({}));
+      await showSpendAckModal({
+        title: 'Cannot research company',
+        message: err.message || 'Company research is unavailable for this job.',
+      });
+      return;
+    }
+
+    const preflightData = await preflightResp.json();
+    let glassdoorJobTitle = preflightData.default_glassdoor_job_title || job.title;
+
+    if (preflightData.will_call_apify) {
+      const ok = await showSpendConfirmModal({
+        title: 'Research Company',
+        subtitle: 'Glassdoor via Apify',
+        bodyHtml: buildGlassdoorSpendBodyHtml(preflightData),
+        confirmLabel: 'Proceed',
+      });
+      if (!ok) return;
+      const titleInput = document.getElementById('spend-glassdoor-job-title');
+      if (titleInput && titleInput.value.trim()) {
+        glassdoorJobTitle = titleInput.value.trim();
+      }
+    }
+
+    activeCompanyResearchJobId = id;
+    renderActiveVariant();
+    drawer.refreshDrawerIfOpen(id);
+    addLogLine(`Researching [${job.title} @ ${job.company}] on Glassdoor…`, 'info');
+    expandLogsConsole();
+
+    try {
+      const resp = await fetch(`/api/jobs/${id}/company-research`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ glassdoorJobTitle }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        addLogLine(`Company research failed: ${err.message || resp.status}`, 'error');
+        return;
+      }
+      const data = await resp.json();
+      const taskId = data.task_id;
+      localStorage.setItem(ACTIVE_COMPANY_RESEARCH_TASK_KEY, taskId);
+      localStorage.setItem(ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY, '0');
+      taskLog.setEnrichEventSource(connectTaskLogStream(taskId, {
+        skipKey: ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY,
+        taskKey: ACTIVE_COMPANY_RESEARCH_TASK_KEY,
+        existingSource: taskLog.getEnrichEventSource(),
+        onResult(logData) {
+          if (logData.job) updateJob(logData.job.id, logData.job);
+          drawer.refreshDrawerIfOpen(id);
+          renderActiveVariant();
+        },
+        onDone() {
+          activeCompanyResearchJobId = null;
+          drawer.refreshDrawerIfOpen(id);
+          renderActiveVariant();
+        },
+      }));
+    } catch (err) {
+      addLogLine(`Company research failed: ${err.message}`, 'error');
+    } finally {
+      if (!localStorage.getItem(ACTIVE_COMPANY_RESEARCH_TASK_KEY)) {
+        activeCompanyResearchJobId = null;
+        renderActiveVariant();
+        drawer.refreshDrawerIfOpen(id);
+      }
+    }
+  }
+
   async function loadMoreContacts(id) {
     const job = findJob(id);
     if (!job) return;
@@ -783,6 +867,7 @@ export function createBoardOrchestrator({
     postOutreachTemplate,
     reclassifyJob,
     rejectJobFromDrawer,
+    researchCompany,
     renderActiveVariant,
     resetBoardControls,
     restoreActiveEnrichTask,

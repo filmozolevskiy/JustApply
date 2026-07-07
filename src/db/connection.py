@@ -232,6 +232,28 @@ def init_db(db_path=None, allow_seed=False):
     except sqlite3.OperationalError:
         pass
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS company_research_cache (
+            company_key TEXT PRIMARY KEY,
+            glassdoor_company_id TEXT DEFAULT '',
+            matched_name TEXT DEFAULT '',
+            company_size TEXT DEFAULT '',
+            rating REAL,
+            review_count INTEGER,
+            recommend_percent REAL,
+            salaries_by_title TEXT DEFAULT '{}',
+            interviews_by_title TEXT DEFAULT '{}',
+            fetched_at TEXT DEFAULT ''
+        )
+    """)
+    conn.commit()
+
+    try:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN companyResearch TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     cursor.execute("SELECT COUNT(*) FROM jobs")
     count = cursor.fetchone()[0]
     if count == 0 and _seeding_allowed(db_existed, allow_seed):

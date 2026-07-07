@@ -58,6 +58,37 @@ function buildApifySpendBodyHtml(actionLabel, streamLines, runs, costStr) {
   `;
 }
 
+function buildGlassdoorSpendBodyHtml(preflightData) {
+  const cached = (preflightData.cached_slices || []).map((s) => `- ${s} (cached)`).join('\n');
+  const billable = (preflightData.billable_slices || []).map((s) => `- ${s}`).join('\n');
+  const sliceLines = [cached, billable].filter(Boolean).join('\n');
+  const linesHtml = sliceLines
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const text = line.replace(/^- /, '');
+      return `<div class="spend-stream-line">${escapeSpendHtml(text)}</div>`;
+    })
+    .join('');
+  const runs = preflightData.estimated_runs || 0;
+  const costStr = `~$${(preflightData.estimated_cost || 0).toFixed(2)}`;
+  const runLabel = `${runs} Apify run${runs > 1 ? 's' : ''}`;
+  const defaultTitle = escapeSpendHtml(preflightData.default_glassdoor_job_title || '');
+  return `
+    <div class="spend-modal-warn">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-top:2px"></i>
+      <span>Company research will fetch from Glassdoor via Apify and <b>spends real credits</b>.</span>
+    </div>
+    <label class="spend-field-label" for="spend-glassdoor-job-title">Glassdoor job title</label>
+    <input id="spend-glassdoor-job-title" class="spend-field-input" type="text" value="${defaultTitle}" />
+    <div class="spend-stream-list">${linesHtml}</div>
+    <div class="spend-estimate">
+      <div class="spend-estimate-label">Estimated spend</div>
+      <div class="spend-estimate-big">${escapeSpendHtml(runLabel)} · estimated ${escapeSpendHtml(costStr)}</div>
+    </div>
+  `;
+}
+
 function openSpendModal({ title, subtitle, bodyHtml, confirmLabel, showCancel }) {
   return new Promise((resolve) => {
     const modal = document.getElementById('spend-confirmation-modal');
@@ -317,4 +348,5 @@ export {
   confirmDiscardUnsavedEdits,
   showScrapeSpendConfirmModal,
   buildApifySpendBodyHtml,
+  buildGlassdoorSpendBodyHtml,
 };

@@ -29,7 +29,11 @@ from ..db import (
     update_outreach_template,
 )
 from ..db import batch_jobs as batch_jobs_db
-from ..pipelines import run_load_more_contacts_pipeline, run_reclassify_pipeline
+from ..pipelines import (
+    run_company_research_pipeline,
+    run_load_more_contacts_pipeline,
+    run_reclassify_pipeline,
+)
 from ..schemas import Job, OutreachSettings
 from ..service import (
     RateLimitError,
@@ -442,6 +446,38 @@ async def run_reclassify_task_with_logs(task_id: str, job_id: int):
         await state.queue.put(None)
 
 
+async def run_company_research_task_with_logs(
+    task_id: str,
+    job_id: int,
+    glassdoor_job_title: str,
+):
+    state = active_tasks.get(task_id)
+    if not state:
+        return
+
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        updated = await run_company_research_pipeline(
+            job_id,
+            glassdoor_job_title,
+            log_func=log_callback,
+        )
+        state.result = {"type": "result", "job": updated.model_dump()}
+        state.status = "completed"
+    except ValueError as e:
+        state.status = "failed"
+        await log_callback(f"Company research failed: {str(e)}", "error")
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Company research task failed: {str(e)}", "error")
+    finally:
+        await state.queue.put(None)
+
+
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     updated = begin_enrichment(job_id)
@@ -553,6 +589,80 @@ async def load_more_contacts(job_id: int):
     except ValueError as e:
         return JSONResponse(status_code=422, content={"message": str(e)})
     return updated
+
+
+class CompanyResearchRunRequest(BaseModel):
+    glassdoorJobTitle: str = ""
+
+
+@app.get("/api/jobs/{job_id}/company-research-preflight")
+async def company_research_preflight(
+    job_id: int,
+    glassdoorJobTitle: str = Query(default=""),
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        resolve_company_research_slices,
+        slice_labels,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+
+    resolved = resolve_company_research_slices(
+        job.company or "",
+        job.title or "",
+        glassdoor_job_title=glassdoorJobTitle or None,
+    )
+    estimated_runs = resolved["estimated_runs"]
+    result = {
+        "will_call_apify": resolved["will_call_apify"],
+        "estimated_runs": estimated_runs,
+        "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
+        "cached_slices": slice_labels(resolved["cached_slices"]),
+        "billable_slices": slice_labels(resolved["billable_slices"]),
+        "default_glassdoor_job_title": resolved["default_glassdoor_job_title"],
+    }
+    preview = job.companyResearch or resolved.get("cache_row")
+    if preview:
+        result["cached_preview"] = preview
+    return result
+
+
+@app.post("/api/jobs/{job_id}/company-research")
+async def company_research_run(
+    job_id: int,
+    body: CompanyResearchRunRequest,
+    background_tasks: BackgroundTasks,
+):
+    from ..core.company_research.preflight import company_research_allowed
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    title = (body.glassdoorJobTitle or job.title or "").strip()
+    background_tasks.add_task(
+        run_company_research_task_with_logs,
+        task_id,
+        job_id,
+        title,
+    )
+    return {"task_id": task_id, "job_id": job_id}
 
 
 @app.get("/")

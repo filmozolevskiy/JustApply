@@ -294,6 +294,29 @@ def log_activity(job_id: int, message: str, db_path=None) -> None:
     conn.close()
 
 
+def update_company_research(job_id: int, company_research: dict, db_path=None):
+    """Persist denormalized companyResearch snapshot on a job row."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute(
+        "UPDATE jobs SET companyResearch = ? WHERE id = ?",
+        (json.dumps(company_research), job_id),
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return parse_job_row_enriched(row, db_path=db_path)
+
+
 def update_outreach_template(job_id, audience, template, db_path=None):
     if audience == "recruiter":
         column = "recruiterOutreachTemplate"

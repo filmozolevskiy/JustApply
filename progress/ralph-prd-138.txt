@@ -1,0 +1,17 @@
+# Ralph Loop Progress — PRD #138
+
+## Iteration 1 — Company Research — first-fetch end-to-end (Matched+ drawer) (#139)
+
+**Status:** closed
+
+**Summary:**
+- Added `company_research_cache` table and `companyResearch` JSON column on `jobs`; extended **Job** model parsing.
+- Promoted Glassdoor Apify logic into `src/core/company_research/` (search/overview/salaries/interviews, LinkedIn slug tie-break, job snapshot builder).
+- Added preflight `GET /api/jobs/{id}/company-research-preflight` and background run `POST /api/jobs/{id}/company-research` with Matched+ lane guard, slice-level billable/cached breakdown, cache + job snapshot persistence, Task Log streaming, and Job Activity Log entries.
+- Wired drawer **Glassdoor Company Research** section (Variant A metrics grid), spend modal with editable Glassdoor job title, and `researchCompany()` orchestration.
+- CLI script `scripts/glassdoor_company_intel.py` now delegates to core module.
+- Tests: cache module, Glassdoor core, API/pipeline, drawer/spend-modal static assertions.
+
+**Quality gates:** ruff ✓ · mypy ✓ · pytest 859 passed · coverage 84.59%
+
+**Commit:** 557ff03

@@ -1,5 +1,6 @@
 /** Job details drawer — Active Contact, templates, and outreach UI. */
 
+import { buildCompanyResearchSectionHtml } from './companyResearchUi.js';
 import { findJob, getJobs, setJobs, updateJob, upsertJob } from './jobStore.js';
 import { getBoardJobOrder, resolveJobsArchivedFetchParam } from './boardRenderer.js';
 
@@ -134,6 +135,7 @@ export function createDrawerController({
   confirmDiscardUnsavedEdits = async () => true,
   getActiveReclassifyJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
+  getActiveCompanyResearchJobId = () => null,
   getBoardFilters = () => ({}),
 }) {
   let activeContactIdx = -1;
@@ -457,8 +459,10 @@ export function createDrawerController({
 
     const isReclassifying = getActiveReclassifyJobIds().includes(job.id);
     const isLoadingMore = getActiveLoadMoreJobId() === job.id;
+    const isResearching = getActiveCompanyResearchJobId() === job.id;
     const contactActionInProgress = isReclassifying || isLoadingMore;
     const reclassifyBusy = isReclassifying;
+    const companyResearchSection = buildCompanyResearchSectionHtml(job, { isResearching });
 
     const hasPostingLink =
       job.link && job.link.trim() && job.link !== '#' && job.link !== 'undefined';
@@ -502,6 +506,8 @@ export function createDrawerController({
               <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
             </div>
           </div>
+
+          ${companyResearchSection}
 
           ${job.activityLog && job.activityLog.length > 0
             ? (() => {
