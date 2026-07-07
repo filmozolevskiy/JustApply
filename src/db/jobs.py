@@ -2,7 +2,10 @@ import json
 from datetime import UTC, datetime
 
 from . import connection
-from .contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
+from .contacted_elsewhere import (
+    enrich_jobs_with_contacted_elsewhere,
+    sync_job_contacted_profiles_index,
+)
 from .job_model import normalize_add_job_input, parse_job_row
 
 VALID_STATUSES = frozenset({
@@ -189,6 +192,18 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
         "UPDATE jobs SET contacts = ? WHERE id = ?",
         (json.dumps(contacts), job_id),
     )
+
+    cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (job_id,))
+    activity_row = cursor.fetchone()
+    activity_log = _parse_activity_log(activity_row[0] if activity_row else None)
+    sync_job_contacted_profiles_index(
+        conn,
+        job_id,
+        job["company"],
+        job["title"],
+        contacts,
+        activity_log,
+    )
     conn.commit()
 
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -276,6 +291,18 @@ def enrich_job(
         count = len(contacts)
         label = "contact" if count == 1 else "contacts"
         _append_activity_log(cursor, job_id, f"Enriched · {count} {label}")
+    if not keep_contacts:
+        cursor.execute("SELECT company, title, activityLog FROM jobs WHERE id = ?", (job_id,))
+        job_row = cursor.fetchone()
+        if job_row:
+            sync_job_contacted_profiles_index(
+                conn,
+                job_id,
+                job_row["company"],
+                job_row["title"],
+                contacts,
+                _parse_activity_log(job_row["activityLog"]),
+            )
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()

@@ -125,6 +125,75 @@ def contacted_elsewhere_for_contact(
     }
 
 
+def _insert_contacted_profile_rows(
+    cursor,
+    job_id: int,
+    company: str,
+    title: str,
+    contacts: list,
+    activity_log: list[dict],
+) -> None:
+    for contact in contacts:
+        if isinstance(contact, Contact):
+            raw = contact.model_dump()
+        else:
+            raw = contact
+        if not raw.get("contacted"):
+            continue
+        slug = normalize_linkedin_url(_contact_profile_url(raw))
+        if not slug:
+            continue
+        cursor.execute(
+            f"""
+            INSERT OR REPLACE INTO {CONTACTED_PROFILES_TABLE}
+                (profile_slug, job_id, company, title, contacted_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                slug,
+                job_id,
+                company,
+                title,
+                contacted_timestamp(raw, activity_log),
+            ),
+        )
+
+
+def sync_job_contacted_profiles_index(
+    conn,
+    job_id: int,
+    company: str,
+    title: str,
+    contacts: list,
+    activity_log: list[dict] | None = None,
+) -> None:
+    """Replace index rows for one job after a contact or enrichment write."""
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM {CONTACTED_PROFILES_TABLE} WHERE job_id = ?", (job_id,))
+    _insert_contacted_profile_rows(
+        cursor,
+        job_id,
+        company,
+        title,
+        contacts,
+        activity_log or [],
+    )
+
+
+def sync_job_contacted_profiles_index_from_job(conn, job: Job) -> None:
+    """Replace index rows for one Job model after a contact or enrichment write."""
+    if job.id is None:
+        return
+    sync_job_contacted_profiles_index(
+        conn,
+        job.id,
+        job.company,
+        job.title,
+        job.contacts or [],
+        _activity_log_entries(job),
+    )
+
+
 def enrich_jobs_with_contacted_elsewhere(jobs: list[Job], db_path=None) -> list[Job]:
     """Attach contactedElsewhere metadata to each contact on the given jobs."""
     if not jobs:

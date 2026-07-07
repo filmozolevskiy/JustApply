@@ -229,6 +229,32 @@ def test_update_contact_status_sets_contacted_at(db):
     assert raw.get("contacted_at")
 
 
+def test_update_contact_status_adds_index_row_without_rebuild(db):
+    """Marking contacted incrementally updates the index — no full-table rescan."""
+    job_id = _add_job_with_contact(db, title="Role", company="Acme")
+    assert not any(row["job_id"] == job_id for row in list_contacted_profile_rows(db_path=db))
+
+    updated = update_contact_status(job_id, 0, True, db_path=db)
+    rows = [row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id]
+    assert len(rows) == 1
+    assert rows[0] == {
+        "profile_slug": "/in/jane-doe",
+        "job_id": job_id,
+        "company": "Acme",
+        "title": "Role",
+        "contacted_at": updated.contacts[0].model_dump()["contacted_at"],
+    }
+
+
+def test_update_contact_status_unmark_removes_index_row(db):
+    job_id = _add_job_with_contact(db, title="Role", company="Acme")
+    update_contact_status(job_id, 0, True, db_path=db)
+    assert len([row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id]) == 1
+
+    update_contact_status(job_id, 0, False, db_path=db)
+    assert [row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id] == []
+
+
 def test_get_jobs_enriches_contacted_elsewhere(db):
     source_id = _add_job_with_contact(
         db,
@@ -320,6 +346,85 @@ def test_enrich_job_returns_contacted_elsewhere(db):
         "company": "SourceCo",
         "title": "Source Role",
     }
+
+
+def test_enrich_job_syncs_contacted_profiles_index(db):
+    """Enrich persist indexes contacted contacts without a full rebuild."""
+    from src.db.jobs import enrich_job
+
+    job_id = add_job({"title": "Role", "company": "Acme", "status": "matched"}, db_path=db)
+    enrich_job(
+        job_id,
+        [
+            {
+                "name": "Jane Doe",
+                "title": "Recruiter",
+                "url": SHARED_URL,
+                "contacted": True,
+                "contacted_at": "2026-04-01T08:00:00+00:00",
+            },
+            {
+                "name": "Bob Smith",
+                "title": "Engineer",
+                "url": "https://linkedin.com/in/bob-smith",
+                "contacted": False,
+            },
+        ],
+        "Hello",
+        db_path=db,
+    )
+    rows = [row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id]
+    assert len(rows) == 1
+    assert rows[0] == {
+        "profile_slug": "/in/jane-doe",
+        "job_id": job_id,
+        "company": "Acme",
+        "title": "Role",
+        "contacted_at": "2026-04-01T08:00:00+00:00",
+    }
+
+
+def test_reclassify_replaces_index_rows_for_job(db):
+    """Re-classify that rewrites contacts keeps the index consistent."""
+    from src.db.jobs import enrich_job
+
+    job_id = add_job({"title": "Role", "company": "Acme", "status": "accepted"}, db_path=db)
+    enrich_job(
+        job_id,
+        [
+            {
+                "name": "Jane Doe",
+                "title": "Recruiter",
+                "url": SHARED_URL,
+                "contacted": True,
+                "contacted_at": "2026-04-01T08:00:00+00:00",
+            }
+        ],
+        "Hello",
+        db_path=db,
+    )
+    assert len([row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id]) == 1
+
+    enrich_job(
+        job_id,
+        [
+            {
+                "name": "Bob Smith",
+                "title": "Engineer",
+                "url": "https://linkedin.com/in/bob-smith",
+                "contacted": True,
+                "contacted_at": "2026-05-01T08:00:00+00:00",
+            }
+        ],
+        "Hello",
+        activity_kind="reclassify",
+        db_path=db,
+    )
+    rows = [row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id]
+    assert len(rows) == 1
+    assert rows[0]["profile_slug"] == "/in/bob-smith"
+    assert rows[0]["job_id"] == job_id
+    assert rows[0]["contacted_at"] == "2026-05-01T08:00:00+00:00"
 
 
 def test_update_job_status_returns_contacted_elsewhere(db, monkeypatch):

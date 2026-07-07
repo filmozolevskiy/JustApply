@@ -8,3 +8,12 @@
 - Skips legacy rows that cannot be parsed into full Job models (minimal-schema fixtures)
 - Tests: backfill after DROP TABLE upgrade path; URL variant normalization
 - Quality gates: ruff, mypy, pytest (880 passed, 84.83% coverage)
+
+## #145 — Keep contacted-profiles index in sync on contact and enrichment writes
+
+- Added `sync_job_contacted_profiles_index()` for incremental per-job index updates (no full rescan)
+- Hooked into `update_contact_status` (Kanban contact checkbox toggle) and `enrich_job` (enrich, load-more, re-classify persist paths)
+- Marking contacted upserts index row with contacted_at/company/title; unmarking removes job/profile pair
+- Re-classify contact rewrites replace prior index rows for that job
+- Tests: toggle add/remove index rows; enrich and reclassify sync without rebuild
+- Quality gates: ruff, mypy, pytest (884 passed, 84.81% coverage)
