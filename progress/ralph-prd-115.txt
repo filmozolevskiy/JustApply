@@ -13,3 +13,10 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Removed one-off `scripts/probe_brightdata_fields.py` and `scripts/probe_brightdata_company.py`
 - Removed legacy `_load_all_jobs` from `contacted_elsewhere.py`; regression tests now spy on `load_contacted_index_for_slugs`
 - Quality gates: ruff, mypy, pytest (898 passed, 84.88% coverage)
+
+## #151 — Remove unused CLI resume helper and unused --sites flag (2026-07-07)
+
+- Removed dead `_resume_name_for_position` helper from `src/cli/cli.py` (resume selection is Profile Manager + `general_cv.md`)
+- Removed unused `--sites` argparse flag and unused `sites` parameter on `run_search`
+- Search pipeline unchanged: still uses `general_cv.md` via `search_jobs`
+- Quality gates: ruff, mypy, pytest (898 passed, 84.98% coverage)

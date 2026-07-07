@@ -18,16 +18,8 @@ from ..service import (
 )
 
 
-def _resume_name_for_position(position: str) -> str:
-    resume_name = position.lower().replace("/", "_").replace(" ", "_")
-    if not resume_name.endswith(".md"):
-        resume_name += ".md"
-    return resume_name
-
-
 async def run_search(
     position: str,
-    sites: list = None,
     mock_eval: bool = False,
     allowed_remote_types: list = None
 ) -> list:
@@ -169,7 +161,6 @@ def main():
         action="store_true",
         help="With --backfill or --collect, wait until all batches finish",
     )
-    parser.add_argument("--sites", help="Comma-separated list of job sites (unused, reserved for future use)")
     args = parser.parse_args()
 
     if args.search:
