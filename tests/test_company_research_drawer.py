@@ -2,7 +2,13 @@
 import os
 import sys
 
+from fastapi.testclient import TestClient
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from src.web.server import app
+
+client = TestClient(app)
 
 
 def test_drawer_includes_glassdoor_section():
@@ -102,3 +108,28 @@ def test_research_company_passes_existing_glassdoor_title_to_preflight():
     research_fn = content.split("async function researchCompany")[1].split("function reclassifyJob")[0]
     assert "companyResearch" in research_fn
     assert "glassdoorJobTitle" in research_fn
+
+
+def test_company_research_prototype_route_removed():
+    resp = client.get("/prototype/company-research")
+    assert resp.status_code == 404
+
+
+def test_company_research_prototype_files_removed():
+    root = os.path.join(os.path.dirname(__file__), "..", "src", "web")
+    paths = [
+        os.path.join(root, "prototype", "company-research.html"),
+        os.path.join(root, "prototype", "NOTES.md"),
+        os.path.join(root, "static", "css", "prototype-company-research.css"),
+        os.path.join(root, "static", "js", "prototype", "companyResearchUiPrototype.js"),
+    ]
+    for path in paths:
+        assert not os.path.exists(path), f"Prototype artifact must be deleted: {path}"
+
+
+def test_server_has_no_company_research_prototype_route():
+    path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "server.py")
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    assert "/prototype/company-research" not in content
+    assert "PROTOTYPE_COMPANY_RESEARCH" not in content

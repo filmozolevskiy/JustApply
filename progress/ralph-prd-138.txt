@@ -44,3 +44,17 @@
 **Quality gates:** ruff ✓ · mypy ✓ · pytest 875 passed · coverage 84.68%
 
 **Commit:** c40f05f
+
+## Iteration 4 — Company Research — remove UI prototype route and assets (#142)
+
+**Status:** closed
+
+**Summary:**
+- Removed `/prototype/company-research` FastAPI route and `PROTOTYPE_COMPANY_RESEARCH_HTML` constant from `server.py`.
+- Deleted throwaway prototype artifacts: `company-research.html`, `NOTES.md`, `prototype-company-research.css`, `companyResearchUiPrototype.js`.
+- Production drawer unchanged — Variant A markup/CSS lives in `companyResearchUi.js` and `dashboard.css`.
+- Tests: prototype route 404, deleted file assertions, no server references; existing drawer wiring tests still pass.
+
+**Quality gates:** ruff ✓ · mypy ✓ · pytest 878 passed · coverage 84.73%
+
+**Commit:** (pending)

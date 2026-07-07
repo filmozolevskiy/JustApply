@@ -48,9 +48,6 @@ from ..service import (
 app = FastAPI(title="JustApply")
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
-PROTOTYPE_COMPANY_RESEARCH_HTML = os.path.join(
-    os.path.dirname(__file__), "prototype", "company-research.html"
-)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
 
@@ -849,14 +846,6 @@ async def get_dashboard():
     if os.path.exists(HTML_PATH):
         return FileResponse(HTML_PATH)
     return JSONResponse(status_code=404, content={"message": "Dashboard HTML file not found"})
-
-
-@app.get("/prototype/company-research")
-async def get_company_research_prototype():
-    """Throwaway UI prototype — delete when Company Research variant is chosen."""
-    if os.path.exists(PROTOTYPE_COMPANY_RESEARCH_HTML):
-        return FileResponse(PROTOTYPE_COMPANY_RESEARCH_HTML)
-    return JSONResponse(status_code=404, content={"message": "Prototype HTML not found"})
 
 
 class TaskState:
