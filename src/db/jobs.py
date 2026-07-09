@@ -1,12 +1,18 @@
 import json
 from datetime import UTC, datetime
 
+from ..schemas import ActivityLogEntry
 from . import connection
 from .contacted_elsewhere import (
     enrich_jobs_with_contacted_elsewhere,
     sync_job_contacted_profiles_index,
 )
-from .job_model import normalize_add_job_input, parse_job_row
+from .job_model import (
+    _parse_activity_log,
+    activity_log_as_dicts,
+    normalize_add_job_input,
+    parse_job_row,
+)
 
 VALID_STATUSES = frozenset({
     "scraped", "matched", "accepted",
@@ -20,28 +26,21 @@ def _format_lane(status: str) -> str:
     return status.replace("_", " ").title()
 
 
-def _parse_activity_log(raw) -> list:
-    try:
-        return json.loads(raw) if raw else []
-    except Exception:
-        return []
-
-
 def _append_activity_log(cursor, job_id: int, message: str) -> None:
     cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     if not row:
         return
     log = _parse_activity_log(row[0])
-    log.append({
-        "ts": datetime.now(UTC).isoformat(),
-        "message": message,
-    })
+    log.append(ActivityLogEntry(
+        ts=datetime.now(UTC).isoformat(),
+        message=message,
+    ))
     if len(log) > ACTIVITY_LOG_MAX:
         log = log[-ACTIVITY_LOG_MAX:]
     cursor.execute(
         "UPDATE jobs SET activityLog = ? WHERE id = ?",
-        (json.dumps(log), job_id),
+        (json.dumps([e.model_dump() for e in log]), job_id),
     )
 
 
@@ -195,7 +194,7 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
 
     cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (job_id,))
     activity_row = cursor.fetchone()
-    activity_log = _parse_activity_log(activity_row[0] if activity_row else None)
+    activity_log = activity_log_as_dicts(activity_row[0] if activity_row else None)
     sync_job_contacted_profiles_index(
         conn,
         job_id,
@@ -301,7 +300,7 @@ def enrich_job(
                 job_row["company"],
                 job_row["title"],
                 contacts,
-                _parse_activity_log(job_row["activityLog"]),
+                activity_log_as_dicts(job_row["activityLog"]),
             )
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
@@ -500,7 +499,7 @@ def add_job(job, db_path=None):
     _append_activity_log(cursor, new_id, "Found")
     cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (new_id,))
     activity_row = cursor.fetchone()
-    activity_log = _parse_activity_log(activity_row[0] if activity_row else None)
+    activity_log = activity_log_as_dicts(activity_row[0] if activity_row else None)
     sync_job_contacted_profiles_index(
         conn,
         new_id,

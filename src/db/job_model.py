@@ -15,6 +15,11 @@ def _parse_activity_log(raw) -> list[ActivityLogEntry]:
     return [ActivityLogEntry(**e) if isinstance(e, dict) else e for e in entries]
 
 
+def activity_log_as_dicts(raw) -> list[dict]:
+    """Parse activity log JSON into plain dicts for index/sync callers."""
+    return [e.model_dump() for e in _parse_activity_log(raw)]
+
+
 def parse_job_row(row) -> Job:
     """Normalize a SQLite jobs row into the canonical Job model."""
     job = dict(row)
