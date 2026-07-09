@@ -1,11 +1,6 @@
 """Tracer-bullet: Job is the canonical type returned from DB reads."""
-import os
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.db.job_model import _parse_activity_log, activity_log_as_dicts
 
@@ -16,16 +11,13 @@ def db(tmp_path):
     database.init_db(db_path)
     return db_path
 
-
 def test_parse_activity_log_empty():
     assert _parse_activity_log(None) == []
     assert _parse_activity_log("") == []
 
-
 def test_parse_activity_log_invalid_json():
     assert _parse_activity_log("not json") == []
     assert _parse_activity_log("{broken") == []
-
 
 def test_parse_activity_log_valid_entries():
     raw = '[{"ts": "2026-01-01T00:00:00+00:00", "message": "Found"}]'
@@ -34,13 +26,11 @@ def test_parse_activity_log_valid_entries():
     assert entries[0].ts == "2026-01-01T00:00:00+00:00"
     assert entries[0].message == "Found"
 
-
 def test_activity_log_as_dicts_round_trip():
     raw = '[{"ts": "2026-01-01", "message": "Moved Scraped → Applied"}]'
     assert activity_log_as_dicts(raw) == [
         {"ts": "2026-01-01", "message": "Moved Scraped → Applied"},
     ]
-
 
 def test_legacy_activity_log_row_deserializes_via_get_job(db):
     """Legacy persisted JSON rows still deserialize through the shared parser."""
@@ -59,7 +49,6 @@ def test_legacy_activity_log_row_deserializes_via_get_job(db):
     assert len(job.activityLog) == 1
     assert job.activityLog[0].message == "Legacy entry"
 
-
 def test_corrupt_activity_log_row_returns_empty_list(db):
     import sqlite3
 
@@ -74,7 +63,6 @@ def test_corrupt_activity_log_row_returns_empty_list(db):
 
     job = database.get_job(job_id, db_path=db)
     assert job.activityLog == []
-
 
 def test_legacy_outreach_message_migrated_on_read(db):
     """Read-time migration: outreachMessage → recruiterOutreachTemplate."""

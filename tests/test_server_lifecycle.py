@@ -6,21 +6,16 @@ import sqlite3
 import sys
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src.web import server
 
 client = TestClient(server.app)
-
 
 def test_health_smoke():
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "message": "FastAPI backend online"}
-
 
 def test_init_db_runs_on_application_startup(tmp_path, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
@@ -51,14 +46,12 @@ def test_init_db_runs_on_application_startup(tmp_path, monkeypatch):
         conn.close()
     assert "jobs" in tables
 
-
 def test_import_server_module_does_not_call_init_db():
     sys.modules.pop("src.web.server", None)
 
     with patch("src.db.init_db") as mock_init:
         importlib.import_module("src.web.server")
         mock_init.assert_not_called()
-
 
 def test_web_modules_do_not_mutate_sys_path():
     path_before = list(sys.path)
@@ -68,13 +61,11 @@ def test_web_modules_do_not_mutate_sys_path():
     importlib.import_module("src.web.run_dashboard")
     assert sys.path == path_before
 
-
 def test_scrape_route_deprecated_in_openapi():
     schema = client.get("/openapi.json").json()
     scrape_post = schema["paths"]["/api/scrape"]["post"]
     assert scrape_post["deprecated"] is True
     assert "Deprecated" in scrape_post["description"]
-
 
 def test_both_scrape_routes_share_handler_response_shape():
     with patch("src.web.server.run_scraping_task"):

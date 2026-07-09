@@ -4,16 +4,12 @@ import subprocess
 import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _connection
 from src.db import add_job, get_jobs, init_db
 from src.safety import gate, snapshot
 
 _REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 _GATE_SCRIPT = os.path.join(_REPO_ROOT, "scripts", "hooks", "db_safety_gate.py")
-
 
 # --- Detection: destructive operations are flagged --------------------------
 
@@ -40,7 +36,6 @@ def test_destructive_commands_flagged(command):
     verdict = gate.evaluate(command=command)
     assert verdict.destructive, f"should flag: {command}"
 
-
 # --- Detection: routine / unrelated operations pass through -----------------
 
 @pytest.mark.parametrize("command", [
@@ -61,13 +56,11 @@ def test_benign_commands_pass(command):
     verdict = gate.evaluate(command=command)
     assert not verdict.destructive, f"should not flag: {command}"
 
-
 def test_unscoped_update_flagged_scoped_passes():
     assert gate.evaluate(command="sqlite3 data/just_apply.db 'UPDATE jobs SET x=1'").destructive
     assert not gate.evaluate(
         command="sqlite3 data/just_apply.db 'UPDATE jobs SET x=1 WHERE id=2'"
     ).destructive
-
 
 def test_file_path_delete_flagged():
     """A non-shell tool deleting the db path (paths arg) is flagged."""
@@ -75,13 +68,11 @@ def test_file_path_delete_flagged():
     assert gate.evaluate(paths=["/abs/path/data/just_apply.db"]).destructive
     assert not gate.evaluate(paths=["src/web/dashboard.html"]).destructive
 
-
 def test_bypass_env(monkeypatch):
     monkeypatch.setenv("JUSTAPPLY_DB_GATE", "off")
     assert gate.is_bypassed()
     monkeypatch.setenv("JUSTAPPLY_DB_GATE", "")
     assert not gate.is_bypassed()
-
 
 # --- Snapshots --------------------------------------------------------------
 
@@ -99,11 +90,9 @@ def test_snapshot_creates_out_of_tree_copy(tmp_path, monkeypatch):
     rows = get_jobs(str(out))
     assert len(rows) > 0
 
-
 def test_snapshot_none_when_no_db(tmp_path, monkeypatch):
     monkeypatch.setattr(snapshot, "BACKUP_DIR", tmp_path / "backups")
     assert snapshot.create_snapshot(db_path=str(tmp_path / "missing.db")) is None
-
 
 def test_snapshot_prune_keeps_latest(tmp_path, monkeypatch):
     db_path = tmp_path / "live.db"
@@ -115,14 +104,12 @@ def test_snapshot_prune_keeps_latest(tmp_path, monkeypatch):
     remaining = list((tmp_path / "backups").glob("just_apply_*.db"))
     assert len(remaining) == 3
 
-
 # --- In-process reseed guard ------------------------------------------------
 
 def test_new_db_is_seeded(tmp_path):
     db_path = str(tmp_path / "fresh.db")
     init_db(db_path)
     assert len(get_jobs(db_path)) > 0
-
 
 def test_existing_emptied_db_not_reseeded(tmp_path):
     db_path = str(tmp_path / "live.db")
@@ -138,7 +125,6 @@ def test_existing_emptied_db_not_reseeded(tmp_path):
     init_db(db_path)
     assert len(get_jobs(db_path)) == 0
 
-
 def test_existing_emptied_db_reseeds_with_explicit_optin(tmp_path):
     db_path = str(tmp_path / "live.db")
     init_db(db_path)
@@ -149,7 +135,6 @@ def test_existing_emptied_db_reseeds_with_explicit_optin(tmp_path):
 
     init_db(db_path, allow_seed=True)
     assert len(get_jobs(db_path)) > 0
-
 
 def test_existing_emptied_db_reseeds_with_env(tmp_path, monkeypatch):
     db_path = str(tmp_path / "live.db")
@@ -162,7 +147,6 @@ def test_existing_emptied_db_reseeds_with_env(tmp_path, monkeypatch):
     monkeypatch.setenv("JUSTAPPLY_ALLOW_SEED", "1")
     init_db(db_path)
     assert len(get_jobs(db_path)) > 0
-
 
 def test_existing_db_with_data_untouched(tmp_path):
     """Existing db with real rows keeps them (no seeding, no wipe)."""
@@ -178,7 +162,6 @@ def test_existing_db_with_data_untouched(tmp_path):
     jobs = get_jobs(db_path)
     assert len(jobs) == 1
     assert jobs[0].id == real_id
-
 
 # --- Adapter end-to-end (subprocess, real runtime payloads) -----------------
 
@@ -196,7 +179,6 @@ def _run_gate(payload, env_extra=None):
     )
     return proc
 
-
 def test_adapter_cursor_blocks_shell_rm():
     payload = {
         "hook_event_name": "beforeShellExecution",
@@ -208,7 +190,6 @@ def test_adapter_cursor_blocks_shell_rm():
     out = json.loads(proc.stdout)
     assert out["permission"] == "deny"
 
-
 def test_adapter_cursor_allows_benign_shell():
     payload = {
         "hook_event_name": "beforeShellExecution",
@@ -219,7 +200,6 @@ def test_adapter_cursor_allows_benign_shell():
     proc = _run_gate(payload)
     out = json.loads(proc.stdout)
     assert out["permission"] == "allow"
-
 
 def test_adapter_cursor_edit_content_not_blocked():
     """Editing a file whose CONTENT mentions data/*.db must not be blocked."""
@@ -237,7 +217,6 @@ def test_adapter_cursor_edit_content_not_blocked():
     out = json.loads(proc.stdout)
     assert out["permission"] == "allow"
 
-
 def test_adapter_cursor_delete_db_blocked():
     payload = {
         "hook_event_name": "preToolUse",
@@ -250,7 +229,6 @@ def test_adapter_cursor_delete_db_blocked():
     out = json.loads(proc.stdout)
     assert out["permission"] == "deny"
 
-
 def test_adapter_claude_blocks_with_exit_2():
     payload = {
         "hook_event_name": "PreToolUse",
@@ -262,7 +240,6 @@ def test_adapter_claude_blocks_with_exit_2():
     out = json.loads(proc.stdout)
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
 
-
 def test_adapter_gemini_blocks_with_deny():
     payload = {
         "type": "BeforeTool",
@@ -273,7 +250,6 @@ def test_adapter_gemini_blocks_with_deny():
     out = json.loads(proc.stdout)
     assert out["decision"] == "deny"
     assert proc.returncode == 0
-
 
 def test_adapter_bypass_env_allows():
     payload = {

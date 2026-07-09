@@ -1,11 +1,6 @@
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.pipelines import run_reassess_pipeline
 from src.service.just_apply import reassess_all_jobs
@@ -22,7 +17,6 @@ def tmp_db(tmp_path, monkeypatch):
     import src.core.matcher as matcher_module
     monkeypatch.setattr(matcher_module, "RESUMES_DIR", str(resume_dir))
     return db_path
-
 
 def _seed_job(db_path, **overrides):
     job = {
@@ -41,7 +35,6 @@ def _seed_job(db_path, **overrides):
     job.update(overrides)
     job_id = database.add_job(job, db_path=str(db_path))
     return job_id
-
 
 @pytest.mark.asyncio
 async def test_reassess_updates_job_scores(tmp_db):
@@ -74,12 +67,10 @@ async def test_reassess_updates_job_scores(tmp_db):
     assert updated.description == "Updated job summary."
     assert any("Re-assessed" in entry.message for entry in updated.activityLog)
 
-
 @pytest.mark.asyncio
 async def test_reassess_raises_when_job_missing(tmp_db):
     with pytest.raises(ValueError, match="Job not found"):
         await run_reassess_pipeline(9999)
-
 
 @pytest.mark.asyncio
 async def test_reassess_all_jobs(tmp_db):

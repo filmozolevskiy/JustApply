@@ -66,3 +66,11 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Added lane vocabulary to `search_jobs`, `backfill_unevaluated_jobs`, and `collect_batch_evaluation_results` docstrings
 - Documentation-only — no API or behavior changes
 - Quality gates: ruff, mypy, pytest (910 passed, 84.81% coverage)
+
+## #160 — Remove sys.path bootstrap from pytest modules (2026-07-09)
+
+- Removed per-module `sys.path.insert`/`append` bootstraps from 61 test files
+- Added centralized `pythonpath = ["."]` to `[tool.pytest.ini_options]` in `pyproject.toml` so `tests.kanban_js` and `src` imports work via editable install + repo root
+- Ruff auto-fixed 160 unused `os`/`sys` imports left behind after bootstrap removal
+- `test_server_lifecycle.py` still asserts web modules do not mutate `sys.path` at import time
+- Quality gates: ruff, mypy, pytest (910 passed, 84.86% coverage)

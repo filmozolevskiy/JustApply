@@ -1,12 +1,7 @@
 import json
-import os
-import sys
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src.core.batch_evaluation import (
     BATCH_CHUNK_SIZE,
     build_batch_jsonl,
@@ -28,7 +23,6 @@ def test_build_batch_request_line_uses_job_id_key_and_json_mime():
     assert "QA" in line["request"]["contents"][0]["parts"][0]["text"]
     assert "Acme" in line["request"]["contents"][0]["parts"][0]["text"]
 
-
 def test_build_batch_jsonl_one_line_per_job():
     jobs = [
         {"id": 1, "title": "A", "company": "Co", "description": "Desc"},
@@ -40,7 +34,6 @@ def test_build_batch_jsonl_one_line_per_job():
     first = json.loads(lines[0])
     assert first["key"] == "1"
 
-
 def test_chunk_jobs_splits_at_100():
     jobs = [{"id": i} for i in range(250)]
     chunks = chunk_jobs(jobs, chunk_size=BATCH_CHUNK_SIZE)
@@ -48,7 +41,6 @@ def test_chunk_jobs_splits_at_100():
     assert len(chunks[0]) == 100
     assert len(chunks[1]) == 100
     assert len(chunks[2]) == 50
-
 
 @pytest.mark.asyncio
 async def test_submit_batch_evaluation_persists_rows(tmp_path, monkeypatch):
@@ -70,7 +62,6 @@ async def test_submit_batch_evaluation_persists_rows(tmp_path, monkeypatch):
     assert len(created) == 1
     assert created[0]["batchName"] == "batches/test-1"
     assert created[0]["jobIds"] == [1, 2, 3]
-
 
 @pytest.mark.asyncio
 async def test_submit_batch_evaluation_skips_in_flight_job_ids(tmp_path, monkeypatch):

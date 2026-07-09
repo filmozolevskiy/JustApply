@@ -1,10 +1,5 @@
-import os
-import sys
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.db import batch_jobs
 
@@ -15,7 +10,6 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
     database.init_db(str(db_path))
     return db_path
-
 
 def test_create_and_get_batch_job_round_trip(tmp_db):
     row = batch_jobs.create_batch_job(
@@ -42,7 +36,6 @@ def test_create_and_get_batch_job_round_trip(tmp_db):
     by_name = batch_jobs.get_batch_job_by_name("batches/abc123", db_path=str(tmp_db))
     assert by_name == row
 
-
 def test_batch_name_uniqueness_enforced(tmp_db):
     batch_jobs.create_batch_job(
         batch_name="batches/dup",
@@ -62,7 +55,6 @@ def test_batch_name_uniqueness_enforced(tmp_db):
             job_ids=[2],
             db_path=str(tmp_db),
         )
-
 
 def test_update_batch_job_persists_fields(tmp_db):
     row = batch_jobs.create_batch_job(
@@ -89,7 +81,6 @@ def test_update_batch_job_persists_fields(tmp_db):
     assert updated["lastPolledAt"] == "2026-06-26T12:00:00+00:00"
     assert updated["resultFileName"] == "files/result.jsonl"
     assert updated["jobIds"] == [10, 11]
-
 
 def test_in_flight_job_ids_exclude_terminal_states(tmp_db):
     batch_jobs.create_batch_job(

@@ -1,10 +1,6 @@
 """Tests for versioned Job Tracker Database migrations (PRD #113 / issue #147)."""
 
-import os
 import sqlite3
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import add_job, get_jobs, init_db
 from src.db import batch_jobs as batch_jobs_module
@@ -21,7 +17,6 @@ def test_fresh_db_has_current_schema_version(tmp_path):
     finally:
         conn.close()
 
-
 def test_schema_version_unchanged_on_second_init(tmp_path):
     db_path = str(tmp_path / "fresh.db")
     init_db(db_path)
@@ -37,7 +32,6 @@ def test_schema_version_unchanged_on_second_init(tmp_path):
         assert get_schema_version(conn) == version_after_first == CURRENT_SCHEMA_VERSION
     finally:
         conn.close()
-
 
 def test_legacy_minimal_jobs_schema_upgrades_in_place(tmp_path):
     """Legacy fixture with only core jobs columns reaches current schema."""
@@ -84,7 +78,6 @@ def test_legacy_minimal_jobs_schema_upgrades_in_place(tmp_path):
     job = get_jobs(db_path)[0]
     assert job.title == "Legacy"
     assert job.status == "scraped"
-
 
 def test_legacy_populated_db_preserves_job_data(tmp_path):
     db_path = str(tmp_path / "populated.db")
@@ -143,7 +136,6 @@ def test_legacy_populated_db_preserves_job_data(tmp_path):
     finally:
         conn2.close()
 
-
 def test_legacy_db_gets_batch_jobs_table_for_poller(tmp_path):
     db_path = str(tmp_path / "legacy.db")
     conn = sqlite3.connect(db_path)
@@ -171,7 +163,6 @@ def test_legacy_db_gets_batch_jobs_table_for_poller(tmp_path):
         db_path=db_path,
     )
     assert row["jobIds"] == [job_id]
-
 
 def test_run_migrations_is_idempotent(tmp_path):
     db_path = str(tmp_path / "manual.db")

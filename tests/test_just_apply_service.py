@@ -1,11 +1,8 @@
 """Tracer-bullet tests for JustApply orchestration."""
 import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.mark.asyncio
@@ -19,7 +16,6 @@ async def test_search_jobs_acquires_rate_limit_for_real_search():
     mock_acquire.assert_called_once()
     mock_pipeline.assert_awaited_once()
 
-
 @pytest.mark.asyncio
 async def test_search_jobs_skips_rate_limit_when_fully_mocked():
     from src.service.just_apply import search_jobs
@@ -30,7 +26,6 @@ async def test_search_jobs_skips_rate_limit_when_fully_mocked():
         await search_jobs(query="QA", mock_eval=True)
 
     mock_acquire.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_mock_eval_run_defaults_to_mock_scraper_and_skips_rate_limit():
@@ -50,7 +45,6 @@ async def test_mock_eval_run_defaults_to_mock_scraper_and_skips_rate_limit():
     mock_acquire.assert_not_called()
     assert mock_pipeline.await_args.kwargs["mock_scraper"] is True
 
-
 @pytest.mark.asyncio
 async def test_explicit_mock_scraper_false_forces_real_scrape_with_mock_eval():
     """An explicit mock_scraper=False overrides the mock_eval default."""
@@ -64,7 +58,6 @@ async def test_explicit_mock_scraper_false_forces_real_scrape_with_mock_eval():
 
     mock_acquire.assert_called_once()
     assert mock_pipeline.await_args.kwargs["mock_scraper"] is False
-
 
 def test_scraper_will_mock_resolution_order():
     from src.service.just_apply import scraper_will_mock
@@ -80,12 +73,10 @@ def test_scraper_will_mock_resolution_order():
     with patch.dict(os.environ, {"MOCK_SCRAPER": "true"}):
         assert scraper_will_mock(mock_eval=False, mock_scraper=False) is True
 
-
 def test_parse_remote_types_accepts_comma_string():
     from src.service.just_apply import parse_remote_types
 
     assert parse_remote_types("remote, hybrid") == ["remote", "hybrid"]
-
 
 @pytest.mark.asyncio
 async def test_complete_enrichment_runs_pipeline_for_enriching_job():
@@ -103,7 +94,6 @@ async def test_complete_enrichment_runs_pipeline_for_enriching_job():
     mock_pipeline.assert_awaited_once()
     mock_abort.assert_not_called()
     assert result.status == "enriched"
-
 
 @pytest.mark.asyncio
 async def test_complete_enrichment_aborts_when_pipeline_returns_none():

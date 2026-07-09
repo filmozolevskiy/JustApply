@@ -1,7 +1,3 @@
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from kanban_js import load_dashboard_js, load_kanban_js, read_task_log_client
 
@@ -14,7 +10,6 @@ def test_dashboard_html_marks_page_unload_before_sse_error_handling():
     assert "window.addEventListener('beforeunload', markPageUnloading)" in dashboard_js
     assert "window.addEventListener('pagehide'" in dashboard_js
 
-
 def test_dashboard_html_sse_error_skips_cleanup_on_intentional_close():
     content = load_kanban_js()
     connect_start = content.find("function connectTaskLogStream(")
@@ -25,14 +20,12 @@ def test_dashboard_html_sse_error_skips_cleanup_on_intentional_close():
     assert "function closeTaskLogStreamQuietly(" in content
     assert "if (intentional)" in connect_body
 
-
 def test_dashboard_html_restore_active_scrape_task_after_load():
     content = load_dashboard_js()
     assert "function restoreActiveScrapeTask()" in content
     assert "Reconnecting to active background task" in content
     assert "board.loadJobs().then(() => {" in content
     assert "restoreActiveScrapeTask();" in content
-
 
 def test_dashboard_html_restore_active_reclassify_task_after_load():
     content = load_dashboard_js()
@@ -41,7 +34,6 @@ def test_dashboard_html_restore_active_reclassify_task_after_load():
     assert "active re-classify task" in content
     assert "restoreActiveReclassifyTasks();" in content
     assert "ACTIVE_RECLASSIFY_TASKS_KEY" in content
-
 
 def test_dashboard_html_scrape_warning_only_for_unexpected_disconnect():
     content = load_dashboard_js()

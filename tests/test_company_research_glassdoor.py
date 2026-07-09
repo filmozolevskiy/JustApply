@@ -1,8 +1,4 @@
 """Tests for Glassdoor core module — mocked Apify boundary."""
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.core.company_research.glassdoor_intel import (
     _pick_company_match,
@@ -29,11 +25,9 @@ FLIGHTHUB_OVERVIEW = [
     }
 ]
 
-
 def test_pick_company_match_exact():
     match = _pick_company_match("FlightHub", FLIGHTHUB_SEARCH)
     assert match["companyId"] == "882104"
-
 
 def test_pick_company_match_linkedin_slug_tie_break():
     match = _pick_company_match(
@@ -43,14 +37,12 @@ def test_pick_company_match_linkedin_slug_tie_break():
     )
     assert match["companyId"] == "111"
 
-
 def test_parse_overview_row_flighthub():
     overview = parse_overview_row(FLIGHTHUB_OVERVIEW)
     assert overview["companySize"] == "51 to 200 Employees"
     assert overview["rating"] == 2.8
     assert overview["reviewCount"] == 246
     assert overview["recommendPercent"] == 40.0
-
 
 def test_summarize_interviews_caps_at_three():
     rows = [
@@ -64,7 +56,6 @@ def test_summarize_interviews_caps_at_three():
     ]
     summaries = _summarize_interviews(rows, "QA Engineer")
     assert len(summaries) == 3
-
 
 def test_build_job_snapshot_shape():
     snapshot = build_job_company_research_snapshot(
@@ -82,14 +73,12 @@ def test_build_job_snapshot_shape():
     assert snapshot["interviews"] == []
     assert snapshot["fetchedAt"]
 
-
 def test_normalize_salary_row():
     row = {"medianBaseSalary": 85000, "currency": "USD", "numSalaries": 42}
     salary = normalize_salary_row(row, "QA Engineer")
     assert salary["medianBaseSalary"] == 85000
     assert salary["currency"] == "USD"
     assert salary["sampleSize"] == 42
-
 
 def test_activity_log_message_sparse_salary():
     snapshot = build_job_company_research_snapshot(
@@ -106,7 +95,6 @@ def test_activity_log_message_sparse_salary():
     assert "40% recommend" in msg
     assert "salary n/a" in msg
 
-
 def test_format_search_candidates_caps_at_three():
     rows = [
         {"companyId": "1", "companyName": "Alpha", "size": "1 to 50"},
@@ -120,7 +108,6 @@ def test_format_search_candidates_caps_at_three():
     assert candidates[0]["matchedName"] == "Alpha"
     assert candidates[0]["previewSize"] == "1 to 50"
     assert candidates[2]["matchedName"] == "Gamma"
-
 
 def test_format_repick_activity_log_message():
     assert format_repick_activity_log_message("QualiTest Group") == (

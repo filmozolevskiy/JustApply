@@ -1,12 +1,7 @@
 """Tests for per-stream cache behavior in run_reclassify_pipeline (issue #76)."""
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from src import db as database
 
@@ -17,7 +12,6 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db)
     database.init_db(test_db)
     return test_db
-
 
 def _make_accepted_job(db):
     from src.core.enrichment.coordinator import begin_enrichment
@@ -37,7 +31,6 @@ def _make_accepted_job(db):
         db_path=db,
     )
     return job_id
-
 
 # --- Per-stream cache hits: no Apify calls ---
 
@@ -75,7 +68,6 @@ async def test_reclassify_recruiter_stream_cache_hit_no_apify(db):
     assert len(updated.contacts) == 1
     assert updated.contacts[0].name == "Bob Smith"
 
-
 @pytest.mark.asyncio
 async def test_reclassify_russian_stream_cache_hit_no_apify(db):
     """Re-classify with russian-only settings + cached russian stream → no Apify."""
@@ -109,7 +101,6 @@ async def test_reclassify_russian_stream_cache_hit_no_apify(db):
     mock_rus.assert_not_called()
     assert len(updated.contacts) == 1
     assert updated.contacts[0].name == "Ivan Petrov"
-
 
 @pytest.mark.asyncio
 async def test_reclassify_dual_audience_both_caches_no_apify(db):
@@ -153,7 +144,6 @@ async def test_reclassify_dual_audience_both_caches_no_apify(db):
     mock_rus.assert_not_called()
     assert len(updated.contacts) == 2
 
-
 @pytest.mark.asyncio
 async def test_reclassify_recruiter_settings_no_recruiter_cache_template_only(db):
     """Re-classify with recruiter-only settings + no cached recruiters stream → template-only."""
@@ -174,7 +164,6 @@ async def test_reclassify_recruiter_settings_no_recruiter_cache_template_only(db
     assert len(updated.contacts) == 1
     assert updated.contacts[0].name == "Alice"
     assert "templates refreshed" in updated.enrichmentNote
-
 
 @pytest.mark.asyncio
 async def test_reclassify_both_toggles_off_uses_legacy_stream_cache(db):

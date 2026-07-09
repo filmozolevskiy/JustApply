@@ -1,12 +1,7 @@
 """Tests for Contacted Elsewhere cross-job outreach warnings."""
 
-import os
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from fastapi.testclient import TestClient
 from src.db import add_job, get_job, get_jobs, init_db, update_contact_status
 from src.db import connection as _db_connection
@@ -21,13 +16,11 @@ from src.web.server import app
 
 SHARED_URL = "https://linkedin.com/in/jane-doe"
 
-
 @pytest.fixture
 def db(tmp_path):
     db_path = str(tmp_path / "contacted_elsewhere.db")
     init_db(db_path)
     return db_path
-
 
 def _add_job_with_contact(db_path, *, title, company, contacted=False, contacted_at="", archived=False):
     job_id = add_job(
@@ -55,7 +48,6 @@ def _add_job_with_contact(db_path, *, title, company, contacted=False, contacted
         conn.commit()
         conn.close()
     return job_id
-
 
 def test_init_db_backfills_contacted_profiles_index(tmp_path):
     """Upgrade path: legacy DB without index gets backfilled from contacted contacts."""
@@ -100,7 +92,6 @@ def test_init_db_backfills_contacted_profiles_index(tmp_path):
     assert by_job[archived_id]["company"] == "Beta"
     assert by_job[archived_id]["contacted_at"] == "2026-02-01T08:00:00+00:00"
 
-
 def test_init_db_backfill_normalizes_linkedin_url_variants(tmp_path):
     db_path = str(tmp_path / "url_variants.db")
     open(db_path, "a").close()
@@ -135,7 +126,6 @@ def test_init_db_backfill_normalizes_linkedin_url_variants(tmp_path):
     assert rows[0]["profile_slug"] == "/in/jane-doe"
     assert rows[0]["job_id"] == job_id
 
-
 def test_contacted_timestamp_prefers_contacted_at(db):
     ts = contacted_timestamp(
         {"name": "Jane Doe", "contacted_at": "2026-01-02T10:00:00+00:00"},
@@ -143,14 +133,12 @@ def test_contacted_timestamp_prefers_contacted_at(db):
     )
     assert ts == "2026-01-02T10:00:00+00:00"
 
-
 def test_contacted_timestamp_falls_back_to_activity_log(db):
     ts = contacted_timestamp(
         {"name": "Jane Doe"},
         [{"ts": "2026-01-01T08:00:00+00:00", "message": "Marked Jane Doe contacted"}],
     )
     assert ts == "2026-01-01T08:00:00+00:00"
-
 
 def test_build_contacted_index_includes_archived_jobs(db):
     active_id = _add_job_with_contact(
@@ -174,7 +162,6 @@ def test_build_contacted_index_includes_archived_jobs(db):
     assert len(index[slug]) == 2
     job_ids = {entry["jobId"] for entry in index[slug]}
     assert job_ids == {active_id, archived_id}
-
 
 def test_contacted_elsewhere_picks_most_recent_other_job(db):
     older_id = _add_job_with_contact(
@@ -200,7 +187,6 @@ def test_contacted_elsewhere_picks_most_recent_other_job(db):
     assert elsewhere == {"jobId": newer_id, "company": "NewCo", "title": "Newer Role"}
     assert elsewhere["jobId"] != older_id
 
-
 def test_contacted_elsewhere_hidden_when_current_contact_is_contacted(db):
     job_id = _add_job_with_contact(
         db,
@@ -220,14 +206,12 @@ def test_contacted_elsewhere_hidden_when_current_contact_is_contacted(db):
     assert job.contacts[0].contacted is True
     assert not hasattr(job.contacts[0], "contactedElsewhere") or job.contacts[0].model_dump().get("contactedElsewhere") is None
 
-
 def test_update_contact_status_sets_contacted_at(db):
     job_id = _add_job_with_contact(db, title="Role", company="Acme")
     updated = update_contact_status(job_id, 0, True, db_path=db)
     assert updated.contacts[0].contacted is True
     raw = updated.contacts[0].model_dump()
     assert raw.get("contacted_at")
-
 
 def test_update_contact_status_adds_index_row_without_rebuild(db):
     """Marking contacted incrementally updates the index — no full-table rescan."""
@@ -245,7 +229,6 @@ def test_update_contact_status_adds_index_row_without_rebuild(db):
         "contacted_at": updated.contacts[0].model_dump()["contacted_at"],
     }
 
-
 def test_update_contact_status_unmark_removes_index_row(db):
     job_id = _add_job_with_contact(db, title="Role", company="Acme")
     update_contact_status(job_id, 0, True, db_path=db)
@@ -253,7 +236,6 @@ def test_update_contact_status_unmark_removes_index_row(db):
 
     update_contact_status(job_id, 0, False, db_path=db)
     assert [row for row in list_contacted_profile_rows(db_path=db) if row["job_id"] == job_id] == []
-
 
 def test_get_jobs_enriches_contacted_elsewhere(db):
     source_id = _add_job_with_contact(
@@ -273,7 +255,6 @@ def test_get_jobs_enriches_contacted_elsewhere(db):
         "title": "Source Role",
     }
 
-
 def test_api_get_job_returns_contacted_elsewhere(db, monkeypatch):
     monkeypatch.setattr(_db_connection, "DB_PATH", db)
     client = TestClient(app)
@@ -289,7 +270,6 @@ def test_api_get_job_returns_contacted_elsewhere(db, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["contacts"][0]["contactedElsewhere"]["jobId"] == source_id
-
 
 def test_api_contact_toggle_clears_elsewhere_on_same_job(db, monkeypatch):
     monkeypatch.setattr(_db_connection, "DB_PATH", db)
@@ -311,10 +291,8 @@ def test_api_contact_toggle_clears_elsewhere_on_same_job(db, monkeypatch):
     assert after["contacts"][0]["contacted"] is True
     assert "contactedElsewhere" not in after["contacts"][0]
 
-
 def test_enrich_jobs_with_contacted_elsewhere_is_noop_for_empty_list(db):
     assert enrich_jobs_with_contacted_elsewhere([], db_path=db) == []
-
 
 def test_enrich_job_returns_contacted_elsewhere(db):
     from src.db.jobs import enrich_job
@@ -346,7 +324,6 @@ def test_enrich_job_returns_contacted_elsewhere(db):
         "company": "SourceCo",
         "title": "Source Role",
     }
-
 
 def test_enrich_job_syncs_contacted_profiles_index(db):
     """Enrich persist indexes contacted contacts without a full rebuild."""
@@ -382,7 +359,6 @@ def test_enrich_job_syncs_contacted_profiles_index(db):
         "title": "Role",
         "contacted_at": "2026-04-01T08:00:00+00:00",
     }
-
 
 def test_reclassify_replaces_index_rows_for_job(db):
     """Re-classify that rewrites contacts keeps the index consistent."""
@@ -426,7 +402,6 @@ def test_reclassify_replaces_index_rows_for_job(db):
     assert rows[0]["job_id"] == job_id
     assert rows[0]["contacted_at"] == "2026-05-01T08:00:00+00:00"
 
-
 def test_get_job_uses_contacted_index_for_contacted_elsewhere(db, monkeypatch):
     """Regression: single-job reads enrich via indexed slug lookups."""
     from src.db import contacted_elsewhere as ce
@@ -455,7 +430,6 @@ def test_get_job_uses_contacted_index_for_contacted_elsewhere(db, monkeypatch):
     assert job.contacts[0].model_dump()["contactedElsewhere"]["jobId"] == source_id
     assert len(calls) == 1
     assert calls[0] == {"/in/jane-doe"}
-
 
 def test_get_jobs_uses_contacted_index_for_contacted_elsewhere(db, monkeypatch):
     """Regression: list reads enrich via indexed slug lookups."""
@@ -486,7 +460,6 @@ def test_get_jobs_uses_contacted_index_for_contacted_elsewhere(db, monkeypatch):
     assert target.contacts[0].model_dump()["contactedElsewhere"]["jobId"] == source_id
     assert len(calls) == 1
     assert "/in/jane-doe" in calls[0]
-
 
 def test_update_job_status_returns_contacted_elsewhere(db, monkeypatch):
     monkeypatch.setattr(_db_connection, "DB_PATH", db)

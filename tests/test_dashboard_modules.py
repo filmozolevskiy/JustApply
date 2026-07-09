@@ -2,9 +2,6 @@
 
 import os
 import subprocess
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
 from src.web.server import app
@@ -17,7 +14,6 @@ DRAWER_CONTROLLER_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "
 TASK_LOG_CLIENT_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "taskLogClient.js")
 HTML_PATH = os.path.join(REPO_ROOT, "src", "web", "dashboard.html")
 
-
 def _run_node(script: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["node", "--input-type=module", "-e", script],
@@ -26,7 +22,6 @@ def _run_node(script: str) -> subprocess.CompletedProcess:
         text=True,
         timeout=10,
     )
-
 
 def test_job_store_round_trips_jobs():
     """jobStore owns in-memory job list — set, find, update, remove."""
@@ -57,7 +52,6 @@ def test_job_store_round_trips_jobs():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_job_store_integrates_incoming_search_jobs():
     """integrateIncomingJobs adds new jobs and skips duplicates by id or title/company."""
     result = _run_node(
@@ -81,7 +75,6 @@ def test_job_store_integrates_incoming_search_jobs():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_filters_and_sorts_jobs():
     """boardRenderer applies Board Controls filters without touching the DOM."""
@@ -108,7 +101,6 @@ def test_board_renderer_filters_and_sorts_jobs():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_search_filters_by_title_company_location_description():
     """Board Search uses multi-word AND across title, company, location, and description."""
@@ -162,7 +154,6 @@ def test_board_renderer_search_filters_by_title_company_location_description():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_search_matches_contact_names():
     """Board Search includes contact display names in the haystack (name only, case-insensitive AND)."""
@@ -226,7 +217,6 @@ def test_board_renderer_search_matches_contact_names():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_resolve_jobs_archived_fetch_param():
     """Active visibility + non-empty search fetches all jobs; otherwise unchanged."""
     result = _run_node(
@@ -243,7 +233,6 @@ def test_board_renderer_resolve_jobs_archived_fetch_param():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_active_search_surfaces_archived_on_contact_match_only():
     """Under Active visibility, archived jobs appear only when contact names match search."""
@@ -320,7 +309,6 @@ def test_board_renderer_active_search_surfaces_archived_on_contact_match_only():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_archived_and_all_visibility_skip_contact_bypass():
     """Archived and All visibility modes use normal search — no contact-only bypass."""
     result = _run_node(
@@ -373,7 +361,6 @@ def test_board_renderer_archived_and_all_visibility_skip_contact_bypass():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_active_archived_bypass_combines_with_other_filters():
     """Contact-name archived bypass still respects remote, size, and recruiter filters."""
     result = _run_node(
@@ -421,20 +408,17 @@ def test_board_renderer_active_archived_bypass_combines_with_other_filters():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_load_jobs_uses_archived_fetch_resolver():
     """loadJobs uses resolveJobsArchivedFetchParam for search-aware fetch under Active."""
     content = load_dashboard_js()
     assert "resolveJobsArchivedFetchParam" in content
     assert "getJobsFetchArchivedParam" in content
 
-
 def test_dashboard_clear_board_search_reloads_jobs():
     """Clearing Board Search reloads jobs so archived rows drop under Active visibility."""
     content = load_dashboard_js()
     clear_fn = content[content.find("function clearBoardSearch"): content.find("function resetBoardControls")]
     assert "loadJobs()" in clear_fn
-
 
 def test_board_renderer_search_combines_with_other_board_filters():
     """Board Search ANDs with remote, size, and recruiter filters."""
@@ -478,7 +462,6 @@ def test_board_renderer_search_combines_with_other_board_filters():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_job_order_follows_lanes_and_sort():
     """getBoardJobOrder returns jobs lane-by-lane using the active sort."""
     result = _run_node(
@@ -500,7 +483,6 @@ def test_board_renderer_job_order_follows_lanes_and_sort():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_drawer_has_prev_next_navigation():
     """Job drawer exposes previous/next navigation controls."""
     with open(HTML_PATH, encoding="utf-8") as f:
@@ -514,7 +496,6 @@ def test_dashboard_drawer_has_prev_next_navigation():
         drawer = f.read()
     assert "navigateDrawerJob" in drawer
     assert "getBoardJobOrder" in drawer
-
 
 def test_drawer_controller_substitutes_greeting_name():
     """drawerController applies Name Placeholder greeting substitution."""
@@ -542,7 +523,6 @@ def test_drawer_controller_substitutes_greeting_name():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_drawer_controller_company_row_and_size_helpers():
     """Drawer company row shows LinkedIn badge only when companyUrl is present."""
     result = _run_node(
@@ -561,7 +541,6 @@ def test_drawer_controller_company_row_and_size_helpers():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_drawer_controller_pick_default_active_contact_deprioritizes_elsewhere():
     """Active Contact defaults to uncontacted contacts without Contacted Elsewhere first."""
@@ -594,7 +573,6 @@ def test_drawer_controller_pick_default_active_contact_deprioritizes_elsewhere()
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_drawer_controller_contact_sample_actions_after_empty_reclassify():
     """Load More / Re-classify stay available when enrichment ran but contacts are empty."""
     result = _run_node(
@@ -614,7 +592,6 @@ def test_drawer_controller_contact_sample_actions_after_empty_reclassify():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_task_log_client_routes_sse_message_types():
     """taskLogClient routes log/result/done SSE payloads through one handler."""
@@ -648,14 +625,12 @@ def test_task_log_client_routes_sse_message_types():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_has_no_inline_mock_job_database():
     """Kanban Dashboard loads jobs from the API — no static masterJobs mock array."""
     content = load_dashboard_js()
     assert "let masterJobs = [" not in content
     assert "Senior QA Automation Engineer" not in content
     assert "Using static fallback database" not in content
-
 
 def test_dashboard_loads_kanban_modules():
     """dashboard.html imports Kanban Dashboard modules instead of inline monolith state."""
@@ -674,14 +649,12 @@ def test_dashboard_loads_kanban_modules():
     assert "evaluationLock.js" in dashboard_js
     assert "profileManager.js" in dashboard_js
 
-
 def test_dashboard_links_stylesheet():
     """dashboard.html links extracted CSS from the static mount."""
     with open(HTML_PATH, encoding="utf-8") as f:
         content = f.read()
     assert "/static/css/dashboard.css" in content
     assert "<style" not in content
-
 
 def test_server_serves_dashboard_stylesheet():
     """FastAPI serves extracted dashboard CSS."""
@@ -690,7 +663,6 @@ def test_server_serves_dashboard_stylesheet():
     assert resp.status_code == 200
     assert ":root {" in resp.text
     assert ".kanban-board-container" in resp.text
-
 
 def test_server_serves_kanban_static_modules():
     """FastAPI serves extracted dashboard JS modules."""
@@ -710,7 +682,6 @@ def test_server_serves_kanban_static_modules():
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert "export " in resp.text
-
 
 def test_board_renderer_shows_enriching_badge_for_active_task():
     """boardRenderer.cardEnrichingBadge returns spinner for matching job, empty otherwise."""
@@ -733,7 +704,6 @@ def test_board_renderer_shows_enriching_badge_for_active_task():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_shows_load_more_badge_for_active_task():
     """boardRenderer.cardLoadMoreBadge returns spinner for matching job, empty otherwise."""
     result = _run_node(
@@ -754,7 +724,6 @@ def test_board_renderer_shows_load_more_badge_for_active_task():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_shows_reclassify_badge_for_active_task():
     """boardRenderer.cardReclassifyBadge returns spinner for matching job, empty otherwise."""
@@ -777,14 +746,12 @@ def test_board_renderer_shows_reclassify_badge_for_active_task():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_has_summary_log_level_style():
     """Task Logs summary level has distinct styling in dashboard CSS."""
     content = read_dashboard_css()
     assert ".terminal-text.summary" in content
     assert "border-top" in content
     assert os.path.isfile(DASHBOARD_CSS_PATH)
-
 
 def test_board_renderer_includes_unclassified_badge():
     """boardRenderer shows Unclassified badge with hover tooltip for unclassified jobs."""
@@ -794,7 +761,6 @@ def test_board_renderer_includes_unclassified_badge():
     assert "Unclassified" in content
     assert "title=" in content
 
-
 def test_drawer_shows_reclassify_progress_banner():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
@@ -802,7 +768,6 @@ def test_drawer_shows_reclassify_progress_banner():
         "drawerController must show in-drawer spinner while re-classifying"
     assert "refreshDrawerIfOpen" in content, \
         "drawerController must export refreshDrawerIfOpen to avoid reopening closed drawer"
-
 
 def test_drawer_inline_handlers_exported_to_window():
     """Inline oninput/onclick in drawer HTML require globals on window."""

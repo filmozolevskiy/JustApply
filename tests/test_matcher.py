@@ -1,12 +1,8 @@
 import json
 import os
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import src.core.matcher as matcher_module
 from src.core.matcher import evaluate_job, evaluate_jobs_batch, load_resume
 
@@ -27,7 +23,6 @@ def mock_gemini_response():
     response.text = json.dumps(result)
     return response
 
-
 @pytest.fixture
 def sample_job():
     return {
@@ -35,7 +30,6 @@ def sample_job():
         "company": "TechCorp",
         "description": "We need a QA engineer with Python and Pytest experience."
     }
-
 
 # --- load_resume ---
 
@@ -48,12 +42,10 @@ def test_load_resume_returns_content(tmp_path, monkeypatch):
     content = load_resume("qa.md")
     assert content == "# QA Resume\nPython expert"
 
-
 def test_load_resume_raises_when_file_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(matcher_module, "RESUMES_DIR", str(tmp_path))
     with pytest.raises(FileNotFoundError):
         load_resume("nonexistent.md")
-
 
 # --- evaluate_job ---
 
@@ -72,7 +64,6 @@ async def test_evaluate_job_returns_structured_result(mock_gemini_response, samp
     assert result["seniority"] == "senior"
     assert result["summary"] == "This is a mock summary of the job listing."
 
-
 @pytest.mark.asyncio
 async def test_evaluate_job_retries_on_rate_limit(mock_gemini_response, sample_job):
     mock_generate = AsyncMock(side_effect=[
@@ -87,7 +78,6 @@ async def test_evaluate_job_retries_on_rate_limit(mock_gemini_response, sample_j
     assert result["matchScore"] == 89
     assert mock_generate.call_count == 2
 
-
 @pytest.mark.asyncio
 async def test_evaluate_job_returns_empty_when_no_api_key(sample_job):
     env = {k: v for k, v in os.environ.items() if k != "GEMINI_API_KEY"}
@@ -95,7 +85,6 @@ async def test_evaluate_job_returns_empty_when_no_api_key(sample_job):
         result = await evaluate_job(sample_job, "resume content")
 
     assert result == {}
-
 
 @pytest.mark.asyncio
 async def test_evaluate_job_returns_empty_on_non_rate_limit_error(sample_job):
@@ -105,7 +94,6 @@ async def test_evaluate_job_returns_empty_on_non_rate_limit_error(sample_job):
 
     assert result == {}
 
-
 @pytest.mark.asyncio
 async def test_evaluate_job_returns_empty_on_max_retries_exceeded(sample_job):
     with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(side_effect=Exception("429 Rate limit exceeded"))), \
@@ -114,7 +102,6 @@ async def test_evaluate_job_returns_empty_on_max_retries_exceeded(sample_job):
             result = await evaluate_job(sample_job, "resume content")
 
     assert result == {}
-
 
 # --- Pipeline integration: mock_eval applied via scraping endpoint ---
 
@@ -132,7 +119,6 @@ async def test_evaluate_job_logs_warning_when_skipping(sample_job):
     assert result == {}
     assert any("GEMINI_API_KEY" in msg for _, msg in log_messages)
 
-
 def test_build_prompt_formatting():
     from src.core.matcher import _build_prompt
 
@@ -147,14 +133,12 @@ def test_build_prompt_formatting():
     assert "summary" in prompt
     assert "Allowed Remote Preferences" not in prompt
 
-
 def test_recruiter_company_detection_local():
     from src.core.matcher import check_recruiter_by_name
     assert check_recruiter_by_name("Fuze HR Solutions") is True
     assert check_recruiter_by_name("Randstad Canada") is True
     assert check_recruiter_by_name("Google Inc.") is False
     assert check_recruiter_by_name("Air Canada") is False
-
 
 @pytest.mark.asyncio
 async def test_evaluate_job_applies_recruiter_override():
@@ -179,7 +163,6 @@ async def test_evaluate_job_applies_recruiter_override():
             assert result["matchType"] == "no-match"
             assert "Posted by a recruiting agency/staffing firm" in result["gaps"]
             assert result["salary"] == "$110k"
-
 
 # --- evaluate_jobs_batch ---
 

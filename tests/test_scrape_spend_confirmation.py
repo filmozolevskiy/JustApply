@@ -4,16 +4,12 @@ Client (static): triggerScrapeRun opens spend modal before POST /api/search,
 checkout-receipt layout with live cost recompute, limit sync back to settings.
 """
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from kanban_js import load_dashboard_js, read_dashboard_html
 
 
 def _dashboard_script() -> str:
     return load_dashboard_js()
-
 
 def _get_function_body(content: str, func_name: str, window: int = 12000) -> str:
     for prefix in (f"async function {func_name}(", f"function {func_name}("):
@@ -22,11 +18,9 @@ def _get_function_body(content: str, func_name: str, window: int = 12000) -> str
             return content[idx : idx + window]
     raise AssertionError(f"{func_name} not found in content")
 
-
 def test_scrape_spend_confirm_modal_function_exists():
     script = _dashboard_script()
     assert "showScrapeSpendConfirmModal" in script
-
 
 def test_trigger_scrape_shows_modal_before_post():
     script = _dashboard_script()
@@ -37,7 +31,6 @@ def test_trigger_scrape_shows_modal_before_post():
     assert fetch_idx != -1, "triggerScrapeRun must POST to /api/search"
     assert modal_idx < fetch_idx, "Spend modal must appear before POST /api/search"
 
-
 def test_trigger_scrape_cancels_without_post():
     script = _dashboard_script()
     body = _get_function_body(script, "triggerScrapeRun")
@@ -47,14 +40,12 @@ def test_trigger_scrape_cancels_without_post():
         or "!spendResult.confirmed" in body
     ), "triggerScrapeRun must abort when user cancels the modal"
 
-
 def test_scrape_spend_receipt_layout_classes():
     html = read_dashboard_html()
     assert "spend-receipt-grid" in html or "spend-receipt-grid" in _dashboard_script()
     script = _dashboard_script()
     assert "spend-receipt-left" in script or "spend-receipt-grid" in script
     assert "spend-receipt-right" in script or "spend-receipt-grid" in script
-
 
 def test_scrape_spend_shows_scope_keyword_regions_time():
     script = _dashboard_script()
@@ -63,12 +54,10 @@ def test_scrape_spend_shows_scope_keyword_regions_time():
     assert "region" in body.lower()
     assert "time" in body.lower() or "timeRange" in body
 
-
 def test_scrape_spend_cost_per_record_constant():
     script = _dashboard_script()
     assert "SCRAPE_COST_PER_RECORD" in script or "COST_PER_RECORD" in script
     assert "0.0015" in script
-
 
 def test_scrape_spend_recompute_max_postings_and_spend():
     script = _dashboard_script()
@@ -81,13 +70,11 @@ def test_scrape_spend_recompute_max_postings_and_spend():
     assert "maxPostings" in body or "max_postings" in body or "Max postings" in body
     assert "maxSpend" in body or "max_spend" in body or "Max spend" in body
 
-
 def test_scrape_spend_modal_limit_stepper_clamps():
     script = _dashboard_script()
     body = _get_function_body(script, "showScrapeSpendConfirmModal", window=8000)
     assert "PER_REGION_LIMIT" in body or "clampPerRegionLimit" in body
     assert "STEP" in body or "step" in body.lower()
-
 
 def test_scrape_spend_syncs_limit_to_settings():
     script = _dashboard_script()
@@ -96,12 +83,10 @@ def test_scrape_spend_syncs_limit_to_settings():
         "Confirmed modal limit must write back to Job Search Settings"
     )
 
-
 def test_scrape_spend_ceiling_note_not_single_fabricated_figure():
     script = _dashboard_script()
     body = _get_function_body(script, "buildScrapeSpendReceiptBodyHtml", window=6000)
     assert "ceiling" in body.lower() or "depends on" in body.lower() or "actual cost" in body.lower()
-
 
 def test_spend_confirmation_prototype_removed():
     proto = os.path.join(

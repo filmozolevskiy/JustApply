@@ -1,20 +1,14 @@
 import json
-import os
-import sys
 import time
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi.testclient import TestClient
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
 from src.web.server import TaskState, _schedule_active_task_prune, active_tasks, app
 
 client = TestClient(app)
-
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
@@ -23,13 +17,11 @@ def setup_test_db(tmp_path, monkeypatch):
     database.init_db(test_db)
     yield test_db
 
-
 @pytest.fixture(autouse=True)
 def reset_active_tasks():
     active_tasks.clear()
     yield
     active_tasks.clear()
-
 
 def _make_completed_state(log_messages):
     """Return a completed TaskState with pre-filled logs and a sentinel in the queue."""
@@ -41,7 +33,6 @@ def _make_completed_state(log_messages):
     state.queue.put_nowait(None)
     return state
 
-
 def _collect_messages(task_id, skip=0):
     """Stream the SSE endpoint and return all parsed JSON payloads."""
     messages = []
@@ -52,14 +43,12 @@ def _collect_messages(task_id, skip=0):
                 messages.append(json.loads(line[6:]))
     return messages
 
-
 # --- 404 on unknown task ---
 
 def test_unknown_task_returns_404():
     resp = client.get("/api/logs/nonexistent-id")
     assert resp.status_code == 404
     assert resp.json() == {"message": "Task ID not found"}
-
 
 # --- skip parameter skips already-seen log lines ---
 
@@ -69,7 +58,6 @@ def test_skip_zero_returns_all_logs():
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["Step 1", "Step 2", "Step 3"]
 
-
 def test_skip_two_omits_first_two_logs():
     active_tasks["t2"] = _make_completed_state(["Step 1", "Step 2", "Step 3"])
     msgs = _collect_messages("t2", skip=2)
@@ -77,20 +65,17 @@ def test_skip_two_omits_first_two_logs():
     assert len(logs) == 1
     assert logs[0]["message"] == "Step 3"
 
-
 def test_skip_equal_to_total_yields_no_logs():
     active_tasks["t3"] = _make_completed_state(["Step 1", "Step 2"])
     msgs = _collect_messages("t3", skip=2)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert len(logs) == 0
 
-
 def test_negative_skip_is_treated_as_zero():
     active_tasks["t4"] = _make_completed_state(["Line A", "Line B"])
     msgs = _collect_messages("t4", skip=-5)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["Line A", "Line B"]
-
 
 # --- stream termination events ---
 
@@ -99,7 +84,6 @@ def test_completed_task_stream_ends_with_done_event():
     msgs = _collect_messages("t5")
     done = [m for m in msgs if m.get("type") == "done"]
     assert len(done) == 1
-
 
 def test_failed_task_stream_ends_with_error_and_done():
     state = TaskState({"job_id": 1})
@@ -112,7 +96,6 @@ def test_failed_task_stream_ends_with_error_and_done():
     errors = [m for m in msgs if m.get("type") == "log" and m.get("level") == "error"]
     assert len(done) == 1
     assert len(errors) >= 1
-
 
 # --- skip is independent per reconnect ---
 
@@ -130,7 +113,6 @@ def test_skip_one_then_skip_two_covers_all_logs():
     assert len(logs2) == 2
     assert logs2[0]["message"] == "B"
 
-
 def _make_live_task_state(log_messages):
     """Mirror log_callback: each line is stored in logs and queued."""
     state = TaskState({"job_id": 1})
@@ -141,7 +123,6 @@ def _make_live_task_state(log_messages):
     state.status = "completed"
     state.queue.put_nowait(None)
     return state
-
 
 def test_live_stream_does_not_duplicate_replayed_logs():
     """Logs buffered before SSE connect must not appear twice (replay + queue)."""
@@ -155,14 +136,12 @@ def test_live_stream_does_not_duplicate_replayed_logs():
         "Fetching up to 25 employees for 'Acme'...",
     ]
 
-
 def test_live_stream_reconnect_skips_replayed_and_queued_history():
     """Reconnect with skip=N must not re-deliver lines already seen."""
     active_tasks["live2"] = _make_live_task_state(["A", "B", "C"])
     msgs = _collect_messages("live2", skip=1)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["B", "C"]
-
 
 def test_live_stream_yields_incremental_job_results():
     """Search saves emit result events on the SSE stream before done."""
@@ -183,9 +162,7 @@ def test_live_stream_yields_incremental_job_results():
     assert results[0]["job"]["id"] == 42
     assert any(m.get("type") == "done" for m in msgs)
 
-
 # --- active_tasks pruning after terminal SSE ---
-
 
 @pytest.mark.asyncio
 async def test_schedule_active_task_prune_removes_terminal_task(monkeypatch):
@@ -196,7 +173,6 @@ async def test_schedule_active_task_prune_removes_terminal_task(monkeypatch):
     await _schedule_active_task_prune("prune-me")
     assert "prune-me" not in active_tasks
 
-
 @pytest.mark.asyncio
 async def test_schedule_active_task_prune_keeps_running_task(monkeypatch):
     monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
@@ -205,7 +181,6 @@ async def test_schedule_active_task_prune_keeps_running_task(monkeypatch):
     active_tasks["keep-me"] = state
     await _schedule_active_task_prune("keep-me")
     assert "keep-me" in active_tasks
-
 
 @pytest.mark.asyncio
 async def test_schedule_active_task_prune_skips_when_stream_active(monkeypatch):
@@ -217,14 +192,12 @@ async def test_schedule_active_task_prune_skips_when_stream_active(monkeypatch):
     await _schedule_active_task_prune("streaming")
     assert "streaming" in active_tasks
 
-
 def test_completed_task_pruned_after_stream_and_ttl(monkeypatch):
     monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
     active_tasks["t8"] = _make_completed_state(["Step 1"])
     _collect_messages("t8")
     time.sleep(0.05)
     assert "t8" not in active_tasks
-
 
 def test_completed_task_replayable_during_prune_ttl():
     active_tasks["t9"] = _make_completed_state(["A", "B"])

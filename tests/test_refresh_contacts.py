@@ -1,18 +1,13 @@
 """Tests verifying that the refresh-contacts endpoint and refreshContacts JS are removed."""
 import os
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
 from src.web.server import app
 
 client = TestClient(app)
-
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
@@ -22,14 +17,12 @@ def setup_test_db(tmp_path, monkeypatch):
     database.init_db(test_db_str)
     yield test_db_str
 
-
 # --- POST /api/jobs/{id}/refresh-contacts is removed ---
 
 def test_post_refresh_contacts_endpoint_removed():
     """The refresh-contacts endpoint no longer exists."""
     response = client.post("/api/jobs/1/refresh-contacts")
     assert response.status_code == 404
-
 
 # --- Dashboard HTML: refreshContacts function is removed ---
 
@@ -43,18 +36,15 @@ def _load_script():
             return content[start:]
     raise AssertionError("<script> block not found")
 
-
 def test_dashboard_html_refresh_contacts_function_removed():
     script = _load_script()
     assert "function refreshContacts(" not in script, \
         "refreshContacts JS function must be removed from dashboard"
 
-
 def test_dashboard_html_refresh_contacts_not_exported():
     script = _load_script()
     assert "refreshContacts," not in script, \
         "refreshContacts must not appear in the window export block"
-
 
 # --- Drawer: Refresh Contacts button is removed ---
 

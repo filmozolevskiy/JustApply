@@ -1,13 +1,8 @@
 import json
-import os
-import sys
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.cli.cli import run_collect
 from src.core.batch_poller import run_batch_collection
@@ -21,7 +16,6 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
     database.init_db(str(db_path))
     return db_path
-
 
 def _seed_scraped_job(db_path, **overrides):
     job = {
@@ -38,7 +32,6 @@ def _seed_scraped_job(db_path, **overrides):
     job.update(overrides)
     return database.add_job(job, db_path=str(db_path))
 
-
 def _evaluation(score=82):
     return {
         "matchScore": score,
@@ -53,7 +46,6 @@ def _evaluation(score=82):
         "salary": "",
     }
 
-
 def _build_fake_client(result_jsonl: str):
     client = MagicMock()
     batch_job = MagicMock()
@@ -62,7 +54,6 @@ def _build_fake_client(result_jsonl: str):
     client.batches.get.return_value = batch_job
     client.files.download.return_value = result_jsonl.encode("utf-8")
     return client
-
 
 @pytest.mark.asyncio
 async def test_collect_once_writes_back_with_fake_client(tmp_db, monkeypatch):
@@ -103,7 +94,6 @@ async def test_collect_once_writes_back_with_fake_client(tmp_db, monkeypatch):
     assert job.status == "matched"
     assert job.matchScore == 82
 
-
 @pytest.mark.asyncio
 async def test_collect_works_while_evaluation_lock_active(tmp_db, monkeypatch):
     job_id = _seed_scraped_job(tmp_db)
@@ -133,7 +123,6 @@ async def test_collect_works_while_evaluation_lock_active(tmp_db, monkeypatch):
 
     assert result["matched"] == 1
     assert result["in_flight_remaining"] == 0
-
 
 @pytest.mark.asyncio
 async def test_collect_wait_loops_until_terminal(tmp_db, monkeypatch):
@@ -189,7 +178,6 @@ async def test_collect_wait_loops_until_terminal(tmp_db, monkeypatch):
     assert result["in_flight_remaining"] == 0
     assert client.batches.get.call_count == 2
     assert sleep_calls
-
 
 @pytest.mark.asyncio
 async def test_collect_once_with_no_in_flight_batches(tmp_db):

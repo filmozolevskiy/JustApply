@@ -1,10 +1,6 @@
-import os
-import sys
 import unittest
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from src.core.enrichment.contact_sample import detect_country_from_location
 
 
@@ -92,7 +88,6 @@ class TestLocationMapping(unittest.TestCase):
         self.assertEqual(detect_country_from_location("montreal, quebec"), "Canada")
         self.assertEqual(detect_country_from_location("Toronto, on"), "Canada")
         self.assertEqual(detect_country_from_location("new york, ny"), "United States")
-
 
 if __name__ == "__main__":
     unittest.main()

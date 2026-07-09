@@ -1,12 +1,7 @@
 """Tests for Contact Sample Cache — DB layer and source_contacts cache-aware behavior."""
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from src import db as database
@@ -16,14 +11,12 @@ from src.schemas import OutreachSettings
 
 _LEGACY_SETTINGS = OutreachSettings(target_recruiters=False, target_russian_speakers=False)
 
-
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(_db_connection, "DB_PATH", db_path)
     database.init_db(db_path)
     return db_path
-
 
 # --- DB layer ---
 
@@ -37,11 +30,9 @@ def test_cache_table_created_by_init_db(db):
     conn.close()
     assert row is not None
 
-
 def test_cache_miss_returns_none(db):
     result = get_contact_sample("acme", db_path=db)
     assert result is None
-
 
 def test_set_and_get_contact_sample(db):
     profiles = [{"firstName": "Ivan", "lastName": "Petrov"}]
@@ -52,14 +43,12 @@ def test_set_and_get_contact_sample(db):
     assert cached["display_name"] == "Acme Corp"
     assert cached["fetched_at"]
 
-
 def test_set_contact_sample_stores_empty_list(db):
     """Empty profiles list from a successful Apify run is cached to prevent repeat calls."""
     set_contact_sample("acme", [], db_path=db)
     cached = get_contact_sample("acme", db_path=db)
     assert cached is not None
     assert cached["profiles"] == []
-
 
 def test_set_contact_sample_tracks_stream_exhausted(db):
     """last_fetch_empty marks Stream Exhausted when Apify returned zero profiles."""
@@ -71,7 +60,6 @@ def test_set_contact_sample_tracks_stream_exhausted(db):
     cached = get_contact_sample("acme", stream="recruiters", db_path=db)
     assert cached["last_fetch_empty"] is False
 
-
 def test_set_contact_sample_replaces_existing(db):
     old = [{"firstName": "Old"}]
     new = [{"firstName": "New"}]
@@ -80,16 +68,13 @@ def test_set_contact_sample_replaces_existing(db):
     cached = get_contact_sample("acme", db_path=db)
     assert cached["profiles"] == new
 
-
 def test_delete_contact_sample(db):
     set_contact_sample("acme", [{"x": 1}], db_path=db)
     delete_contact_sample("acme", db_path=db)
     assert get_contact_sample("acme", db_path=db) is None
 
-
 def test_delete_contact_sample_nonexistent_is_noop(db):
     delete_contact_sample("nonexistent", db_path=db)  # must not raise
-
 
 # --- source_contacts cache-aware behavior ---
 
@@ -102,7 +87,6 @@ async def test_source_contacts_calls_apify_on_cache_miss(db):
         await source_contacts(job, settings=_LEGACY_SETTINGS)
     mock_apify.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_skips_apify_on_cache_hit(db):
     """On cache hit, Apify is not called."""
@@ -113,7 +97,6 @@ async def test_source_contacts_skips_apify_on_cache_hit(db):
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     mock_apify.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_populates_cache_after_apify_fetch(db):
@@ -127,7 +110,6 @@ async def test_source_contacts_populates_cache_after_apify_fetch(db):
     assert cached is not None
     assert cached["profiles"] == profiles
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_empty_apify_is_cached(db):
     """Zero-profile Apify result IS cached to prevent repeat Apify calls."""
@@ -139,7 +121,6 @@ async def test_source_contacts_empty_apify_is_cached(db):
     assert cached is not None
     assert cached["profiles"] == []
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_classify_runs_on_cache_hit(db):
     """classify_contacts is called even when serving from cache."""
@@ -150,7 +131,6 @@ async def test_source_contacts_classify_runs_on_cache_hit(db):
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])) as mock_classify:
         await source_contacts(job, settings=_LEGACY_SETTINGS)
     mock_classify.assert_called_once()
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_cache_hit_logs_company_and_fetch_date(db):
@@ -172,14 +152,12 @@ async def test_source_contacts_cache_hit_logs_company_and_fetch_date(db):
     # fetched_at is an ISO timestamp; verify something date-like is present
     assert any("fetched" in m.lower() or "cache" in m.lower() for m in log_records)
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_cache_hit_appends_activity_log(db):
     """Cache hit appends an entry to the job's Job Activity Log."""
 
     profiles = [{"firstName": "Ivan", "lastName": "Petrov", "headline": "Dev", "linkedinUrl": ""}]
     set_contact_sample("acme", profiles, display_name="Acme Corp", db_path=db)
-
 
     job = database.get_job(1, db_path=db)
     assert job is not None, "Seed data must provide at least one job"
@@ -195,7 +173,6 @@ async def test_source_contacts_cache_hit_appends_activity_log(db):
     assert any("cache" in m.lower() or "Cache" in m for m in messages), \
         f"Expected cache hit entry in activity log, got: {messages}"
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_missing_company_url_skips_apify(db):
     """When companyUrl is absent, Apify is not called."""
@@ -204,7 +181,6 @@ async def test_source_contacts_missing_company_url_skips_apify(db):
          patch.object(source_module, "classify_contacts", new=AsyncMock(return_value=[])):
         await source_contacts(job)
     mock_apify.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_missing_company_url_sets_meta(db):
@@ -216,7 +192,6 @@ async def test_source_contacts_missing_company_url_sets_meta(db):
         await source_contacts(job, meta=meta)
     assert meta.get("empty_reason") == "no_company_url"
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_infrastructure_error_not_cached(db):
     """Infrastructure failure (ApifyInfrastructureError) is not cached; exception propagates."""
@@ -226,7 +201,6 @@ async def test_source_contacts_infrastructure_error_not_cached(db):
         with pytest.raises(ApifyInfrastructureError):
             await source_contacts(job, settings=_LEGACY_SETTINGS)
     assert get_contact_sample("acme", db_path=db) is None
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_slug_normalization(db):

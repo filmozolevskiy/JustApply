@@ -1,18 +1,12 @@
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
 from src.web.server import app
 
 client = TestClient(app)
-
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
@@ -24,7 +18,6 @@ def setup_test_db(tmp_path, monkeypatch):
     database.init_db(test_db_str)
 
     yield test_db_str
-
 
 def test_get_jobs_endpoint():
     response = client.get("/api/jobs")
@@ -47,7 +40,6 @@ def test_get_jobs_endpoint():
     assert job7["salary"] == "$70 - $80 / hr"
     assert "Posted by a recruiting agency/staffing firm" in job7["gaps"]
 
-
 def test_put_job_status_endpoint():
     response = client.get("/api/jobs")
     jobs = response.json()
@@ -64,27 +56,22 @@ def test_put_job_status_endpoint():
     job1_updated = next(j for j in jobs if j["id"] == 1)
     assert job1_updated["status"] == "accepted"
 
-
 def test_put_job_status_nonexistent():
     put_response = client.put("/api/jobs/999/status", json={"status": "accepted"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
 
-
 def test_put_job_status_rejects_obsolete_sourced():
     put_response = client.put("/api/jobs/1/status", json={"status": "sourced"})
     assert put_response.status_code == 422
-
 
 def test_put_job_status_rejects_obsolete_enriching():
     put_response = client.put("/api/jobs/1/status", json={"status": "enriching"})
     assert put_response.status_code == 422
 
-
 def test_put_job_status_rejects_obsolete_enriched():
     put_response = client.put("/api/jobs/1/status", json={"status": "enriched"})
     assert put_response.status_code == 422
-
 
 def test_put_job_comment_endpoint():
     response = client.get("/api/jobs")
@@ -103,7 +90,6 @@ def test_put_job_comment_endpoint():
     job1_updated = next(j for j in jobs if j["id"] == 1)
     assert job1_updated["comment"] == "Verified API testing framework."
 
-
 def test_post_job_activity_log_endpoint():
     response = client.post(
         "/api/jobs/1/activity-log",
@@ -113,7 +99,6 @@ def test_post_job_activity_log_endpoint():
     updated = response.json()
     assert "Notes save failed · HTTP error 503" in [e["message"] for e in updated["activityLog"]]
 
-
 def test_post_job_activity_log_nonexistent():
     response = client.post(
         "/api/jobs/999/activity-log",
@@ -121,12 +106,10 @@ def test_post_job_activity_log_nonexistent():
     )
     assert response.status_code == 404
 
-
 def test_put_job_comment_nonexistent():
     put_response = client.put("/api/jobs/999/comment", json={"comment": "No job here"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
-
 
 def test_post_job_enrich_endpoint():
     with patch("src.web.server.run_enrichment_task_with_logs") as mock_enrich_task:
@@ -143,12 +126,10 @@ def test_post_job_enrich_endpoint():
         assert job1["status"] == "accepted"
         assert mock_enrich_task.called
 
-
 def test_post_job_enrich_nonexistent():
     response = client.post("/api/jobs/999/enrich")
     assert response.status_code == 404
     assert response.json() == {"message": "Job not found"}
-
 
 # --- run_enrichment_task_with_logs integration ---
 
@@ -176,7 +157,6 @@ async def test_run_enrichment_task_with_logs_writes_enriched_results(setup_test_
     assert job.contacts[0].name == "Test Contact"
     assert job.recruiterOutreachTemplate == recruiter_note
 
-
 @pytest.mark.asyncio
 async def test_run_enrichment_task_with_logs_noop_for_missing_job():
     import uuid
@@ -187,7 +167,6 @@ async def test_run_enrichment_task_with_logs_noop_for_missing_job():
     active_tasks[task_id] = state
     # Should complete without raising for a non-existent job ID
     await run_enrichment_task_with_logs(task_id, 99999)
-
 
 # --- PUT /api/jobs/{id}/template ---
 
@@ -202,13 +181,11 @@ def test_put_template_endpoint_saves_recruiter_template():
     job1 = next(j for j in jobs if j["id"] == 1)
     assert job1["recruiterOutreachTemplate"] == "Edited recruiter draft"
 
-
 def test_put_template_endpoint_saves_russian_speaker_template():
     response = client.put("/api/jobs/1/template", json={"audience": "russian_speaker", "template": "Edited RS draft"})
     assert response.status_code == 200
     job = response.json()
     assert job["russianSpeakerOutreachTemplate"] == "Edited RS draft"
-
 
 def test_put_template_endpoint_audiences_do_not_overwrite_each_other():
     client.put("/api/jobs/1/template", json={"audience": "recruiter", "template": "R draft"})
@@ -220,12 +197,10 @@ def test_put_template_endpoint_audiences_do_not_overwrite_each_other():
     assert job1["recruiterOutreachTemplate"] == "R draft v2"
     assert job1["russianSpeakerOutreachTemplate"] == "RS draft"
 
-
 def test_put_template_endpoint_nonexistent_job():
     response = client.put("/api/jobs/999/template", json={"audience": "recruiter", "template": "anything"})
     assert response.status_code == 404
     assert response.json() == {"message": "Job not found"}
-
 
 @pytest.mark.asyncio
 async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
@@ -246,7 +221,6 @@ async def test_enrichment_task_aborts_when_pipeline_returns_none(setup_test_db):
     job = database.get_job(1, setup_test_db)
     assert job.status == "accepted"
     assert state.status == "failed"
-
 
 def test_post_job_enrich_returns_server_job_snapshot():
     with patch("src.web.server.run_enrichment_task_with_logs"):

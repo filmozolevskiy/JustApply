@@ -1,15 +1,10 @@
 """Static assertions for Company Research drawer and spend modal wiring."""
 import os
-import sys
 
 from fastapi.testclient import TestClient
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.web.server import app
 
 client = TestClient(app)
-
 
 def test_drawer_includes_glassdoor_section():
     ui_path = os.path.join(
@@ -25,7 +20,6 @@ def test_drawer_includes_glassdoor_section():
     assert "Glassdoor Company Research" in ui_content
     assert "buildCompanyResearchSectionHtml" in drawer_content
 
-
 def test_drawer_hides_research_on_scraped_lane():
     path = os.path.join(
         os.path.dirname(__file__), "..", "src", "web", "static", "js", "companyResearchUi.js"
@@ -34,7 +28,6 @@ def test_drawer_hides_research_on_scraped_lane():
         content = f.read()
     assert "companyResearchAllowed" in content
     assert "scraped" not in content.split("companyResearchAllowed")[1][:200]
-
 
 def test_board_orchestration_research_company_action():
     path = os.path.join(
@@ -45,7 +38,6 @@ def test_board_orchestration_research_company_action():
     assert "researchCompany" in content
     assert "company-research-preflight" in content
 
-
 def test_spend_modal_glassdoor_job_title_field():
     path = os.path.join(
         os.path.dirname(__file__), "..", "src", "web", "static", "js", "spendConfirmation.js"
@@ -55,7 +47,6 @@ def test_spend_modal_glassdoor_job_title_field():
     assert "buildGlassdoorSpendBodyHtml" in content
     assert "spend-glassdoor-job-title" in content
 
-
 def test_drawer_refresh_button_in_researched_section():
     path = os.path.join(
         os.path.dirname(__file__), "..", "src", "web", "static", "js", "companyResearchUi.js"
@@ -64,7 +55,6 @@ def test_drawer_refresh_button_in_researched_section():
         content = f.read()
     assert "Refresh" in content
     assert "showActions: true" in content
-
 
 def test_research_company_skips_spend_when_fully_cached():
     path = os.path.join(
@@ -77,7 +67,6 @@ def test_research_company_skips_spend_when_fully_cached():
     assert "showSpendConfirmModal" in research_fn
     assert research_fn.index("will_call_apify") < research_fn.index("showSpendConfirmModal")
 
-
 def test_drawer_wrong_company_button_in_researched_section():
     path = os.path.join(
         os.path.dirname(__file__), "..", "src", "web", "static", "js", "companyResearchUi.js"
@@ -86,7 +75,6 @@ def test_drawer_wrong_company_button_in_researched_section():
         content = f.read()
     assert "Wrong company?" in content
     assert "repickCompany" in content
-
 
 def test_board_orchestration_repick_company_action():
     path = os.path.join(
@@ -98,7 +86,6 @@ def test_board_orchestration_repick_company_action():
     assert "company-research/candidates" in content
     assert "company-research/repick" in content
 
-
 def test_research_company_passes_existing_glassdoor_title_to_preflight():
     path = os.path.join(
         os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardOrchestration.js"
@@ -109,11 +96,9 @@ def test_research_company_passes_existing_glassdoor_title_to_preflight():
     assert "companyResearch" in research_fn
     assert "glassdoorJobTitle" in research_fn
 
-
 def test_company_research_prototype_route_removed():
     resp = client.get("/prototype/company-research")
     assert resp.status_code == 404
-
 
 def test_company_research_prototype_files_removed():
     root = os.path.join(os.path.dirname(__file__), "..", "src", "web")
@@ -125,7 +110,6 @@ def test_company_research_prototype_files_removed():
     ]
     for path in paths:
         assert not os.path.exists(path), f"Prototype artifact must be deleted: {path}"
-
 
 def test_server_has_no_company_research_prototype_route():
     path = os.path.join(os.path.dirname(__file__), "..", "src", "web", "server.py")

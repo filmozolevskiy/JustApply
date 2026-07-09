@@ -5,14 +5,9 @@ calls Apify with Russian search + HR exclusion filters and maxItems=5, and caps 
 at 5 Russian Speakers who are not Recruiters.
 """
 import json
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from src import db as database
@@ -36,11 +31,9 @@ def db(tmp_path, monkeypatch):
     database.init_db(db_path)
     return db_path
 
-
 @pytest.fixture
 def russian_only_settings():
     return OutreachSettings(target_recruiters=False, target_russian_speakers=True)
-
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -49,7 +42,6 @@ def test_russian_constants():
     assert RUSSIAN_SAMPLE_SIZE == 5
     assert RUSSIAN_SEARCH_QUERY == "Russian"
     assert RUSSIAN_EXCLUDE_FUNCTION_IDS == ["12"]
-
 
 # ─── Russian-only Apify orchestration ─────────────────────────────────────────
 
@@ -69,7 +61,6 @@ async def test_russian_only_calls_apify_for_russian_speakers(db, russian_only_se
 
     mock_russian.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_russian_only_does_not_call_unfiltered_apify(db, russian_only_settings):
     """Russian-only path never calls the unfiltered Apify fetch."""
@@ -86,7 +77,6 @@ async def test_russian_only_does_not_call_unfiltered_apify(db, russian_only_sett
 
     mock_unfiltered.assert_not_called()
 
-
 @pytest.mark.asyncio
 async def test_russian_only_does_not_call_recruiter_apify(db, russian_only_settings):
     """Russian-only path must not call the recruiter-filtered Apify fetch."""
@@ -102,7 +92,6 @@ async def test_russian_only_does_not_call_recruiter_apify(db, russian_only_setti
         await source_contacts(job, settings=russian_only_settings)
 
     mock_recruiters.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_russian_only_caches_result_under_russian_stream(db, russian_only_settings):
@@ -121,7 +110,6 @@ async def test_russian_only_caches_result_under_russian_stream(db, russian_only_
     assert cached is not None
     assert cached["profiles"] == profiles
 
-
 @pytest.mark.asyncio
 async def test_russian_only_does_not_write_legacy_cache(db, russian_only_settings):
     """Russian-only enrichment must not write to the legacy (stream='') cache entry."""
@@ -137,7 +125,6 @@ async def test_russian_only_does_not_write_legacy_cache(db, russian_only_setting
     legacy = get_contact_sample("acme", stream="", db_path=db)
     assert legacy is None
 
-
 @pytest.mark.asyncio
 async def test_russian_only_skips_apify_on_stream_cache_hit(db, russian_only_settings):
     """On 'russian' stream cache hit, Apify is not called."""
@@ -151,7 +138,6 @@ async def test_russian_only_skips_apify_on_stream_cache_hit(db, russian_only_set
         await source_contacts(job, settings=russian_only_settings)
 
     mock_russian.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_russian_only_empty_apify_is_cached(db, russian_only_settings):
@@ -169,7 +155,6 @@ async def test_russian_only_empty_apify_is_cached(db, russian_only_settings):
     assert cached is not None
     assert cached["profiles"] == []
 
-
 @pytest.mark.asyncio
 async def test_russian_only_infrastructure_error_not_cached(db, russian_only_settings):
     """Infrastructure failure is not cached; exception propagates."""
@@ -186,7 +171,6 @@ async def test_russian_only_infrastructure_error_not_cached(db, russian_only_set
 
     assert get_contact_sample("acme", stream="russian", db_path=db) is None
 
-
 @pytest.mark.asyncio
 async def test_russian_only_missing_company_url_skips_apify(db, russian_only_settings):
     """Missing companyUrl skips Apify in Russian-only mode."""
@@ -197,7 +181,6 @@ async def test_russian_only_missing_company_url_skips_apify(db, russian_only_set
         await source_contacts(job, settings=russian_only_settings)
 
     mock_russian.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_russian_only_logs_stream_name(db, russian_only_settings):
@@ -218,7 +201,6 @@ async def test_russian_only_logs_stream_name(db, russian_only_settings):
 
     combined = " ".join(log_messages).lower()
     assert "russian" in combined
-
 
 # ─── Non-HR cap (5 Russian Speakers who are not Recruiters) ───────────────────
 
@@ -243,7 +225,6 @@ async def test_russian_speaker_non_recruiter_keeps_all_matches():
     assert len(result) == 7
     assert all(c["russian_speaker"] for c in result)
     assert all(not c["is_recruiter"] for c in result)
-
 
 @pytest.mark.asyncio
 async def test_recruiter_classified_excluded_from_russian_pool():
@@ -272,7 +253,6 @@ async def test_recruiter_classified_excluded_from_russian_pool():
     assert len(result) == 2, f"Expected 2 (non-recruiter Russians only), got {len(result)}"
     assert all(c["russian_speaker"] for c in result)
     assert all(not c["is_recruiter"] for c in result)
-
 
 @pytest.mark.asyncio
 async def test_apify_input_for_russian_speakers():

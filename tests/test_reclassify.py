@@ -1,19 +1,13 @@
 """Tests for POST /api/jobs/{id}/reclassify — re-classify from cached Contact Sample."""
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
 from src.web.server import app
 
 client = TestClient(app)
-
 
 def _job_after_reclassify_post(job_id, db):
     """POST reclassify starts a background task; TestClient runs it before returning."""
@@ -25,14 +19,12 @@ def _job_after_reclassify_post(job_id, db):
     assert data["job_id"] == job_id
     return get_job(job_id, db_path=db)
 
-
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     test_db = str(tmp_path / "test.db")
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db)
     database.init_db(test_db)
     return test_db
-
 
 def _make_accepted_job_with_contacts(db):
     """Insert an accepted job with contacts and return its id."""
@@ -54,13 +46,11 @@ def _make_accepted_job_with_contacts(db):
     )
     return job_id
 
-
 # --- 404 when job does not exist ---
 
 def test_reclassify_returns_404_for_unknown_job(db):
     resp = client.post("/api/jobs/9999/reclassify")
     assert resp.status_code == 404
-
 
 # --- 200 template-only path when no cached sample exists ---
 
@@ -72,7 +62,6 @@ def test_reclassify_no_cache_returns_200(db):
         job = _job_after_reclassify_post(job_id, db)
     assert job is not None
 
-
 def test_reclassify_no_cache_enrichment_note_kind_is_info(db):
     job_id = _make_accepted_job_with_contacts(db)
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
@@ -82,7 +71,6 @@ def test_reclassify_no_cache_enrichment_note_kind_is_info(db):
     assert job.enrichmentNoteKind == "info"
     assert "templates refreshed" in job.enrichmentNote
 
-
 def test_reclassify_no_cache_preserves_existing_contacts(db):
     job_id = _make_accepted_job_with_contacts(db)
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
@@ -91,7 +79,6 @@ def test_reclassify_no_cache_preserves_existing_contacts(db):
         job = _job_after_reclassify_post(job_id, db)
     assert len(job.contacts) == 1
     assert job.contacts[0].name == "Alice"
-
 
 def test_reclassify_no_cache_activity_log_templates_refreshed(db):
     job_id = _make_accepted_job_with_contacts(db)
@@ -103,7 +90,6 @@ def test_reclassify_no_cache_activity_log_templates_refreshed(db):
     assert any("Re-classified · Outreach templates refreshed" in m for m in messages)
     assert not any("Enrichment failed" in m for m in messages)
 
-
 @pytest.mark.asyncio
 async def test_reclassify_no_cache_does_not_call_source_contacts(db):
     from src.pipelines import run_reclassify_pipeline
@@ -114,7 +100,6 @@ async def test_reclassify_no_cache_does_not_call_source_contacts(db):
          patch("src.pipelines.generate_outreach_templates", new=AsyncMock(return_value=templates)):
         await run_reclassify_pipeline(job_id)
     mock_source.assert_not_called()
-
 
 def test_enrich_job_failure_sets_warning_note_kind(db):
     from src.core.enrichment.coordinator import begin_enrichment
@@ -130,13 +115,11 @@ def test_enrich_job_failure_sets_warning_note_kind(db):
     )
     assert result.enrichmentNoteKind == "warning"
 
-
 def test_job_schema_has_enrichment_note_kind():
     from src.schemas import Job
     job = Job(title="Test", company="Co")
     assert hasattr(job, "enrichmentNoteKind")
     assert job.enrichmentNoteKind == ""
-
 
 # --- 200 on success: re-classifies from cache, no Apify call ---
 
@@ -165,7 +148,6 @@ async def test_reclassify_uses_cache_not_apify(db):
     assert len(job.contacts) == 1
     assert job.contacts[0].name == "Bob Smith"
     assert any("Re-classified" in e.message for e in job.activityLog)
-
 
 @pytest.mark.asyncio
 async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
@@ -214,7 +196,6 @@ async def test_reclassify_uses_source_contacts_and_preserves_contacted(db):
     mock_apify.assert_not_called()
     assert updated.contacts[0].contacted is True
 
-
 @pytest.mark.asyncio
 async def test_reclassify_uses_complete_message_format_when_setting_disabled(db):
     from src.core.enrichment.contact_sample import company_cache_slug
@@ -245,7 +226,6 @@ async def test_reclassify_uses_complete_message_format_when_setting_disabled(db)
     assert mock_gen.await_args.kwargs["short_connection_note"] is False
     assert updated.recruiterOutreachTemplate == complete_template
 
-
 def test_reclassify_post_returns_task_id(db):
     job_id = _make_accepted_job_with_contacts(db)
     templates = {"recruiter": "Hello ______,\n\nAcme.", "russian_speaker": ""}
@@ -257,7 +237,6 @@ def test_reclassify_post_returns_task_id(db):
     assert data["job_id"] == job_id
     assert isinstance(data["task_id"], str)
     assert data["task_id"]
-
 
 @pytest.mark.asyncio
 async def test_run_reclassify_task_with_logs_writes_results(db):
@@ -281,7 +260,6 @@ async def test_run_reclassify_task_with_logs_writes_results(db):
     assert state.status == "completed"
     assert state.result["job"]["id"] == job_id
 
-
 # --- 422 when job is not in Accepted lane ---
 
 def test_reclassify_returns_422_for_non_accepted_job(db):
@@ -295,7 +273,6 @@ def test_reclassify_returns_422_for_non_accepted_job(db):
     assert resp.status_code == 422
     assert "accepted" in resp.json()["message"].lower()
 
-
 # --- Drawer: Re-classify button shown on Accepted jobs with contacts ---
 
 def test_drawer_shows_reclassify_button_for_accepted_jobs_with_contacts():
@@ -305,7 +282,6 @@ def test_drawer_shows_reclassify_button_for_accepted_jobs_with_contacts():
         "drawerController.js must contain 'Re-classify' button text"
     assert "reclassifyJob" in content, \
         "drawerController.js must call reclassifyJob()"
-
 
 def test_drawer_reclassify_button_gated_on_accepted_status():
     """Re-classify is gated on status === 'accepted', not hasContactSampleActions."""
@@ -319,7 +295,6 @@ def test_drawer_reclassify_button_gated_on_accepted_status():
     assert "hasContactSampleActions" not in nearby, \
         "Re-classify must not be gated on hasContactSampleActions — show for all Accepted jobs"
 
-
 def test_load_more_contacts_gated_on_company_url():
     """Load More Contacts requires Accepted status and companyUrl."""
     from kanban_js import read_drawer_controller
@@ -332,7 +307,6 @@ def test_load_more_contacts_gated_on_company_url():
     assert "status === 'accepted'" in nearby, \
         "Load More Contacts must be gated on job.status === 'accepted'"
 
-
 # --- Dashboard: reclassifyJob is exported to window ---
 
 def test_dashboard_exports_reclassify_job():
@@ -341,7 +315,6 @@ def test_dashboard_exports_reclassify_job():
     assert "reclassifyJob" in script, \
         "dashboard must define and export reclassifyJob"
 
-
 # --- Hardening: infrastructure failures (issue #118) ---
 
 _EMPTY_TEMPLATES = {"recruiter": "", "russian_speaker": ""}
@@ -349,7 +322,6 @@ _BOTH_TEMPLATES = {
     "recruiter": "Hello ______,\n\nAcme is looking for a QA.",
     "russian_speaker": "Hello ______,\n\nAcme is looking for a QA.",
 }
-
 
 @pytest.mark.asyncio
 async def test_reclassify_settings_read_failure_no_cache_completes_with_note(db):
@@ -373,7 +345,6 @@ async def test_reclassify_settings_read_failure_no_cache_completes_with_note(db)
     assert "DB locked" in result.enrichmentNote
     assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
     assert any(level == "error" for _, level in log_records)
-
 
 @pytest.mark.asyncio
 async def test_reclassify_settings_read_failure_cache_hit_completes_with_note(db):
@@ -401,7 +372,6 @@ async def test_reclassify_settings_read_failure_cache_hit_completes_with_note(db
     assert result.enrichmentNote.startswith("Could not load Outreach Settings:")
     assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
 
-
 @pytest.mark.asyncio
 async def test_reclassify_template_generation_failure_persists_note(db):
     """Template generation failure leaves Accepted job with explanatory note."""
@@ -416,7 +386,6 @@ async def test_reclassify_template_generation_failure_persists_note(db):
     assert result.status == "accepted"
     assert result.enrichmentNote.startswith("Outreach template generation failed:")
     assert "LLM timeout" in result.enrichmentNote
-
 
 @pytest.mark.asyncio
 async def test_reclassify_contact_sourcing_failure_persists_note(db):
@@ -442,7 +411,6 @@ async def test_reclassify_contact_sourcing_failure_persists_note(db):
     assert result.status == "accepted"
     assert result.enrichmentNote.startswith("Contact sourcing failed:")
     assert result.recruiterOutreachTemplate == _BOTH_TEMPLATES["recruiter"]
-
 
 @pytest.mark.asyncio
 async def test_run_reclassify_task_settings_failure_reaches_terminal_state(db):

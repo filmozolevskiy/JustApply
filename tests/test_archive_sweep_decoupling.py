@@ -1,8 +1,4 @@
 """Tracer-bullet: get_jobs reads must not mutate; sweep is explicit."""
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import add_job, get_jobs, init_db, update_job_status
 from src.db.jobs import archive_stale_rejected_jobs, get_job
@@ -25,7 +21,6 @@ def _add_rejected_job(db_str, backdated_days: int) -> int:
     conn.close()
     return job_id
 
-
 def test_get_jobs_does_not_auto_archive(tmp_path):
     """Pure read: get_jobs must not mutate stale rejected jobs."""
     db_str = str(tmp_path / "test.db")
@@ -36,7 +31,6 @@ def test_get_jobs_does_not_auto_archive(tmp_path):
 
     job = get_job(job_id, db_str)
     assert job.archived is False
-
 
 def test_archive_stale_rejected_jobs_archives_stale(tmp_path):
     """Explicit maintenance sweep archives 14+ day rejected jobs."""

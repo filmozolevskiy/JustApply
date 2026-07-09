@@ -1,11 +1,7 @@
-import os
-import sys
 
 import pytest
 
 # Add root directory to path to import database
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 from src.db import add_job, enrich_job, get_jobs, init_db, update_job_status
 
 
@@ -62,7 +58,6 @@ def test_database_lifecycle(tmp_path):
     assert added_job.strengths == ["Testing", "Scaling"]
     assert added_job.shouldProceed is True
 
-
 def test_add_job_persists_company_url(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
@@ -77,7 +72,6 @@ def test_add_job_persists_company_url(tmp_path):
     assert job.companyUrl == (
         "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
     )
-
 
 def test_update_nonexistent_job(tmp_path):
     test_db = tmp_path / "test_just_apply.db"
@@ -119,7 +113,6 @@ def test_update_job_comment_nonexistent(tmp_path):
     res = update_job_comment(999, "No comment", db_str)
     assert res is None
 
-
 def test_update_job_status_invalid_status(tmp_path):
     test_db = tmp_path / "test_just_apply.db"
     db_str = str(test_db)
@@ -132,7 +125,6 @@ def test_update_job_status_invalid_status(tmp_path):
     jobs = get_jobs(db_str)
     job1 = next(j for j in jobs if j.id == 1)
     assert job1.status == "matched"
-
 
 def test_get_jobs_json_roundtrip(tmp_path):
     test_db = tmp_path / "test_just_apply.db"
@@ -153,7 +145,6 @@ def test_get_jobs_json_roundtrip(tmp_path):
     assert added.gaps == ["No MLOps experience"]
     assert isinstance(added.contacts, list)
     assert added.contacts[0].name == "Bob"
-
 
 def test_job_exists(tmp_path):
     test_db = tmp_path / "test_just_apply.db"
@@ -194,7 +185,6 @@ def test_job_exists(tmp_path):
         db_path=db_str
     ) is False
 
-
 def test_enrich_job_persists_contacts_and_message(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
@@ -214,12 +204,10 @@ def test_enrich_job_persists_contacts_and_message(tmp_path):
     assert job.status == "accepted"
     assert job.outreachMessage == "Hello Alice"
 
-
 def test_enrich_job_nonexistent(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
     assert enrich_job(999, [], "", db_path=db_str) is None
-
 
 def test_enrich_job_persists_enrichment_note(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
@@ -227,7 +215,6 @@ def test_enrich_job_persists_enrichment_note(tmp_path):
     updated = enrich_job(1, [], "msg", enrichment_note="Apify failed: HTTP 403", db_path=db_str)
     assert updated is not None
     assert updated.enrichmentNote == "Apify failed: HTTP 403"
-
 
 def test_enrich_job_clears_enrichment_note(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
@@ -237,7 +224,6 @@ def test_enrich_job_clears_enrichment_note(tmp_path):
     updated = enrich_job(1, contacts, "Hello", enrichment_note="", db_path=db_str)
     assert updated is not None
     assert updated.enrichmentNote == ""
-
 
 def test_enrich_job_persists_both_outreach_templates(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
@@ -254,7 +240,6 @@ def test_enrich_job_persists_both_outreach_templates(tmp_path):
     assert updated.recruiterOutreachTemplate == recruiter_tmpl
     assert updated.russianSpeakerOutreachTemplate == russian_tmpl
 
-
 def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path):
     db_str = str(tmp_path / "test_just_apply.db")
     init_db(db_str)
@@ -266,7 +251,6 @@ def test_existing_recruiter_template_not_overwritten_by_legacy_message(tmp_path)
     )
     job = next(j for j in get_jobs(db_str) if j.id == 1)
     assert job.recruiterOutreachTemplate == recruiter_tmpl
-
 
 def test_update_outreach_template_persists_recruiter_template(tmp_path):
     from src.db.jobs import update_outreach_template
@@ -280,7 +264,6 @@ def test_update_outreach_template_persists_recruiter_template(tmp_path):
     job = next(j for j in get_jobs(db_str) if j.id == 1)
     assert job.recruiterOutreachTemplate == new_text
 
-
 def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
     from src.db.jobs import update_outreach_template
     db_str = str(tmp_path / "test_just_apply.db")
@@ -291,7 +274,6 @@ def test_update_outreach_template_persists_russian_speaker_template(tmp_path):
     assert updated.russianSpeakerOutreachTemplate == new_text
     job = next(j for j in get_jobs(db_str) if j.id == 1)
     assert job.russianSpeakerOutreachTemplate == new_text
-
 
 def test_update_outreach_template_audiences_independent(tmp_path):
     from src.db.jobs import update_outreach_template
@@ -307,7 +289,6 @@ def test_update_outreach_template_audiences_independent(tmp_path):
     job = next(j for j in get_jobs(db_str) if j.id == 1)
     assert job.recruiterOutreachTemplate == "Edited recruiter"
     assert job.russianSpeakerOutreachTemplate == "Russian draft"
-
 
 def test_update_outreach_template_nonexistent_job(tmp_path):
     from src.db.jobs import update_outreach_template

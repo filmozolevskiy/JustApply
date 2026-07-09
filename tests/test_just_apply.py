@@ -1,11 +1,6 @@
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.cli import run_promote, run_search
 from src.schemas import Job
 
@@ -42,7 +37,6 @@ async def test_run_search_calls_scraper_and_saves_to_db():
         assert len(results) == 1
         assert results[0]["id"] == 1
 
-
 @pytest.mark.asyncio
 async def test_run_search_calls_evaluate_when_not_mock():
     mock_jobs = [
@@ -62,7 +56,6 @@ async def test_run_search_calls_evaluate_when_not_mock():
         }
     ]
 
-
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=mock_jobs), \
          patch("src.pipelines.load_resume", return_value="# Resume content"), \
          patch("src.pipelines.submit_batch_evaluation", new=AsyncMock(return_value=[{"batchName": "batches/test"}])) as mock_submit, \
@@ -77,7 +70,6 @@ async def test_run_search_calls_evaluate_when_not_mock():
         assert len(results) == 1
         assert results[0]["id"] == 42
         assert results[0]["matchType"] == ""
-
 
 @pytest.mark.asyncio
 async def test_run_promote_reads_found_jobs_and_sources_contacts():
@@ -102,7 +94,6 @@ async def test_run_promote_reads_found_jobs_and_sources_contacts():
         assert results[0].company == "Docker"
         assert results[0].status == "accepted"
 
-
 @pytest.mark.asyncio
 async def test_run_promote_handles_no_contacts_gracefully():
     seeded_jobs = [
@@ -121,7 +112,6 @@ async def test_run_promote_handles_no_contacts_gracefully():
         # Job is still included even with no contacts
         assert len(results) == 1
         assert results[0].status == "accepted"
-
 
 @pytest.mark.asyncio
 async def test_run_enrichment_pipeline_sources_contacts_and_persists():
@@ -156,7 +146,6 @@ async def test_run_enrichment_pipeline_sources_contacts_and_persists():
             russian_speaker_template="",
         )
 
-
 @pytest.mark.asyncio
 async def test_run_enrichment_pipeline_requires_begin_enrichment():
     from src.pipelines import run_enrichment_pipeline
@@ -171,7 +160,6 @@ async def test_run_enrichment_pipeline_requires_begin_enrichment():
 
     result = await run_enrichment_pipeline(job)
     assert result is None
-
 
 @pytest.mark.asyncio
 async def test_run_enrichment_pipeline_runs_when_already_accepted():
@@ -194,7 +182,6 @@ async def test_run_enrichment_pipeline_runs_when_already_accepted():
         result = await run_enrichment_pipeline(job)
 
     assert result.status == "accepted"
-
 
 @pytest.mark.asyncio
 async def test_run_enrichment_pipeline_reads_settings_and_passes_to_source_contacts():

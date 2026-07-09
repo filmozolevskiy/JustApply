@@ -1,12 +1,7 @@
-import os
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.cli.cli import run_backfill, run_search
 from src.core.evaluation_lock import (
@@ -21,14 +16,12 @@ from src.web.server import app
 
 client = TestClient(app)
 
-
 @pytest.fixture
 def tmp_db(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
     monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
     database.init_db(str(db_path))
     return db_path
-
 
 def test_lock_inactive_when_all_batches_terminal(tmp_db):
     batch_jobs.create_batch_job(
@@ -46,7 +39,6 @@ def test_lock_inactive_when_all_batches_terminal(tmp_db):
     assert status["batchCount"] == 0
     assert is_evaluation_lock_active(db_path=str(tmp_db)) is False
     assert_evaluation_lock_clear(db_path=str(tmp_db))
-
 
 def test_lock_active_when_non_terminal_batch_exists(tmp_db):
     batch_jobs.create_batch_job(
@@ -66,7 +58,6 @@ def test_lock_active_when_non_terminal_batch_exists(tmp_db):
     with pytest.raises(EvaluationLockError) as exc_info:
         assert_evaluation_lock_clear(db_path=str(tmp_db))
     assert exc_info.value.job_count == 3
-
 
 @pytest.mark.asyncio
 async def test_cancel_in_flight_batches_calls_gemini_and_marks_cancelled(tmp_db):
@@ -96,7 +87,6 @@ async def test_cancel_in_flight_batches_calls_gemini_and_marks_cancelled(tmp_db)
     mock_client.batches.cancel.assert_any_call(name="batches/b")
     assert is_evaluation_lock_active(db_path=str(tmp_db)) is False
 
-
 @pytest.mark.asyncio
 async def test_cancel_without_client_still_marks_batches_cancelled(tmp_db):
     batch_jobs.create_batch_job(
@@ -114,7 +104,6 @@ async def test_cancel_without_client_still_marks_batches_cancelled(tmp_db):
     row = batch_jobs.get_batch_job(1, db_path=str(tmp_db))
     assert row["state"] == "JOB_STATE_CANCELLED"
     assert is_evaluation_lock_active(db_path=str(tmp_db)) is False
-
 
 def test_api_evaluation_lock_status(tmp_db, monkeypatch):
     monkeypatch.setattr(
@@ -134,7 +123,6 @@ def test_api_evaluation_lock_status(tmp_db, monkeypatch):
     assert body["active"] is True
     assert body["jobCount"] == 2
     assert body["batchCount"] == 1
-
 
 def test_api_search_blocked_when_lock_active(monkeypatch):
     monkeypatch.setattr(
@@ -164,7 +152,6 @@ def test_api_search_blocked_when_lock_active(monkeypatch):
     assert response.status_code == 409
     assert "Evaluation in progress" in response.json()["message"]
 
-
 @pytest.mark.asyncio
 async def test_cli_search_refuses_when_lock_active(tmp_db, monkeypatch):
     batch_jobs.create_batch_job(
@@ -183,7 +170,6 @@ async def test_cli_search_refuses_when_lock_active(tmp_db, monkeypatch):
 
     assert exc_info.value.code == 1
 
-
 @pytest.mark.asyncio
 async def test_cli_backfill_refuses_when_lock_active(tmp_db, monkeypatch):
     batch_jobs.create_batch_job(
@@ -199,7 +185,6 @@ async def test_cli_backfill_refuses_when_lock_active(tmp_db, monkeypatch):
         await run_backfill()
 
     assert exc_info.value.code == 1
-
 
 def test_dashboard_html_has_evaluation_lock_ui():
     from tests.kanban_js import load_dashboard_js, read_dashboard_html

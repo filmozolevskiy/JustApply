@@ -1,8 +1,4 @@
 """Tests for manual archive on Rejected cards — issue #52."""
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import add_job, get_jobs, init_db, update_job_status
 from src.db.jobs import archive_job, get_job
@@ -20,7 +16,6 @@ def test_schema_adds_archived_columns(tmp_path):
     assert hasattr(job, "rejectedAt")
     assert hasattr(job, "autoArchiveExempt")
 
-
 def test_new_job_defaults_not_archived(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -29,7 +24,6 @@ def test_new_job_defaults_not_archived(tmp_path):
     assert job.archived is False
     assert job.rejectedAt == ""
     assert job.autoArchiveExempt is False
-
 
 def test_existing_rejected_jobs_get_rejected_at_backfilled(tmp_path):
     """Seed job 5 is in 'rejected' status — it must have rejectedAt set after init_db."""
@@ -41,7 +35,6 @@ def test_existing_rejected_jobs_get_rejected_at_backfilled(tmp_path):
     for rj in rejected_jobs:
         assert rj.rejectedAt, f"job {rj.id} is rejected but has no rejectedAt"
 
-
 # ---------------------------------------------------------------------------
 # DB-layer: rejectedAt set on first move to Rejected
 # ---------------------------------------------------------------------------
@@ -52,7 +45,6 @@ def test_rejected_at_set_on_first_rejection(tmp_path):
     job_id = add_job({"title": "Dev", "company": "X"}, db_str)
     updated = update_job_status(job_id, "rejected", db_str)
     assert updated.rejectedAt != ""
-
 
 def test_rejected_at_not_overwritten_on_later_rejection(tmp_path):
     """Move to rejected, then to another lane, then back to rejected — rejectedAt unchanged."""
@@ -67,7 +59,6 @@ def test_rejected_at_not_overwritten_on_later_rejection(tmp_path):
     second = update_job_status(job_id, "rejected", db_str)
     assert second.rejectedAt == first_ts, "rejectedAt must not change on re-rejection"
 
-
 def test_rejected_at_not_set_for_non_rejected_status(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -75,14 +66,12 @@ def test_rejected_at_not_set_for_non_rejected_status(tmp_path):
     updated = update_job_status(job_id, "scraped", db_str)
     assert updated.rejectedAt == ""
 
-
 def test_get_jobs_still_returns_non_archived(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     all_jobs = get_jobs(db_str)
     non_rejected = [j for j in all_jobs if j.status != "rejected"]
     assert non_rejected, "should have non-rejected jobs in seed data"
-
 
 # ---------------------------------------------------------------------------
 # DB-layer: archive_job
@@ -96,7 +85,6 @@ def test_archive_rejected_job(tmp_path):
     assert result is not None
     assert result.archived is True
 
-
 def test_archive_logs_archived_to_activity_log(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -106,7 +94,6 @@ def test_archive_logs_archived_to_activity_log(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Archived" in messages
 
-
 def test_archive_non_rejected_job_returns_none(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -114,12 +101,10 @@ def test_archive_non_rejected_job_returns_none(tmp_path):
     result = archive_job(sourced_id, db_str)
     assert result is None
 
-
 def test_archive_nonexistent_job_returns_none(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     assert archive_job(99999, db_str) is None
-
 
 # ---------------------------------------------------------------------------
 # DB-layer: deduplication still matches archived jobs
@@ -141,7 +126,6 @@ def test_job_exists_returns_true_for_archived_job(tmp_path):
     # job_exists must still find it
     assert job_exists("Archived QA", "Vanishing Co", "https://example.com/archived-job", db_str)
     assert job_exists("Archived QA", "Vanishing Co", db_path=db_str)
-
 
 # ---------------------------------------------------------------------------
 # API-layer: POST /api/jobs/{id}/archive
@@ -168,7 +152,6 @@ def test_archive_endpoint_archives_rejected_job(tmp_path):
     jobs_after = client.get("/api/jobs").json()
     assert not any(j["id"] == rejected["id"] for j in jobs_after)
 
-
 def test_archive_endpoint_rejects_non_rejected_job(tmp_path):
     import src.db.connection as _db_connection
     from fastapi.testclient import TestClient
@@ -184,7 +167,6 @@ def test_archive_endpoint_rejects_non_rejected_job(tmp_path):
     sourced = next(j for j in jobs if j["status"] == "matched")
     response = client.post(f"/api/jobs/{sourced['id']}/archive")
     assert response.status_code == 422
-
 
 def test_archive_endpoint_nonexistent_job(tmp_path):
     import src.db.connection as _db_connection

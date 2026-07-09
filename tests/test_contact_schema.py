@@ -1,20 +1,14 @@
 """Regression tests for Contact forward-compatible extra fields."""
 
 import json
-import os
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.db import add_job, get_job, update_contact_status
 from src.db.contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
 from src.db.job_model import parse_job_row
 from src.schemas import Contact
 
 SHARED_URL = "https://www.linkedin.com/in/ivan-petrov/"
-
 
 @pytest.fixture
 def db(tmp_path):
@@ -24,19 +18,16 @@ def db(tmp_path):
     init_db(db_path)
     return db_path
 
-
 def test_contact_preserves_apify_current_position(apify_normalized_contact):
     contact = Contact(**apify_normalized_contact)
     assert contact.currentPosition == "Senior Engineer at TechCorp"
     assert contact.location == "Montreal, QC"
-
 
 def test_contact_json_round_trip_keeps_apify_extras(apify_normalized_contact):
     contact = Contact(**apify_normalized_contact)
     restored = Contact(**json.loads(contact.model_dump_json()))
     assert restored.currentPosition == apify_normalized_contact["currentPosition"]
     assert restored.location == apify_normalized_contact["location"]
-
 
 def test_parse_job_row_deserializes_persisted_apify_extras(db, apify_normalized_contact):
     payload = {
@@ -62,7 +53,6 @@ def test_parse_job_row_deserializes_persisted_apify_extras(db, apify_normalized_
     assert contact.location == "Montreal, QC"
     assert contact.russian_speaker is True
 
-
 def test_update_contact_status_preserves_apify_extras(db, apify_normalized_contact):
     payload = {
         **apify_normalized_contact,
@@ -84,7 +74,6 @@ def test_update_contact_status_preserves_apify_extras(db, apify_normalized_conta
     assert contact.contacted is True
     assert contact.currentPosition == "Senior Engineer at TechCorp"
     assert contact.model_dump().get("contacted_at")
-
 
 def test_contacted_elsewhere_enrichment_preserves_apify_extras(db, apify_normalized_contact):
     source_id = add_job(
@@ -128,7 +117,6 @@ def test_contacted_elsewhere_enrichment_preserves_apify_extras(db, apify_normali
     assert payload["currentPosition"] == "Senior Engineer at TechCorp"
     assert payload["contactedElsewhere"]["jobId"] == source_id
     assert payload["contactedElsewhere"]["company"] == "OldCo"
-
 
 def test_parse_job_row_from_raw_sqlite_row_keeps_extras(db, apify_normalized_contact):
     from src.db.connection import get_db_connection

@@ -1,13 +1,8 @@
 import json
-import os
-import sys
 
 import pytest
-from fastapi.testclient import TestClient
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
 from src.core.scraper import (
     is_eastern_timezone,
@@ -87,7 +82,6 @@ def test_normalize_brightdata_job_preserves_company_url():
         "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
     )
 
-
 def test_normalize_brightdata_job_sets_is_job_poster_flag():
     raw_job = {
         "job_title": "Senior QA",
@@ -107,7 +101,6 @@ def test_normalize_brightdata_job_sets_is_job_poster_flag():
     assert contact["is_job_poster"] is True
     assert contact["name"] == "Sarah Jenkins"
 
-
 def test_normalize_brightdata_job_no_poster_yields_empty_contacts():
     raw_job = {
         "job_title": "Senior QA",
@@ -118,7 +111,6 @@ def test_normalize_brightdata_job_no_poster_yields_empty_contacts():
     }
     result = normalize_brightdata_job(raw_job)
     assert result["contacts"] == []
-
 
 def test_company_size_matching():
     assert match_company_size("1-50", ["small"]) is True
@@ -181,7 +173,6 @@ def test_api_search_and_sse_logs():
     # so we should get multiple matching jobs.
     assert len(db_jobs) > 6
 
-
 def test_api_logs_replay_reconnection():
     # Create a task state manually in active_tasks
     task_id = "test-reconnect-task-id"
@@ -220,7 +211,6 @@ def test_api_logs_replay_reconnection():
         # Clean up
         active_tasks.pop(task_id, None)
 
-
 @pytest.mark.asyncio
 async def test_scraper_trigger_fails_immediately(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -248,7 +238,6 @@ async def test_scraper_trigger_fails_immediately(monkeypatch):
         assert call_kwargs["params"]["type"] == "discover_new"
         assert call_kwargs["params"]["discover_by"] == "keyword"
         assert call_kwargs["json"][0]["keyword"] == "QA Engineer"
-
 
 @pytest.mark.asyncio
 async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
@@ -319,7 +308,6 @@ async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
         # Verify sleep was called for backoff and for polling wait.
         assert mock_sleep.call_count >= 2
 
-
 @pytest.mark.asyncio
 async def test_scraper_polling_fails_persistently(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -353,7 +341,6 @@ async def test_scraper_polling_fails_persistently(monkeypatch):
         assert mock_get_patched.call_count == 3
         # Verify sleep was called for backoff retries and polling waits
         assert mock_sleep.call_count >= 3
-
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
@@ -419,7 +406,6 @@ async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
         # Verify get was called 3 times: 1 for progress, 2 for snapshot
         assert len(get_calls) == 3
 
-
 @pytest.mark.asyncio
 async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -465,7 +451,6 @@ async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
         assert "Failed to fetch snapshot results after 3 attempts: HTTP 500" in str(excinfo.value)
         # Verify get was called 4 times: 1 for progress, 3 for snapshot
         assert len(get_calls) == 4
-
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
@@ -526,7 +511,6 @@ async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
     assert len(get_calls) == 4  # 1 progress + 3 snapshot (2×202, then 200)
     assert mock_sleep.call_count >= 2
 
-
 @pytest.mark.asyncio
 async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
     """'running' repeated three times before 'ready' — 'Scraper status: running' logged once."""
@@ -574,7 +558,6 @@ async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
     assert sum(1 for m in status_logs if "ready" in m) == 1
     assert len(status_logs) == 2
 
-
 @pytest.mark.asyncio
 async def test_scraper_poll_logs_failed_status_once(monkeypatch):
     """'failed' scraper status is logged once when status transitions to failed."""
@@ -617,7 +600,4 @@ async def test_scraper_poll_logs_failed_status_once(monkeypatch):
     status_logs = [m for m in logged if m.startswith("Scraper status:")]
     assert sum(1 for m in status_logs if "running" in m) == 1
     assert sum(1 for m in status_logs if "failed" in m) == 1
-
-
-
 

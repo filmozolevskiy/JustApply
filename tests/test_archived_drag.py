@@ -1,8 +1,4 @@
 """Tests for archived card drag rules — issue #55."""
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import add_job, get_jobs, init_db, update_job_status
 from src.db.jobs import archive_job, get_job
@@ -21,7 +17,6 @@ def test_drag_is_status_only():
     assert "newStatus === 'enriching'" not in content, (
         "Drag must never trigger enrichment via enriching-lane check"
     )
-
 
 # ---------------------------------------------------------------------------
 # DB layer: status update on archived job preserves archived flag
@@ -42,7 +37,6 @@ def test_archived_job_status_update_preserves_archived(tmp_path):
     assert updated.status == "scraped"
     assert updated.archived is True, "archived flag must survive a status update"
 
-
 def test_archived_job_can_move_to_applied(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -53,7 +47,6 @@ def test_archived_job_can_move_to_applied(tmp_path):
     updated = update_job_status(job_id, "applied", db_str)
     assert updated.status == "applied"
     assert updated.archived is True
-
 
 def test_archived_moved_job_absent_from_active_board(tmp_path):
     """After drag to scraped, archived card still hidden in active view."""
@@ -68,7 +61,6 @@ def test_archived_moved_job_absent_from_active_board(tmp_path):
     ids = [j.id for j in active_jobs]
     assert job_id not in ids, "archived job must remain hidden in active board after status move"
 
-
 def test_archived_moved_job_visible_in_archived_view(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -81,15 +73,12 @@ def test_archived_moved_job_visible_in_archived_view(tmp_path):
     ids = [j.id for j in archived_jobs]
     assert job_id in ids, "archived job must appear in archived view after status move"
 
-
 # ---------------------------------------------------------------------------
 # API layer: PUT /api/jobs/{id}/status preserves archived flag
 # ---------------------------------------------------------------------------
 
 def test_api_status_update_archived_job_preserves_archived(tmp_path):
     """End-to-end API call: archived job status update keeps archived=True."""
-    import sys
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     import src.db.connection as conn_mod
     from fastapi.testclient import TestClient
     from src.web.server import app

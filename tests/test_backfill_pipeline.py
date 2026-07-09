@@ -1,11 +1,6 @@
-import os
-import sys
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.core.batch_evaluation import BATCH_CHUNK_SIZE, MAX_IN_FLIGHT_BATCHES
 from src.pipelines import run_backfill_pipeline
@@ -24,7 +19,6 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(matcher_module, "RESUMES_DIR", str(resume_dir))
     return db_path
 
-
 def _seed_unevaluated(db_path, status="scraped", **overrides):
     job = {
         "title": "QA Engineer",
@@ -40,12 +34,10 @@ def _seed_unevaluated(db_path, status="scraped", **overrides):
     job.update(overrides)
     return database.add_job(job, db_path=str(db_path))
 
-
 @pytest.mark.asyncio
 async def test_empty_db_returns_zero_counts(tmp_db):
     result = await run_backfill_pipeline(log_func=None, db_path=str(tmp_db))
     assert result == {"total": 0, "batches_submitted": 0, "jobs_submitted": 0}
-
 
 @pytest.mark.asyncio
 async def test_get_unevaluated_jobs_excludes_evaluated(tmp_db):
@@ -62,7 +54,6 @@ async def test_get_unevaluated_jobs_excludes_evaluated(tmp_db):
     jobs = database.get_unevaluated_jobs(db_path=str(tmp_db))
     assert len(jobs) == 1
     assert jobs[0].matchType == ""
-
 
 @pytest.mark.asyncio
 async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
@@ -90,7 +81,6 @@ async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
     assert job.matchType == ""
     assert job.status == "scraped"
 
-
 @pytest.mark.asyncio
 async def test_backfill_chunks_at_100(tmp_db, monkeypatch):
     for i in range(250):
@@ -116,7 +106,6 @@ async def test_backfill_chunks_at_100(tmp_db, monkeypatch):
     assert result["batches_submitted"] == 3
     assert result["jobs_submitted"] == 250
     assert len(submit_calls) == 3
-
 
 @pytest.mark.asyncio
 async def test_backfill_in_flight_cap_without_wait(tmp_db, monkeypatch):
@@ -147,7 +136,6 @@ async def test_backfill_in_flight_cap_without_wait(tmp_db, monkeypatch):
     assert result["jobs_submitted"] == MAX_IN_FLIGHT_BATCHES * jobs_per_chunk
     assert result["chunks_remaining"] == 1
     assert len(submit_calls) == MAX_IN_FLIGHT_BATCHES
-
 
 @pytest.mark.asyncio
 async def test_backfill_wait_submits_all_chunks(tmp_db, monkeypatch):
@@ -189,7 +177,6 @@ async def test_backfill_wait_submits_all_chunks(tmp_db, monkeypatch):
     assert result["chunks_remaining"] == 0
     assert batch_counter["n"] == chunk_count
 
-
 @pytest.mark.asyncio
 async def test_already_evaluated_jobs_not_included(tmp_db, monkeypatch):
     _seed_unevaluated(tmp_db)
@@ -206,7 +193,6 @@ async def test_already_evaluated_jobs_not_included(tmp_db, monkeypatch):
 
     assert result["total"] == 1
     assert submit_mock.call_count == 1
-
 
 @pytest.mark.asyncio
 async def test_service_backfill_calls_pipeline(tmp_db, monkeypatch):

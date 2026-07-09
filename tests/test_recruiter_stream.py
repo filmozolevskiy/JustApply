@@ -4,14 +4,9 @@ Issue #73: Recruiter-only enrichment path uses (company_slug, 'recruiters') cach
 calls Apify with HR function filter (functionIds=["12"], maxItems=3), and caps contacts
 at 3 Recruiters.
 """
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from src import db as database
@@ -36,13 +31,11 @@ def db(tmp_path, monkeypatch):
     database.init_db(db_path)
     return db_path
 
-
 # ─── Per-stream cache schema ───────────────────────────────────────────────────
 
 def test_per_stream_cache_miss_returns_none(db):
     """get_contact_sample for 'recruiters' stream returns None when no entry exists."""
     assert get_contact_sample("acme", stream="recruiters", db_path=db) is None
-
 
 def test_per_stream_cache_set_and_get(db):
     """set_contact_sample / get_contact_sample round-trip for 'recruiters' stream."""
@@ -53,7 +46,6 @@ def test_per_stream_cache_set_and_get(db):
     assert cached["profiles"] == profiles
     assert cached["display_name"] == "Acme"
     assert cached["pages_fetched"] == 1
-
 
 def test_per_stream_cache_independent_of_legacy(db):
     """Legacy (stream='') and named stream rows are independent."""
@@ -69,13 +61,11 @@ def test_per_stream_cache_independent_of_legacy(db):
     assert legacy["profiles"] == legacy_profiles
     assert recruiter["profiles"] == stream_profiles
 
-
 def test_legacy_cache_is_miss_for_recruiter_stream(db):
     """A legacy (stream='') cache entry does not satisfy a recruiter-stream lookup."""
     set_contact_sample("acme", [{"firstName": "Ivan"}], db_path=db)  # stream=''
     result = get_contact_sample("acme", stream="recruiters", db_path=db)
     assert result is None
-
 
 def test_per_stream_cache_stores_empty_list(db):
     """Empty profiles are cached for 'recruiters' stream to prevent repeat Apify calls."""
@@ -83,7 +73,6 @@ def test_per_stream_cache_stores_empty_list(db):
     cached = get_contact_sample("acme", stream="recruiters", db_path=db)
     assert cached is not None
     assert cached["profiles"] == []
-
 
 def test_per_stream_append_increments_pages_fetched(db):
     """append_contact_sample for 'recruiters' stream increments pages_fetched."""
@@ -97,7 +86,6 @@ def test_per_stream_append_increments_pages_fetched(db):
     assert cached["pages_fetched"] == 2
     assert len(cached["profiles"]) == 2
 
-
 def test_per_stream_delete(db):
     """delete_contact_sample removes only the targeted stream row."""
     set_contact_sample("acme", [{"x": 1}], stream="recruiters", db_path=db)
@@ -108,13 +96,11 @@ def test_per_stream_delete(db):
     assert get_contact_sample("acme", stream="recruiters", db_path=db) is None
     assert get_contact_sample("acme", stream="", db_path=db) is not None
 
-
 # ─── Recruiter-only Apify orchestration ───────────────────────────────────────
 
 @pytest.fixture
 def recruiter_only_settings():
     return OutreachSettings(target_recruiters=True, target_russian_speakers=False)
-
 
 @pytest.mark.asyncio
 async def test_recruiter_only_calls_apify_on_cache_miss(db, recruiter_only_settings):
@@ -132,7 +118,6 @@ async def test_recruiter_only_calls_apify_on_cache_miss(db, recruiter_only_setti
 
     mock_recruiters.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_recruiter_only_does_not_call_unfiltered_apify(db, recruiter_only_settings):
     """Recruiter-only path never falls back to the unfiltered Apify fetch."""
@@ -148,7 +133,6 @@ async def test_recruiter_only_does_not_call_unfiltered_apify(db, recruiter_only_
         await source_contacts(job, settings=recruiter_only_settings)
 
     mock_unfiltered.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_recruiter_only_caches_result_under_recruiter_stream(db, recruiter_only_settings):
@@ -167,7 +151,6 @@ async def test_recruiter_only_caches_result_under_recruiter_stream(db, recruiter
     assert cached is not None
     assert cached["profiles"] == profiles
 
-
 @pytest.mark.asyncio
 async def test_recruiter_only_does_not_write_legacy_cache(db, recruiter_only_settings):
     """Recruiter-only enrichment must not write to the legacy (stream='') cache entry."""
@@ -183,7 +166,6 @@ async def test_recruiter_only_does_not_write_legacy_cache(db, recruiter_only_set
     legacy = get_contact_sample("acme", stream="", db_path=db)
     assert legacy is None
 
-
 @pytest.mark.asyncio
 async def test_recruiter_only_skips_apify_on_stream_cache_hit(db, recruiter_only_settings):
     """On 'recruiters' stream cache hit, Apify is not called."""
@@ -197,7 +179,6 @@ async def test_recruiter_only_skips_apify_on_stream_cache_hit(db, recruiter_only
         await source_contacts(job, settings=recruiter_only_settings)
 
     mock_recruiters.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_recruiter_only_empty_apify_is_cached(db, recruiter_only_settings):
@@ -215,7 +196,6 @@ async def test_recruiter_only_empty_apify_is_cached(db, recruiter_only_settings)
     assert cached is not None
     assert cached["profiles"] == []
 
-
 @pytest.mark.asyncio
 async def test_recruiter_only_infrastructure_error_not_cached(db, recruiter_only_settings):
     """Infrastructure failure is not cached; exception propagates."""
@@ -232,7 +212,6 @@ async def test_recruiter_only_infrastructure_error_not_cached(db, recruiter_only
 
     assert get_contact_sample("acme", stream="recruiters", db_path=db) is None
 
-
 @pytest.mark.asyncio
 async def test_recruiter_only_missing_company_url_skips_apify(db, recruiter_only_settings):
     """Missing companyUrl skips Apify in recruiter-only mode."""
@@ -243,7 +222,6 @@ async def test_recruiter_only_missing_company_url_skips_apify(db, recruiter_only
         await source_contacts(job, settings=recruiter_only_settings)
 
     mock_recruiters.assert_not_called()
-
 
 @pytest.mark.asyncio
 async def test_recruiter_only_logs_stream_name(db, recruiter_only_settings):
@@ -264,7 +242,6 @@ async def test_recruiter_only_logs_stream_name(db, recruiter_only_settings):
 
     combined = " ".join(log_messages).lower()
     assert "recruiter" in combined
-
 
 # ─── Classifier keeps all matching contacts (no retention cap) ────────────────
 
@@ -291,7 +268,6 @@ async def test_classifier_keeps_all_recruiters():
     assert len(result) == 5
     assert all(c["is_recruiter"] for c in result)
 
-
 @pytest.mark.asyncio
 async def test_classifier_keeps_all_russian_speakers():
     """Classifier keeps all Russian Speaker contacts."""
@@ -314,7 +290,6 @@ async def test_classifier_keeps_all_russian_speakers():
 
     assert len(result) == 7
     assert all(c["russian_speaker"] for c in result)
-
 
 # ─── RECRUITER_SAMPLE_SIZE / RECRUITER_FUNCTION_IDS constants ─────────────────
 

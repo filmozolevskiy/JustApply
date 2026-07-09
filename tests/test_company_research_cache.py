@@ -1,12 +1,7 @@
 """Tests for Company Research Cache — DB layer."""
-import os
 import sqlite3
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from src import db as database
 from src.db.company_research_cache import (
@@ -25,7 +20,6 @@ def db(tmp_path, monkeypatch):
     database.init_db(db_path)
     return db_path
 
-
 def test_cache_table_created_by_init_db(db):
     conn = sqlite3.connect(db)
     cursor = conn.cursor()
@@ -38,19 +32,15 @@ def test_cache_table_created_by_init_db(db):
     assert "companyResearch" in cols
     conn.close()
 
-
 def test_normalize_company_name():
     assert normalize_company_name("  FlightHub  ") == "flighthub"
     assert normalize_company_name("My   Company") == "my company"
 
-
 def test_normalize_glassdoor_job_title():
     assert normalize_glassdoor_job_title("  QA Engineer  ") == "qa engineer"
 
-
 def test_cache_miss_returns_none(db):
     assert get_company_research_cache("acme", db_path=db) is None
-
 
 def test_set_and_get_company_research_cache(db):
     set_company_research_cache(
@@ -74,7 +64,6 @@ def test_set_and_get_company_research_cache(db):
     assert cached["salariesByTitle"]["qa engineer"]["medianBaseSalary"] == 85000
     assert cached["fetchedAt"]
 
-
 def test_empty_title_slice_cached(db):
     set_company_research_cache(
         "flighthub",
@@ -89,7 +78,6 @@ def test_empty_title_slice_cached(db):
     cached = get_company_research_cache("flighthub", db_path=db)
     assert "qa engineer" in cached["salariesByTitle"]
     assert cached["interviewsByTitle"]["qa engineer"] == []
-
 
 def test_delete_company_research_cache(db):
     set_company_research_cache("acme", {"glassdoorCompanyId": "1"}, db_path=db)
