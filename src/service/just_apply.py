@@ -72,7 +72,7 @@ async def search_jobs(
     job_saved_func=None,
     rate_limit: bool = True,
 ) -> list:
-    """Run Search & Evaluation Pipeline with shared rate-limit gating."""
+    """Run Search & Evaluation Pipeline; new listings save to Scraped before batch evaluation."""
     assert_evaluation_lock_clear()
     if rate_limit:
         acquire_scrape_slot(mock_eval, mock_scraper)
@@ -100,7 +100,7 @@ async def complete_enrichment(
     *,
     log_func=None,
 ) -> Job | None:
-    """Finish enrichment for a job already in the enriching lane."""
+    """Finish enrichment for an Accepted Job already running in the enrichment pipeline."""
     job = get_job(job_id)
     if not job:
         abort_enrichment(job_id)
@@ -160,7 +160,7 @@ async def collect_batch_evaluation_results(
     log_func=None,
     db_path=None,
 ) -> dict:
-    """Poll in-flight Batch Evaluation Jobs and write back completed results."""
+    """Poll in-flight Batch Evaluation Jobs and write scores back (Scraped → Matched or Rejected)."""
     init_db(db_path)
     return await run_batch_collection(
         wait=wait,
@@ -178,7 +178,7 @@ async def backfill_unevaluated_jobs(
     log_func=None,
     db_path=None,
 ) -> dict:
-    """Submit Batch Evaluation Jobs for unevaluated jobs; poller writes results back."""
+    """Submit Batch Evaluation Jobs for Scraped Jobs missing scores; poller writes results back."""
     init_db(db_path)
     assert_evaluation_lock_clear(db_path=db_path)
     remote_types = allowed_remote_types if allowed_remote_types is not None else ["any"]
@@ -193,7 +193,7 @@ async def backfill_unevaluated_jobs(
 
 
 async def promote_sourced_jobs(log_func=None) -> list:
-    """Enrich all Found jobs that passed Resume Matcher."""
+    """Run enrichment on Matched Jobs flagged to proceed by Resume Matcher."""
     init_db()
     to_promote = [
         j for j in get_jobs()

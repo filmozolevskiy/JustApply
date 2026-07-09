@@ -58,9 +58,11 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - No change to estimated costs returned by preflight endpoints or scrape modal
 - Quality gates: ruff, mypy, pytest (904 passed, 84.86% coverage)
 
-## #157 — Document Contact forward-compat extras with regression fixture (2026-07-09)
 
-- Documented why `Contact` keeps `extra="allow"` in `src/schemas.py` (Apify `currentPosition`/`location`, runtime `contacted_at`/`contactedElsewhere`)
-- Added `tests/conftest.py` fixtures `apify_employee_item` and `apify_normalized_contact` for real-world Apify extension fields
-- Added `tests/test_contact_schema.py` regression tests: JSON round-trip, DB persist/read, contact toggle, Contacted Elsewhere enrichment
+## #158 — Align service adapter docstrings with Scraped Matched Accepted vocabulary (2026-07-09)
+
+- Updated `src/service/just_apply.py` docstrings to use CONTEXT.md lane terms (Scraped, Matched, Accepted)
+- Replaced legacy "Found" and "enriching lane" wording in `promote_sourced_jobs` and `complete_enrichment`
+- Added lane vocabulary to `search_jobs`, `backfill_unevaluated_jobs`, and `collect_batch_evaluation_results` docstrings
+- Documentation-only — no API or behavior changes
 - Quality gates: ruff, mypy, pytest (910 passed, 84.81% coverage)
