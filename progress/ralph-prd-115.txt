@@ -20,3 +20,11 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Removed unused `--sites` argparse flag and unused `sites` parameter on `run_search`
 - Search pipeline unchanged: still uses `general_cv.md` via `search_jobs`
 - Quality gates: ruff, mypy, pytest (898 passed, 84.98% coverage)
+
+## #152 — Remove commented scraper filters and align log callback inspect usage (2026-07-09)
+
+- Deleted commented-out title/keyword and timezone post-filter blocks from `scrape_linkedin_jobs`
+- Removed dead `get_keywords_for_position(query)` call left over from disabled filters
+- Replaced `asyncio.iscoroutinefunction` with `inspect.iscoroutinefunction` for scraper log callbacks
+- Updated scraper docstring to reflect company-size-only post-filtering
+- Quality gates: ruff, mypy, pytest (898 passed, 84.84% coverage)

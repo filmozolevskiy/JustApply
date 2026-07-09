@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import os
 import re
@@ -451,11 +452,11 @@ async def scrape_linkedin_jobs(
 ) -> list:
     """
     Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
-    Applies post-filtering for company size, keyword matching, and timezone.
+    Applies post-filtering for company size.
     """
     async def log(msg: str, level: str = "info"):
         if log_func:
-            if asyncio.iscoroutinefunction(log_func):
+            if inspect.iscoroutinefunction(log_func):
                 await log_func(msg, level)
             else:
                 log_func(msg, level)
@@ -506,25 +507,12 @@ async def scrape_linkedin_jobs(
 
     # Post-filtering phase
     await log(f"Processing and filtering {len(raw_jobs)} raw results...", "info")
-    
-    get_keywords_for_position(query)
+
     filtered_jobs = []
 
     for raw_job in raw_jobs:
         normalized = normalize_brightdata_job(raw_job)
-        
-        # 1. Title/Keyword filter
-        # if not matches_position_keywords(normalized["title"], keywords):
-        #     await log(f"Skipping '{normalized['title']}': Title does not match keywords {keywords}", "info")
-        #     continue
-            
-        # 2. Timezone filter
-        # is_remote = normalized["remoteType"] == "remote"
-        # if not is_eastern_timezone(normalized["location"], normalized["description"], is_remote):
-        #     await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
-        #     continue
 
-        # 3. Settings Filter - Company Size
         if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):
             await log(f"Skipping '{normalized['title']}': Company Size '{normalized['size']}' does not match {company_sizes}", "info")
             continue
