@@ -15,11 +15,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from src import db as database
+from src.core.enrichment import source_contacts
 from src.core.enrichment.contact_sample import (
     RECRUITER_FUNCTION_IDS,
     RECRUITER_SAMPLE_SIZE,
 )
-from src.core.outreach import source_contacts
 from src.db.cache import (
     append_contact_sample,
     delete_contact_sample,

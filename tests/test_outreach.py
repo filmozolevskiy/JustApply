@@ -12,7 +12,7 @@ import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
-from src.core.outreach import (
+from src.core.enrichment import (
     ApifyTimeoutError,
     _normalize_apify_employee,
     _run_apify_actor,

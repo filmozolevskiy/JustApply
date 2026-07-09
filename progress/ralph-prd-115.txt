@@ -36,3 +36,10 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - `_append_activity_log` appends typed `ActivityLogEntry` objects and serializes via `model_dump()`
 - Added parse edge-case tests in `test_job_model.py` (empty, invalid JSON, legacy rows, corrupt rows)
 - Quality gates: ruff, mypy, pytest (904 passed, 84.92% coverage)
+
+## #154 — Retire outreach facade and point callers at enrichment modules (2026-07-09)
+
+- Removed legacy `src/core/outreach.py` re-export facade; production already imported `core.enrichment` directly
+- Updated five test modules to import from `src.core.enrichment` instead of `src.core.outreach`
+- Updated classifier comment to drop outreach-facade reference
+- Quality gates: ruff, mypy, pytest (904 passed, 84.91% coverage)

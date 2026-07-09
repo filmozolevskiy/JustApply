@@ -16,12 +16,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from src import db as database
+from src.core.enrichment import source_contacts
 from src.core.enrichment.contact_sample import (
     RUSSIAN_EXCLUDE_FUNCTION_IDS,
     RUSSIAN_SAMPLE_SIZE,
     RUSSIAN_SEARCH_QUERY,
 )
-from src.core.outreach import source_contacts
 from src.db.cache import (
     get_contact_sample,
     set_contact_sample,

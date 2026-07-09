@@ -23,7 +23,7 @@ def normalize_apify_employee(item: dict) -> dict:
     }
 
 
-# Backward-compatible alias for tests and outreach facade
+# Backward-compatible alias for tests importing _normalize_apify_employee
 _normalize_apify_employee = normalize_apify_employee
 
 
