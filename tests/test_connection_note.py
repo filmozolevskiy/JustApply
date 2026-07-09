@@ -222,8 +222,7 @@ def test_assemble_complete_outreach_omits_bullet_block_when_empty():
 @pytest.mark.asyncio
 async def test_generate_complete_outreach_falls_back_without_api_key():
     job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md", "link": "http://job.url", "description": ""}
-    with patch("src.core.enrichment.connection_note.load_dotenv"), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         result = await generate_complete_outreach_template(job, "recruiter")
     assert result == complete_outreach_fallback_template(job, "recruiter")
 
@@ -301,8 +300,7 @@ async def test_generate_complete_outreach_falls_back_on_unparseable_json(monkeyp
 @pytest.mark.asyncio
 async def test_generate_connection_note_falls_back_without_api_key():
     job = {"title": "QA Lead", "company": "Acme"}
-    with patch("src.core.enrichment.connection_note.load_dotenv"), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         result = await generate_connection_note_template(job, "recruiter")
     assert result == minimal_fallback_template("recruiter", job)
 

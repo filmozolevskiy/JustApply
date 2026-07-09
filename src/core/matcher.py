@@ -4,11 +4,7 @@ import json
 import os
 import re
 
-from dotenv import load_dotenv
-
 from .gemini_client import generate_text as gemini_generate_text
-
-load_dotenv()
 
 RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
 

@@ -3,8 +3,6 @@
 import json
 import os
 
-from dotenv import load_dotenv
-
 
 def normalize_apify_employee(item: dict) -> dict:
     first = item.get("firstName") or ""
@@ -37,7 +35,6 @@ async def classify_contacts(items: list, settings) -> list:
     if not items:
         return []
 
-    load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return []

@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import uvicorn
+from dotenv import load_dotenv
 
 if __name__ == "__main__":
+    load_dotenv()
     project_root = Path(__file__).resolve().parents[2]
 
     # Keep the server log OUT of the watched tree. Writing it under data/ made the

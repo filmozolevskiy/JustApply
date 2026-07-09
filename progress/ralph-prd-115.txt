@@ -43,3 +43,11 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Updated five test modules to import from `src.core.enrichment` instead of `src.core.outreach`
 - Updated classifier comment to drop outreach-facade reference
 - Quality gates: ruff, mypy, pytest (904 passed, 84.91% coverage)
+
+## #155 — Centralize environment loading at CLI and dashboard entrypoints (2026-07-09)
+
+- Added `load_dotenv()` to `src/web/server.py` (module import) and `src/web/run_dashboard.py` (dashboard startup); CLI already loaded `.env` in `src/cli/cli.py`
+- Removed `load_dotenv()` from core library modules: matcher, scraper, gemini_client, classifier, contact_sample, connection_note
+- Kept explicit loading in standalone scripts: `src/cli/gemini_agent.py`, `scripts/glassdoor_company_intel.py`
+- Updated `test_connection_note.py` to drop obsolete `load_dotenv` patches; added `src/web/server.py` to ruff E402 per-file ignore
+- Quality gates: ruff, mypy, pytest (904 passed, 84.86% coverage)

@@ -5,12 +5,8 @@ import os
 import re
 
 import httpx
-from dotenv import load_dotenv
 
 from .pre_evaluation import normalize_remote_type
-
-# Load environment variables
-load_dotenv()
 
 # Timezone filtering constants
 EASTERN_STATES = {
@@ -236,20 +232,15 @@ async def _scrape_linkedin_jobs_mock(
 def _build_brightdata_trigger_payload(
     query: str,
     search_regions: list[tuple[str, str]],
-    per_region_limit: int,
     time_range: str,
 ) -> list[dict]:
     """Build one Bright Data input item per (country, Search Region)."""
-    from .regions import clamp_per_region_limit
-
-    limit = clamp_per_region_limit(per_region_limit)
     payload = []
     for country, region in search_regions:
         item = {
             "keyword": query,
             "location": region,
             "country": country.upper(),
-            "limit_per_input": limit,
         }
         if time_range and time_range.lower() not in ["any", "anytime"]:
             time_range_mapping = {
@@ -279,20 +270,21 @@ async def _scrape_linkedin_jobs_real(
         "info",
     )
 
+    from .regions import clamp_per_region_limit
+
     trigger_url = "https://api.brightdata.com/datasets/v3/trigger"
     params = {
         "dataset_id": scraper_id,
         "include_errors": "true",
         "type": "discover_new",
         "discover_by": "keyword",
+        "limit_per_input": clamp_per_region_limit(per_region_limit),
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    payload = _build_brightdata_trigger_payload(
-        query, search_regions, per_region_limit, time_range
-    )
+    payload = _build_brightdata_trigger_payload(query, search_regions, time_range)
 
     await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
     async with httpx.AsyncClient(timeout=30.0) as client:

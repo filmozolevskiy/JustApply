@@ -5,8 +5,6 @@ import json
 import os
 import re
 
-from dotenv import load_dotenv
-
 from ...db.job_model import coerce_job
 from ...schemas import Job
 from ..gemini_client import generate_text as gemini_generate_text
@@ -237,7 +235,6 @@ Rules:
 async def fetch_complete_outreach_slots(job: Job, log_func=None) -> dict | None:
     """Fetch Adjusted Position Name and bullets via one structured LLM call."""
     job = coerce_job(job)
-    load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
     resume_name = job.resumeUsed or "general_cv.md"
     resume_content = load_resume_for_outreach(resume_name)
@@ -289,7 +286,6 @@ async def generate_connection_note_template(job: Job, audience: str, log_func=No
     """
     job = coerce_job(job)
     cta = RECRUITER_CTA if audience == "recruiter" else RUSSIAN_SPEAKER_CTA
-    load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return minimal_fallback_template(audience, job)
