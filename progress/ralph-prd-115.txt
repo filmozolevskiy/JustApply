@@ -58,6 +58,12 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - No change to estimated costs returned by preflight endpoints or scrape modal
 - Quality gates: ruff, mypy, pytest (904 passed, 84.86% coverage)
 
+## #157 — Document Contact forward-compat extras with regression fixture (2026-07-09)
+
+- Documented `extra="allow"` decision on `Contact` in `src/schemas.py` for Apify and runtime metadata fields
+- Added `apify_employee_item` and `apify_normalized_contact` fixtures in `tests/conftest.py`
+- Added six regression tests in `tests/test_contact_schema.py` (JSON round-trip, DB persist, toggle, Contacted Elsewhere)
+- Quality gates: ruff, mypy, pytest (910 passed, 84.81% coverage)
 
 ## #158 — Align service adapter docstrings with Scraped Matched Accepted vocabulary (2026-07-09)
 
@@ -74,3 +80,11 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Ruff auto-fixed 160 unused `os`/`sys` imports left behind after bootstrap removal
 - `test_server_lifecycle.py` still asserts web modules do not mutate `sys.path` at import time
 - Quality gates: ruff, mypy, pytest (910 passed, 84.86% coverage)
+
+---
+
+<promise>COMPLETE</promise> — 2026-07-09. All 10 slices (#151–#160) closed. Final commit: `9dfbfeb`.
+
+---
+
+<promise>COMPLETE</promise> — 2026-07-09. All 10 slices (#151–#160) closed. Final commit: `9dfbfeb`.
