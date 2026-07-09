@@ -20,6 +20,17 @@ class ActivityLogEntry(BaseModel):
 
 
 class Contact(BaseModel):
+    """Outreach contact stored inside Job.contacts JSON.
+
+    ``extra="allow"`` is intentional. Enrichment copies Apify-normalized fields
+    such as ``currentPosition`` and ``location`` that are not first-class
+    columns, and runtime metadata such as ``contacted_at`` and
+    ``contactedElsewhere`` is attached on read. Tightening validation would
+    drop these keys on deserialize and break Kanban contact rendering and
+    **Contacted Elsewhere** indicators. See ``tests/conftest.py`` fixture
+    ``apify_employee_item`` and ``tests/test_contact_schema.py``.
+    """
+
     model_config = ConfigDict(extra="allow")
 
     name: str = ""

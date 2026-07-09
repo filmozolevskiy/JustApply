@@ -57,3 +57,10 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Added inline documentation for `SCRAPE_COST_PER_RECORD` in `spendConfirmation.js` with ADR 0012 pointer and cross-reference to Apify constant
 - No change to estimated costs returned by preflight endpoints or scrape modal
 - Quality gates: ruff, mypy, pytest (904 passed, 84.86% coverage)
+
+## #157 — Document Contact forward-compat extras with regression fixture (2026-07-09)
+
+- Documented why `Contact` keeps `extra="allow"` in `src/schemas.py` (Apify `currentPosition`/`location`, runtime `contacted_at`/`contactedElsewhere`)
+- Added `tests/conftest.py` fixtures `apify_employee_item` and `apify_normalized_contact` for real-world Apify extension fields
+- Added `tests/test_contact_schema.py` regression tests: JSON round-trip, DB persist/read, contact toggle, Contacted Elsewhere enrichment
+- Quality gates: ruff, mypy, pytest (910 passed, 84.81% coverage)
