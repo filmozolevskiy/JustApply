@@ -50,4 +50,10 @@ Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
 - Removed `load_dotenv()` from core library modules: matcher, scraper, gemini_client, classifier, contact_sample, connection_note
 - Kept explicit loading in standalone scripts: `src/cli/gemini_agent.py`, `scripts/glassdoor_company_intel.py`
 - Updated `test_connection_note.py` to drop obsolete `load_dotenv` patches; added `src/web/server.py` to ruff E402 per-file ignore
+
+## #156 — Document Apify per-run cost constant beside Spend Confirmation logic (2026-07-09)
+
+- Added inline documentation for `COST_PER_APIFY_RUN` in `server.py` with ADR 0007 pointer and cross-reference to Bright Data constant
+- Added inline documentation for `SCRAPE_COST_PER_RECORD` in `spendConfirmation.js` with ADR 0012 pointer and cross-reference to Apify constant
+- No change to estimated costs returned by preflight endpoints or scrape modal
 - Quality gates: ruff, mypy, pytest (904 passed, 84.86% coverage)

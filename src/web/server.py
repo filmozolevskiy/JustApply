@@ -529,6 +529,13 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     return {"task_id": task_id, "job_id": job_id, "job": updated}
 
 
+# Spend Confirmation — Apify per-run cost estimate (ADR 0007).
+# Preflight endpoints below multiply billable Apify runs by this constant for
+# estimated_cost in the Kanban modal (Enrich Job, Load More Contacts, Company
+# Research). $0.05/run is a conservative round figure for one actor start;
+# see docs/adr/0007-apify-spend-controls-and-accepted-lane.md and
+# docs/prd/company-research-glassdoor.md. Bright Data scrape ceilings use
+# SCRAPE_COST_PER_RECORD in static/js/spendConfirmation.js (ADR 0012).
 COST_PER_APIFY_RUN = 0.05
 
 

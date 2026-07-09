@@ -154,6 +154,10 @@ function confirmDiscardUnsavedEdits(message) {
   });
 }
 
+// Spend Confirmation — Bright Data per-record cost basis (ADR 0012).
+// Pay-as-you-go Web Scraper API: $1.50 / 1,000 successful records (~$0.0015/record).
+// Scrape checkout receipt ceiling: searchRegions × Per-Region Limit × this rate.
+// Apify-paid actions use COST_PER_APIFY_RUN in server.py preflight endpoints (ADR 0007).
 const SCRAPE_COST_PER_RECORD = 0.0015;
 
 const COUNTRY_DISPLAY_NAMES = {
