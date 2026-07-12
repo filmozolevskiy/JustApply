@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from src import db as database
 from src.cli.cli import run_collect
-from src.core.batch_poller import run_batch_collection
+from src.core.batch_poller import reset_round_accumulator, run_batch_collection
 from src.db import batch_jobs
 from src.service import collect_batch_evaluation_results
 
@@ -15,6 +15,7 @@ def tmp_db(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
     monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
     database.init_db(str(db_path))
+    reset_round_accumulator()
     return db_path
 
 def _seed_scraped_job(db_path, **overrides):
@@ -255,4 +256,70 @@ async def test_collect_cli_footer_prints_split_rejection_counters(tmp_db, monkey
         "0 fallback-rejected, 0 failed, 0 unclassified" in line
         for line in captured.err.splitlines()
     )
+    assert any(
+        "Evaluation round complete (search): 1 matched, 1 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified" in line
+        for line in captured.err.splitlines()
+    )
     assert "Attribute mismatch" not in captured.err
+
+
+@pytest.mark.asyncio
+async def test_collect_wait_prints_round_summary_after_chunk(
+    tmp_db, monkeypatch, capsys
+):
+    job_id = _seed_scraped_job(tmp_db)
+    batch_jobs.create_batch_job(
+        batch_name="batches/collect-wait-round",
+        display_name="collect-wait-round",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+
+    pending_job = MagicMock()
+    pending_job.state.name = "JOB_STATE_RUNNING"
+    pending_job.dest = None
+
+    succeeded_job = MagicMock()
+    succeeded_job.state.name = "JOB_STATE_SUCCEEDED"
+    succeeded_job.dest.file_name = "files/result.jsonl"
+
+    result_line = {
+        "key": str(job_id),
+        "response": {
+            "candidates": [
+                {"content": {"parts": [{"text": json.dumps(_evaluation())}]}}
+            ]
+        },
+    }
+
+    client = MagicMock()
+    client.batches.get.side_effect = [pending_job, succeeded_job]
+    client.files.download.return_value = (json.dumps(result_line) + "\n").encode("utf-8")
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: client)
+    monkeypatch.setattr(
+        "src.core.batch_poller.is_due_for_poll", lambda *_args, **_kwargs: True
+    )
+
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("src.core.batch_poller.asyncio.sleep", fake_sleep)
+
+    await run_collect(wait=True)
+    err_lines = capsys.readouterr().err.splitlines()
+
+    chunk_idx = next(i for i, line in enumerate(err_lines) if "Batch chunk completed" in line)
+    round_idx = next(
+        i for i, line in enumerate(err_lines) if "Evaluation round complete" in line
+    )
+    assert chunk_idx < round_idx
+    assert (
+        "Evaluation round complete (search): 1 matched, 0 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified"
+    ) in err_lines[round_idx]

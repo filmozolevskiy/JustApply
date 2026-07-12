@@ -8,9 +8,13 @@ from src.core.batch_poller import (
     POISON_MAX_ATTEMPTS,
     apply_unclassified_fallback,
     collect_batch_results,
+    collect_in_flight_batches_once,
     handle_poison_job_failure,
     is_due_for_poll,
     poll_cadence_seconds,
+    poll_in_flight_batches,
+    reset_round_accumulator,
+    wait_for_in_flight_collection,
     write_back_job_evaluation,
 )
 from src.db import batch_jobs
@@ -21,6 +25,7 @@ def tmp_db(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
     monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
     database.init_db(str(db_path))
+    reset_round_accumulator()
     return db_path
 
 @pytest.mark.parametrize(
@@ -407,3 +412,234 @@ def test_handle_poison_job_failure_retries_before_fallback(tmp_db):
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.unclassified is True
     assert job.status == "matched"
+
+
+def _success_result_line(job_id: int, evaluation: dict | None = None) -> str:
+    payload = evaluation or _evaluation()
+    return json.dumps(
+        {
+            "key": str(job_id),
+            "response": {
+                "candidates": [
+                    {"content": {"parts": [{"text": json.dumps(payload)}]}}
+                ]
+            },
+        }
+    ) + "\n"
+
+
+@pytest.mark.asyncio
+async def test_round_summary_aggregates_multi_chunk_search(tmp_db, monkeypatch):
+    """One Evaluation Round Summary when the last in-flight batch finishes."""
+    job_a = _seed_scraped_job(tmp_db, title="QA A")
+    job_b = _seed_scraped_job(tmp_db, title="QA B")
+    job_c = _seed_scraped_job(tmp_db, title="Office QA", remoteType="in_office")
+
+    batch_jobs.create_batch_job(
+        batch_name="batches/round-a",
+        display_name="round-a",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_a, job_c],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+    batch_jobs.create_batch_job(
+        batch_name="batches/round-b",
+        display_name="round-b",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_b],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+
+    lines_a = (
+        _success_result_line(job_a)
+        + _success_result_line(job_c, _evaluation(remote_type="in_office"))
+    )
+    lines_b = _success_result_line(job_b)
+
+    client = MagicMock()
+    batch_ok = MagicMock()
+    batch_ok.state.name = "JOB_STATE_SUCCEEDED"
+    batch_ok.dest.file_name = "files/result.jsonl"
+    client.batches.get.return_value = batch_ok
+    client.files.download.side_effect = [
+        lines_a.encode("utf-8"),
+        lines_b.encode("utf-8"),
+    ]
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: client)
+    monkeypatch.setattr(
+        "src.core.batch_poller.is_due_for_poll", lambda *_a, **_k: True
+    )
+
+    logs: list[tuple[str, str]] = []
+
+    await poll_in_flight_batches(
+        db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append((level, msg)),
+    )
+
+    chunk_logs = [msg for level, msg in logs if "Batch chunk completed" in msg]
+    round_logs = [
+        (level, msg) for level, msg in logs if "Evaluation round complete" in msg
+    ]
+    assert len(chunk_logs) == 2
+    assert len(round_logs) == 1
+    level, msg = round_logs[0]
+    assert level == "summary"
+    assert msg == (
+        "Evaluation round complete (search): 2 matched, 1 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified"
+    )
+
+
+@pytest.mark.asyncio
+async def test_round_summary_waits_until_last_chunk(tmp_db, monkeypatch):
+    """No round summary until every in-flight batch in the round is terminal."""
+    job_a = _seed_scraped_job(tmp_db, title="QA A")
+    job_b = _seed_scraped_job(tmp_db, title="QA B")
+
+    batch_jobs.create_batch_job(
+        batch_name="batches/partial-a",
+        display_name="partial-a",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_a],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+    batch_jobs.create_batch_job(
+        batch_name="batches/partial-b",
+        display_name="partial-b",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_b],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+
+    pending = MagicMock()
+    pending.state.name = "JOB_STATE_RUNNING"
+    pending.dest = None
+    succeeded = MagicMock()
+    succeeded.state.name = "JOB_STATE_SUCCEEDED"
+    succeeded.dest.file_name = "files/result.jsonl"
+
+    client = MagicMock()
+    # First poll: A succeeds, B still running. Second poll: B succeeds.
+    client.batches.get.side_effect = [succeeded, pending, succeeded]
+    client.files.download.side_effect = [
+        _success_result_line(job_a).encode("utf-8"),
+        _success_result_line(job_b).encode("utf-8"),
+    ]
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: client)
+    monkeypatch.setattr(
+        "src.core.batch_poller.is_due_for_poll", lambda *_a, **_k: True
+    )
+
+    logs: list[tuple[str, str]] = []
+
+    def log_func(msg, level="info"):
+        logs.append((level, msg))
+
+    await poll_in_flight_batches(db_path=str(tmp_db), log_func=log_func)
+    assert not any("Evaluation round complete" in msg for _level, msg in logs)
+    assert len(batch_jobs.list_in_flight_batch_jobs(db_path=str(tmp_db))) == 1
+
+    await poll_in_flight_batches(db_path=str(tmp_db), log_func=log_func)
+    round_logs = [msg for _level, msg in logs if "Evaluation round complete" in msg]
+    assert round_logs == [
+        "Evaluation round complete (search): 2 matched, 0 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_round_summary_labels_backfill_kind(tmp_db, monkeypatch):
+    job_id = _seed_scraped_job(tmp_db)
+    batch_jobs.create_batch_job(
+        batch_name="batches/backfill-round",
+        display_name="backfill-round",
+        state="JOB_STATE_RUNNING",
+        kind="backfill",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        db_path=str(tmp_db),
+    )
+    client = _build_fake_client(_success_result_line(job_id))
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: client)
+
+    logs: list[tuple[str, str]] = []
+    await collect_in_flight_batches_once(
+        db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append((level, msg)),
+    )
+
+    round_msg = next(msg for level, msg in logs if "Evaluation round complete" in msg)
+    assert round_msg.startswith("Evaluation round complete (backfill):")
+    assert "1 matched" in round_msg
+
+
+@pytest.mark.asyncio
+async def test_wait_collect_emits_round_summary_after_chunks(tmp_db, monkeypatch):
+    job_id = _seed_scraped_job(tmp_db)
+    batch_jobs.create_batch_job(
+        batch_name="batches/wait-round",
+        display_name="wait-round",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+
+    pending = MagicMock()
+    pending.state.name = "JOB_STATE_RUNNING"
+    pending.dest = None
+    succeeded = MagicMock()
+    succeeded.state.name = "JOB_STATE_SUCCEEDED"
+    succeeded.dest.file_name = "files/result.jsonl"
+
+    client = MagicMock()
+    client.batches.get.side_effect = [pending, succeeded]
+    client.files.download.return_value = _success_result_line(job_id).encode("utf-8")
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: client)
+    monkeypatch.setattr(
+        "src.core.batch_poller.is_due_for_poll", lambda *_a, **_k: True
+    )
+
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("src.core.batch_poller.asyncio.sleep", fake_sleep)
+
+    logs: list[str] = []
+    await wait_for_in_flight_collection(
+        db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append(msg),
+    )
+
+    chunk_idx = next(
+        i for i, msg in enumerate(logs) if "Batch chunk completed" in msg
+    )
+    round_idx = next(
+        i for i, msg in enumerate(logs) if "Evaluation round complete" in msg
+    )
+    assert chunk_idx < round_idx
+    assert logs[round_idx] == (
+        "Evaluation round complete (search): 1 matched, 0 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified"
+    )

@@ -193,6 +193,94 @@ def _chunk_summary_line(
     )
 
 
+def _round_summary_line(
+    kind: str,
+    matched: int,
+    attribute_filtered: int,
+    fallback_rejected: int,
+    failed: int,
+    unclassified: int,
+) -> str:
+    return (
+        f"Evaluation round complete ({kind}): {matched} matched, "
+        f"{attribute_filtered} attribute-filtered, "
+        f"{fallback_rejected} fallback-rejected, "
+        f"{failed} failed, {unclassified} unclassified"
+    )
+
+
+@dataclass
+class _RoundAccumulator:
+    matched: int = 0
+    attribute_filtered: int = 0
+    fallback_rejected: int = 0
+    failed: int = 0
+    unclassified: int = 0
+    kind: str = "search"
+    chunk_count: int = 0
+
+    def add(self, result: CollectResult, kind: str) -> None:
+        if not result.terminal:
+            return
+        self.matched += result.matched
+        self.attribute_filtered += result.attribute_filtered
+        self.fallback_rejected += result.fallback_rejected
+        self.failed += result.failed
+        self.unclassified += result.unclassified
+        if kind:
+            self.kind = kind
+        self.chunk_count += 1
+
+    def clear(self) -> None:
+        self.matched = 0
+        self.attribute_filtered = 0
+        self.fallback_rejected = 0
+        self.failed = 0
+        self.unclassified = 0
+        self.kind = "search"
+        self.chunk_count = 0
+
+
+_round_accumulator = _RoundAccumulator()
+
+
+def reset_round_accumulator() -> None:
+    """Clear in-progress round totals (tests and orphaned cancel paths)."""
+    _round_accumulator.clear()
+
+
+def _accumulate_terminal_result(result: CollectResult, kind: str) -> None:
+    _round_accumulator.add(result, kind or "search")
+
+
+async def _emit_round_summary_if_ready(*, log_func=None) -> bool:
+    """Emit Evaluation Round Summary when the lock is clear and chunks were tallied."""
+    if _round_accumulator.chunk_count == 0:
+        return False
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    await log(
+        _round_summary_line(
+            _round_accumulator.kind,
+            _round_accumulator.matched,
+            _round_accumulator.attribute_filtered,
+            _round_accumulator.fallback_rejected,
+            _round_accumulator.failed,
+            _round_accumulator.unclassified,
+        ),
+        "summary",
+    )
+    _round_accumulator.clear()
+    return True
+
+
 def apply_unclassified_fallback(
     job_id: int,
     *,
@@ -539,9 +627,15 @@ async def poll_in_flight_batches(
     now: datetime | None = None,
 ) -> list[CollectResult]:
     """Poll every in-flight batch that is due; never submits new batches."""
-    results = []
     now = now or datetime.now(UTC)
-    for batch_row in batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
+    in_flight = batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path)
+    if not in_flight:
+        # Drop orphaned totals (e.g. remaining batches cancelled mid-round).
+        reset_round_accumulator()
+        return []
+
+    results: list[CollectResult] = []
+    for batch_row in in_flight:
         if not is_due_for_poll(batch_row, now=now):
             continue
         result = await collect_batch_results(
@@ -551,6 +645,11 @@ async def poll_in_flight_batches(
             log_func=log_func,
         )
         results.append(result)
+        if result.terminal:
+            _accumulate_terminal_result(result, batch_row.get("kind") or "search")
+
+    if not batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
+        await _emit_round_summary_if_ready(log_func=log_func)
     return results
 
 
@@ -610,8 +709,13 @@ async def collect_in_flight_batches_once(
     log_func=None,
 ) -> dict:
     """One-shot poll of all in-flight batches; ignores poll cadence."""
-    results = []
-    for batch_row in batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
+    in_flight = batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path)
+    if not in_flight:
+        reset_round_accumulator()
+        return _summarize_collect_results([], db_path=db_path)
+
+    results: list[CollectResult] = []
+    for batch_row in in_flight:
         result = await collect_batch_results(
             batch_row,
             client=client,
@@ -619,6 +723,11 @@ async def collect_in_flight_batches_once(
             log_func=log_func,
         )
         results.append(result)
+        if result.terminal:
+            _accumulate_terminal_result(result, batch_row.get("kind") or "search")
+
+    if not batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
+        await _emit_round_summary_if_ready(log_func=log_func)
     return _summarize_collect_results(results, db_path=db_path)
 
 

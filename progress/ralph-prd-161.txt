@@ -6,3 +6,10 @@
 - CLI --collect footer prints split rejection counters; stderr still gets chunk summary via log_func.
 - Tests: test_batch_poller.py + test_collect_cli.py cover counter split, summary format, and no Attribute mismatch.
 - Quality: ruff OK, mypy OK, pytest 911 passed (1 unrelated fail: preexisting src/web/prototype/NOTES.md vs company-research prototype cleanup test).
+
+## 2026-07-12 — #163 Evaluation Round Summary on lock clear
+- Accumulate chunk counters across the current Evaluation Lock cycle; emit one Evaluation Round Summary when the last in-flight batch finishes.
+- Round line format: `Evaluation round complete (search|backfill): …` via poller log_func (summary level); CLI --collect/--wait stderr gets the same footer after chunk summaries.
+- Orphaned totals cleared when poll/collect starts with no in-flight batches (e.g. mid-round cancel).
+- Tests: multi-chunk aggregation, deferred emit until last chunk, backfill kind label, wait path order; collect CLI asserts round line after chunk.
+- Quality: ruff OK, mypy OK, pytest 916 passed (1 unrelated fail: company-research prototype cleanup vs leftover favorite prototypes).
