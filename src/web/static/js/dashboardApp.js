@@ -208,6 +208,7 @@ export function bootstrapDashboard() {
     taskLog.setLogEventSource(null);
     closeTaskLogStreamQuietly(taskLog.getEnrichEventSource());
     taskLog.setEnrichEventSource(null);
+    closeTaskLogStreamQuietly(taskLog.getBatchPollerEventSource());
     for (const source of taskLog.getReclassifyEventSources().values()) {
       closeTaskLogStreamQuietly(source);
     }
@@ -278,6 +279,7 @@ export function bootstrapDashboard() {
   initOutreachToggleHandlers();
   evaluationLock.initEvaluationLockPolling();
   restoreSessionLogs();
+  taskLog.connectBatchPollerLogStream();
   profileManager.initProfileManagerImportInput();
   profileManager.loadResumes();
   loadOutreachSettings();

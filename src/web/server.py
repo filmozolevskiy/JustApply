@@ -1150,7 +1150,11 @@ async def batch_poller_logs_stream(skip: int = 0):
         skip = 0
 
     async def event_generator():
-        for log in batch_poller_logs[skip:]:
+        # Slice copies the buffer so later appends are not double-delivered via
+        # replay; those arrive only through the live queue below.
+        buffered = batch_poller_logs[skip:]
+        buffered_count = len(batch_poller_logs)
+        for log in buffered:
             yield {
                 "data": json.dumps({
                     "type": "log",
@@ -1162,6 +1166,19 @@ async def batch_poller_logs_stream(skip: int = 0):
         queue = batch_poller_queue
         if queue is None:
             return
+
+        # Drop queue items already covered by the buffer (same pattern as
+        # /api/logs/{task_id}) so reconnects do not duplicate history.
+        dropped = 0
+        while dropped < buffered_count:
+            try:
+                queued = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if queued is None:
+                await queue.put(None)
+                return
+            dropped += 1
 
         while True:
             item = await queue.get()

@@ -9,6 +9,8 @@ export const ACTIVE_ENRICH_LOG_SKIP_KEY = 'activeEnrichTaskLogSkip';
 export const ACTIVE_COMPANY_RESEARCH_TASK_KEY = 'activeCompanyResearchTaskId';
 export const ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY = 'activeCompanyResearchTaskLogSkip';
 export const ACTIVE_RECLASSIFY_TASKS_KEY = 'activeReclassifyTasks';
+export const BATCH_POLLER_LOG_SKIP_KEY = 'batchPollerLogSkip';
+export const BATCH_POLLER_RECONNECT_MS = 2000;
 
 export function reclassifyTaskLogSkipKey(taskId) {
   return `activeReclassifyTaskLogSkip:${taskId}`;
@@ -55,6 +57,8 @@ export function handleTaskLogMessage(logData, { addLogLine, onResult, onDone }) 
 export function createTaskLogClient() {
   let logEventSource = null;
   let enrichEventSource = null;
+  let batchPollerEventSource = null;
+  let batchPollerReconnectTimer = null;
   const reclassifyEventSources = new Map();
   let pageUnloading = false;
   let sessionLogs = [];
@@ -214,6 +218,50 @@ export function createTaskLogClient() {
     return es;
   }
 
+  function connectBatchPollerLogStream() {
+    if (batchPollerReconnectTimer != null) {
+      window.clearTimeout(batchPollerReconnectTimer);
+      batchPollerReconnectTimer = null;
+    }
+    if (batchPollerEventSource) {
+      closeTaskLogStreamQuietly(batchPollerEventSource);
+      batchPollerEventSource = null;
+    }
+
+    const skip = parseInt(localStorage.getItem(BATCH_POLLER_LOG_SKIP_KEY) || '0', 10);
+    const es = new EventSource(`/api/batch-poller/logs?skip=${skip}`);
+    batchPollerEventSource = es;
+
+    es.onmessage = function (event) {
+      const logData = JSON.parse(event.data);
+      handleTaskLogMessage(logData, {
+        addLogLine: (msg, level) => {
+          addLogLine(msg, level);
+          bumpTaskLogSkip(BATCH_POLLER_LOG_SKIP_KEY);
+        },
+      });
+    };
+
+    es.onerror = function () {
+      const intentional = es._intentionalClose || pageUnloading;
+      closeTaskLogStreamQuietly(es);
+      if (batchPollerEventSource === es) {
+        batchPollerEventSource = null;
+      }
+      if (intentional) {
+        return;
+      }
+      batchPollerReconnectTimer = window.setTimeout(() => {
+        batchPollerReconnectTimer = null;
+        if (!pageUnloading) {
+          connectBatchPollerLogStream();
+        }
+      }, BATCH_POLLER_RECONNECT_MS);
+    };
+
+    return es;
+  }
+
   function expandLogsConsole() {
     const consoleEl = document.getElementById('kb-logs-console');
     const btn = document.getElementById('toggle-logs-btn');
@@ -229,8 +277,10 @@ export function createTaskLogClient() {
     bumpTaskLogSkip,
     clearLogs,
     closeTaskLogStreamQuietly,
+    connectBatchPollerLogStream,
     connectTaskLogStream,
     expandLogsConsole,
+    getBatchPollerEventSource: () => batchPollerEventSource,
     getEnrichEventSource: () => enrichEventSource,
     getLogEventSource: () => logEventSource,
     getReclassifyEventSource: (taskId) => reclassifyEventSources.get(taskId) ?? null,

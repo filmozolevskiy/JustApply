@@ -625,6 +625,72 @@ def test_task_log_client_routes_sse_message_types():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
+
+def test_task_log_client_batch_poller_sse_uses_single_event_source():
+    """Batch-poller SSE reuses handleTaskLogMessage and replaces prior EventSource."""
+    result = _run_node(
+        """
+        import {
+          BATCH_POLLER_LOG_SKIP_KEY,
+          createTaskLogClient,
+        } from './src/web/static/js/taskLogClient.js';
+
+        const store = new Map();
+        globalThis.localStorage = {
+          getItem: (k) => (store.has(k) ? store.get(k) : null),
+          setItem: (k, v) => store.set(k, String(v)),
+          removeItem: (k) => store.delete(k),
+        };
+        globalThis.document = {
+          getElementById: () => null,
+        };
+        globalThis.window = {
+          clearTimeout: clearTimeout,
+          setTimeout: setTimeout,
+        };
+
+        const constructed = [];
+        class FakeEventSource {
+          constructor(url) {
+            this.url = url;
+            this.closed = false;
+            this.onmessage = null;
+            this.onerror = null;
+            constructed.push(this);
+          }
+          close() {
+            this.closed = true;
+          }
+        }
+        globalThis.EventSource = FakeEventSource;
+
+        const client = createTaskLogClient();
+        store.set(BATCH_POLLER_LOG_SKIP_KEY, '2');
+        const first = client.connectBatchPollerLogStream();
+        if (constructed.length !== 1) process.exit(1);
+        if (!first.url.includes('/api/batch-poller/logs?skip=2')) process.exit(2);
+        if (client.getBatchPollerEventSource() !== first) process.exit(3);
+
+        const second = client.connectBatchPollerLogStream();
+        if (constructed.length !== 2) process.exit(4);
+        if (!first.closed || first._intentionalClose !== true) process.exit(5);
+        if (client.getBatchPollerEventSource() !== second) process.exit(6);
+        if (second.url.includes('/api/logs/')) process.exit(7);
+
+        second.onmessage({
+          data: JSON.stringify({
+            type: 'log',
+            level: 'summary',
+            message: 'Batch chunk completed: 1 matched, 0 attribute-filtered, 0 fallback-rejected, 0 failed, 0 unclassified',
+          }),
+        });
+        if (store.get(BATCH_POLLER_LOG_SKIP_KEY) !== '3') process.exit(8);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
 def test_dashboard_has_no_inline_mock_job_database():
     """Kanban Dashboard loads jobs from the API — no static masterJobs mock array."""
     content = load_dashboard_js()

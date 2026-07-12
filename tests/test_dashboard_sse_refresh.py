@@ -10,6 +10,21 @@ def test_dashboard_html_marks_page_unload_before_sse_error_handling():
     assert "window.addEventListener('beforeunload', markPageUnloading)" in dashboard_js
     assert "window.addEventListener('pagehide'" in dashboard_js
 
+
+def test_dashboard_starts_batch_poller_log_stream():
+    """Dashboard bootstrap opens always-on batch-poller SSE via taskLogClient."""
+    task_log = read_task_log_client()
+    dashboard_js = load_dashboard_js()
+    assert "function connectBatchPollerLogStream()" in task_log
+    assert "/api/batch-poller/logs?skip=" in task_log
+    assert "BATCH_POLLER_LOG_SKIP_KEY" in task_log
+    assert "handleTaskLogMessage(logData," in task_log
+    assert "connectBatchPollerLogStream()" in dashboard_js
+    assert "getBatchPollerEventSource()" in dashboard_js
+    # Enrichment stays on per-task /api/logs streams, not the poller endpoint.
+    assert task_log.count("new EventSource(`/api/batch-poller/logs") == 1
+    assert "new EventSource(`/api/logs/${taskId}?skip=${skip}`)" in task_log
+
 def test_dashboard_html_sse_error_skips_cleanup_on_intentional_close():
     content = load_kanban_js()
     connect_start = content.find("function connectTaskLogStream(")
