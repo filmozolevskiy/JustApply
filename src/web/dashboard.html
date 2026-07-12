@@ -200,6 +200,9 @@
                   <button type="button" id="board-filter-search-clear" class="board-search-clear" hidden onclick="clearBoardSearch()" title="Clear search" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>
                 </div>
               </div>
+              <button type="button" id="board-favorites-filter" class="board-favorites-filter" aria-pressed="false" aria-label="Favorites filter" title="Show favorites only" onclick="toggleFavoritesFilter()">
+                <i class="fa-regular fa-star"></i>
+              </button>
               <div class="board-controls-sort">
                 <label for="board-sort-by">Sort</label>
                 <select id="board-sort-by" onchange="updateBoardFiltersAndSort()">
@@ -259,7 +262,7 @@
         </div>
       </div>
 
-      <p id="board-search-empty-hint" class="board-search-empty-hint" hidden>No jobs match your search.</p>
+      <p id="board-search-empty-hint" class="board-search-empty-hint" hidden>No jobs match your filters.</p>
 
       <!-- Kanban lanes -->
       <div class="kanban-board-container" id="kanban-lanes-container">

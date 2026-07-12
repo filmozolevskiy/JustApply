@@ -53,6 +53,7 @@ export function createBoardOrchestrator({
     recruiter: 'exclude',
     sortBy: 'match_desc',
     archived: 'active',
+    favorites: false,
   };
 
   function startPollingEnrichingJobs() {
@@ -72,7 +73,27 @@ export function createBoardOrchestrator({
   function getJobsFetchArchivedParam() {
     const archivedFilter = getArchivedFilter();
     const searchQuery = document.getElementById('board-filter-search')?.value || '';
-    return resolveJobsArchivedFetchParam(archivedFilter, searchQuery);
+    const favoritesOnly = isFavoritesFilterActive();
+    return resolveJobsArchivedFetchParam(archivedFilter, searchQuery, favoritesOnly);
+  }
+
+  function isFavoritesFilterActive() {
+    const btn = document.getElementById('board-favorites-filter');
+    if (btn) {
+      return btn.getAttribute('aria-pressed') === 'true';
+    }
+    return localStorage.getItem('boardFilterFavorites') === 'true';
+  }
+
+  function setFavoritesFilterUi(active) {
+    const btn = document.getElementById('board-favorites-filter');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.title = active ? 'Show all jobs' : 'Show favorites only';
+    const icon = btn.querySelector('i');
+    if (icon) {
+      icon.className = active ? 'fa-solid fa-star' : 'fa-regular fa-star';
+    }
   }
 
   function updateBoardSearchClearVisibility() {
@@ -86,8 +107,9 @@ export function createBoardOrchestrator({
     const hint = document.getElementById('board-search-empty-hint');
     if (!hint) return;
     const hasSearch = parseBoardSearchTerms(filters.search || '').length > 0;
+    const favoritesOnly = Boolean(filters.favoritesOnly);
     const filteredCount = filterJobs(jobs, filters).length;
-    hint.hidden = !(hasSearch && filteredCount === 0);
+    hint.hidden = !((hasSearch || favoritesOnly) && filteredCount === 0);
   }
 
   function persistBoardSearch() {
@@ -135,6 +157,7 @@ export function createBoardOrchestrator({
 
   function resetBoardControls() {
     const previousArchived = getArchivedFilter();
+    const previousFetchParam = getJobsFetchArchivedParam();
 
     if (boardSearchDebounceTimer) {
       clearTimeout(boardSearchDebounceTimer);
@@ -154,6 +177,7 @@ export function createBoardOrchestrator({
     if (recruiterEl) recruiterEl.value = BOARD_CONTROLS_DEFAULTS.recruiter;
     if (sortEl) sortEl.value = BOARD_CONTROLS_DEFAULTS.sortBy;
     if (archivedEl) archivedEl.value = BOARD_CONTROLS_DEFAULTS.archived;
+    setFavoritesFilterUi(BOARD_CONTROLS_DEFAULTS.favorites);
 
     localStorage.setItem('boardFilterSearch', BOARD_CONTROLS_DEFAULTS.search);
     localStorage.setItem('boardFilterRemote', BOARD_CONTROLS_DEFAULTS.remote);
@@ -161,10 +185,25 @@ export function createBoardOrchestrator({
     localStorage.setItem('boardFilterRecruiter', BOARD_CONTROLS_DEFAULTS.recruiter);
     localStorage.setItem('boardSortBy', BOARD_CONTROLS_DEFAULTS.sortBy);
     localStorage.setItem('boardFilterArchived', BOARD_CONTROLS_DEFAULTS.archived);
+    localStorage.setItem('boardFilterFavorites', BOARD_CONTROLS_DEFAULTS.favorites ? 'true' : 'false');
 
     updateBoardSearchClearVisibility();
 
-    if (previousArchived !== BOARD_CONTROLS_DEFAULTS.archived) {
+    const nextFetchParam = getJobsFetchArchivedParam();
+    if (previousArchived !== BOARD_CONTROLS_DEFAULTS.archived || previousFetchParam !== nextFetchParam) {
+      loadJobs().then(() => updateDrawerNav());
+    } else {
+      renderActiveVariant();
+      updateDrawerNav();
+    }
+  }
+
+  function toggleFavoritesFilter() {
+    const next = !isFavoritesFilterActive();
+    setFavoritesFilterUi(next);
+    localStorage.setItem('boardFilterFavorites', next ? 'true' : 'false');
+    const fetchParam = getJobsFetchArchivedParam();
+    if (fetchParam !== lastJobsFetchArchivedParam) {
       loadJobs().then(() => updateDrawerNav());
     } else {
       renderActiveVariant();
@@ -252,6 +291,7 @@ export function createBoardOrchestrator({
     const recruiterFilter = localStorage.getItem('boardFilterRecruiter') || BOARD_CONTROLS_DEFAULTS.recruiter;
     const sortBy = localStorage.getItem('boardSortBy') || BOARD_CONTROLS_DEFAULTS.sortBy;
     const archivedFilter = localStorage.getItem('boardFilterArchived') || BOARD_CONTROLS_DEFAULTS.archived;
+    const favoritesFilter = localStorage.getItem('boardFilterFavorites') === 'true';
 
     const remoteEl = document.getElementById('board-filter-remote');
     const sizeEl = document.getElementById('board-filter-size');
@@ -268,6 +308,7 @@ export function createBoardOrchestrator({
     if (sortEl) sortEl.value = sortBy;
     if (archivedEl) archivedEl.value = archivedFilter;
     if (searchEl) searchEl.value = searchFilter;
+    setFavoritesFilterUi(favoritesFilter);
     updateBoardSearchClearVisibility();
   }
 
@@ -1007,6 +1048,7 @@ export function createBoardOrchestrator({
     selectActiveContact,
     toggleActivityLog,
     toggleContacted,
+    toggleFavoritesFilter,
     toggleJobFavorite,
     toggleLaneCollapse,
     updateArchiveVisibility,

@@ -218,7 +218,7 @@ def test_board_renderer_search_matches_contact_names():
     assert result.returncode == 0, result.stderr or result.stdout
 
 def test_board_renderer_resolve_jobs_archived_fetch_param():
-    """Active visibility + non-empty search fetches all jobs; otherwise unchanged."""
+    """Active visibility + non-empty search or favorites-only fetches all jobs; otherwise unchanged."""
     result = _run_node(
         """
         import { resolveJobsArchivedFetchParam } from './src/web/static/js/boardRenderer.js';
@@ -228,6 +228,9 @@ def test_board_renderer_resolve_jobs_archived_fetch_param():
         if (resolveJobsArchivedFetchParam('active', '') !== 'active') process.exit(3);
         if (resolveJobsArchivedFetchParam('archived', 'jane') !== 'archived') process.exit(4);
         if (resolveJobsArchivedFetchParam('all', 'jane') !== 'all') process.exit(5);
+        if (resolveJobsArchivedFetchParam('active', '', true) !== 'all') process.exit(6);
+        if (resolveJobsArchivedFetchParam('active', '', false) !== 'active') process.exit(7);
+        if (resolveJobsArchivedFetchParam('archived', '', true) !== 'archived') process.exit(8);
 
         console.log('ok');
         """
@@ -456,6 +459,175 @@ def test_board_renderer_search_combines_with_other_board_filters():
           search: 'qa',
         });
         if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+def test_board_renderer_favorites_only_shows_favorited_jobs():
+    """Favorites Filter keeps only jobs with favorited === true."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'QA Lead',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: true,
+          },
+          {
+            id: 2,
+            title: 'SDET',
+            company: 'Beta',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: false,
+          },
+        ];
+
+        const off = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          favoritesOnly: false,
+        });
+        if (off.map((j) => j.id).join(',') !== '1,2') process.exit(1);
+
+        const on = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          favoritesOnly: true,
+        });
+        if (on.length !== 1 || on[0].id !== 1) process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+def test_board_renderer_favorites_only_ands_with_search_and_remote():
+    """Favorites Filter ANDs with Board Search and remote type filters."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'QA Lead',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: true,
+          },
+          {
+            id: 2,
+            title: 'QA Lead',
+            company: 'Beta',
+            location: 'Hybrid',
+            description: 'Testing',
+            remoteType: 'hybrid',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: true,
+          },
+          {
+            id: 3,
+            title: 'QA Lead',
+            company: 'Gamma',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: false,
+          },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'remote',
+          size: 'all',
+          recruiter: 'all',
+          search: 'qa',
+          favoritesOnly: true,
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+def test_board_renderer_favorites_only_surfaces_favorited_archived_under_active():
+    """Under Active visibility, favorites-only includes favorited archived jobs."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const base = {
+          title: 'Old QA',
+          company: 'Acme',
+          location: 'Remote',
+          description: 'Testing',
+          remoteType: 'remote',
+          size: '10-50',
+          isRecruiter: false,
+          status: 'rejected',
+        };
+
+        const jobs = [
+          { id: 1, ...base, archived: false, favorited: true },
+          { id: 2, ...base, archived: true, favorited: true },
+          { id: 3, ...base, archived: true, favorited: false },
+          { id: 4, ...base, archived: false, favorited: false },
+        ];
+
+        const favoritesOn = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: '',
+          archivedVisibility: 'active',
+          favoritesOnly: true,
+        });
+        const onIds = favoritesOn.map((j) => j.id).sort((a, b) => a - b);
+        if (onIds.join(',') !== '1,2') process.exit(1);
+
+        const favoritesOff = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: '',
+          archivedVisibility: 'active',
+          favoritesOnly: false,
+        });
+        if (favoritesOff.some((j) => j.archived)) process.exit(2);
+        if (favoritesOff.map((j) => j.id).sort((a, b) => a - b).join(',') !== '1,4') process.exit(3);
+
+        const withSearch = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'acme',
+          archivedVisibility: 'active',
+          favoritesOnly: true,
+        });
+        if (withSearch.map((j) => j.id).sort((a, b) => a - b).join(',') !== '1,2') process.exit(4);
 
         console.log('ok');
         """

@@ -258,6 +258,7 @@ export function bootstrapDashboard() {
     setActiveProfileManagerProfile: profileManager.setActiveProfileManagerProfile,
     toggleActivityLog: board.toggleActivityLog,
     toggleContacted: board.toggleContacted,
+    toggleFavoritesFilter: board.toggleFavoritesFilter,
     toggleJobFavorite: board.toggleJobFavorite,
     toggleJobSearchSettings: jobSearchSettings.toggleJobSearchSettings,
     toggleLaneCollapse: board.toggleLaneCollapse,

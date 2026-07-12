@@ -1,6 +1,6 @@
 import os
 
-from tests.kanban_js import load_dashboard_js, read_dashboard_html
+from tests.kanban_js import load_dashboard_js, read_dashboard_css, read_dashboard_html
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
@@ -62,7 +62,12 @@ def test_board_controls_refine_drawer_layout():
     top_block = block[top_start:top_end]
     refine_block = block[block.index('class="board-controls-refine"'):]
     assert 'id="board-filter-search"' in top_block
+    assert 'id="board-favorites-filter"' in top_block
     assert 'id="board-sort-by"' in top_block
+    search_idx = top_block.index('id="board-filter-search"')
+    fav_idx = top_block.index('id="board-favorites-filter"')
+    sort_idx = top_block.index('id="board-sort-by"')
+    assert search_idx < fav_idx < sort_idx
     assert 'id="board-controls-reset"' not in top_block
     assert 'id="board-filter-remote"' in refine_block
     assert 'id="board-filter-size"' in refine_block
@@ -82,7 +87,21 @@ def test_board_controls_has_search_reset_and_empty_hint():
     assert "resetBoardControls" in dashboard_js
     assert "Reset filters" in content
     assert 'id="board-search-empty-hint"' in content
-    assert "No jobs match your search." in content
+    assert "No jobs match your filters." in content
+
+
+def test_board_controls_favorites_filter_wiring():
+    """Favorites Filter star button, localStorage key, and toggle handler are wired."""
+    content = _read_html()
+    dashboard_js = load_dashboard_js()
+    css = read_dashboard_css()
+    assert 'id="board-favorites-filter"' in content
+    assert 'class="board-favorites-filter"' in content
+    assert 'aria-pressed="false"' in content
+    assert "toggleFavoritesFilter" in dashboard_js
+    assert "boardFilterFavorites" in dashboard_js
+    assert "favoritesOnly" in dashboard_js
+    assert '.board-favorites-filter[aria-pressed="true"]' in css
 
 
 def test_shared_panel_header_class():

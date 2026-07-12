@@ -11,12 +11,12 @@ export function parseBoardSearchTerms(query) {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
-export function resolveJobsArchivedFetchParam(archivedVisibility, searchQuery) {
+export function resolveJobsArchivedFetchParam(archivedVisibility, searchQuery, favoritesOnly = false) {
   const visibility = archivedVisibility || 'active';
   if (visibility !== 'active') {
     return visibility;
   }
-  if (parseBoardSearchTerms(searchQuery).length > 0) {
+  if (parseBoardSearchTerms(searchQuery).length > 0 || favoritesOnly) {
     return 'all';
   }
   return 'active';
@@ -88,30 +88,33 @@ export function filterJobs(jobs, filters) {
   const recruiterFilter = filters.recruiter || 'all';
   const searchQuery = filters.search ?? '';
   const archivedVisibility = filters.archivedVisibility || 'active';
+  const favoritesOnly = Boolean(filters.favoritesOnly);
   const hasSearch = parseBoardSearchTerms(searchQuery).length > 0;
-  const activeWithContactBypass = archivedVisibility === 'active' && hasSearch;
 
   return jobs.filter((job) => {
     const isArchived = Boolean(job.archived);
+    const isFavorited = Boolean(job.favorited);
 
-    if (activeWithContactBypass) {
-      if (isArchived) {
-        if (!jobContactsMatchBoardSearch(job, searchQuery)) {
-          return false;
-        }
-      } else if (!jobMatchesBoardSearch(job, searchQuery)) {
+    if (archivedVisibility === 'active' && isArchived) {
+      const contactBypass = hasSearch && jobContactsMatchBoardSearch(job, searchQuery);
+      const favoritesBypass = favoritesOnly && isFavorited;
+      if (!contactBypass && !favoritesBypass) {
+        return false;
+      }
+      if (!contactBypass && !jobMatchesBoardSearch(job, searchQuery)) {
         return false;
       }
     } else {
-      if (archivedVisibility === 'active' && isArchived) {
-        return false;
-      }
       if (archivedVisibility === 'archived' && !isArchived) {
         return false;
       }
       if (!jobMatchesBoardSearch(job, searchQuery)) {
         return false;
       }
+    }
+
+    if (favoritesOnly && !isFavorited) {
+      return false;
     }
 
     if (remoteFilter !== 'all') {
@@ -174,6 +177,7 @@ export function sortJobs(jobs, sortBy) {
 }
 
 export function getBoardFiltersFromDom() {
+  const favoritesBtn = document.getElementById('board-favorites-filter');
   return {
     remote: document.getElementById('board-filter-remote')?.value || 'all',
     size: document.getElementById('board-filter-size')?.value || 'all',
@@ -184,6 +188,9 @@ export function getBoardFiltersFromDom() {
       document.getElementById('board-filter-archived')?.value ||
       localStorage.getItem('boardFilterArchived') ||
       'active',
+    favoritesOnly: favoritesBtn
+      ? favoritesBtn.getAttribute('aria-pressed') === 'true'
+      : localStorage.getItem('boardFilterFavorites') === 'true',
   };
 }
 
