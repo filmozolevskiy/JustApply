@@ -1,0 +1,8 @@
+# Ralph Loop Progress — PRD #161
+
+## 2026-07-12 — #162 Batch Poller split counters and chunk summaries
+- Split CollectResult / collect aggregation into attribute_filtered + fallback_rejected (removed combined rejected).
+- Chunk summary log lists all five counters; removed per-job Attribute mismatch poller logs.
+- CLI --collect footer prints split rejection counters; stderr still gets chunk summary via log_func.
+- Tests: test_batch_poller.py + test_collect_cli.py cover counter split, summary format, and no Attribute mismatch.
+- Quality: ruff OK, mypy OK, pytest 911 passed (1 unrelated fail: preexisting src/web/prototype/NOTES.md vs company-research prototype cleanup test).

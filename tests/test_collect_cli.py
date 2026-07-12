@@ -185,4 +185,74 @@ async def test_collect_once_with_no_in_flight_batches(tmp_db):
 
     assert result["batches_polled"] == 0
     assert result["matched"] == 0
+    assert result["attribute_filtered"] == 0
+    assert result["fallback_rejected"] == 0
     assert result["in_flight_remaining"] == 0
+
+
+@pytest.mark.asyncio
+async def test_collect_cli_footer_prints_split_rejection_counters(tmp_db, monkeypatch, capsys):
+    matched_id = _seed_scraped_job(tmp_db)
+    filtered_id = _seed_scraped_job(tmp_db, remoteType="in_office", title="Office QA")
+    batch_jobs.create_batch_job(
+        batch_name="batches/collect-footer",
+        display_name="collect-footer",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[matched_id, filtered_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        db_path=str(tmp_db),
+    )
+
+    lines = [
+        {
+            "key": str(matched_id),
+            "response": {
+                "candidates": [
+                    {"content": {"parts": [{"text": json.dumps(_evaluation())}]}}
+                ]
+            },
+        },
+        {
+            "key": str(filtered_id),
+            "response": {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": json.dumps(
+                                        {
+                                            **_evaluation(),
+                                            "remoteType": "in_office",
+                                        }
+                                    )
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        },
+    ]
+    fake_client = _build_fake_client(
+        "\n".join(json.dumps(line) for line in lines) + "\n"
+    )
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: fake_client)
+
+    result = await run_collect(wait=False)
+    captured = capsys.readouterr()
+
+    assert result["matched"] == 1
+    assert result["attribute_filtered"] == 1
+    assert result["fallback_rejected"] == 0
+    assert "Attribute-filtered: 1" in captured.out
+    assert "Fallback-rejected: 0" in captured.out
+    assert "Rejected:" not in captured.out
+    assert any(
+        "Batch chunk completed: 1 matched, 1 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified" in line
+        for line in captured.err.splitlines()
+    )
+    assert "Attribute mismatch" not in captured.err

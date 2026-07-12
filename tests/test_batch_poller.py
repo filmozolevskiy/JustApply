@@ -149,7 +149,8 @@ async def test_collect_batch_results_writes_back_and_updates_batch_row(tmp_db):
 
     assert result.terminal is True
     assert result.matched == 1
-    assert result.rejected == 0
+    assert result.attribute_filtered == 0
+    assert result.fallback_rejected == 0
 
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.status == "matched"
@@ -159,7 +160,15 @@ async def test_collect_batch_results_writes_back_and_updates_batch_row(tmp_db):
     assert updated_batch["state"] == "JOB_STATE_SUCCEEDED"
     assert updated_batch["lastPolledAt"] is not None
     assert updated_batch["resultFileName"] == "files/result.jsonl"
-    assert any("Batch chunk completed" in msg for _level, msg in logs)
+    summary_logs = [(level, msg) for level, msg in logs if "Batch chunk completed" in msg]
+    assert summary_logs
+    level, msg = summary_logs[0]
+    assert level == "summary"
+    assert msg == (
+        "Batch chunk completed: 1 matched, 0 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified"
+    )
+    assert not any("Attribute mismatch" in msg for _level, msg in logs)
 
 @pytest.mark.asyncio
 async def test_collect_batch_results_attribute_reject(tmp_db):
@@ -185,17 +194,67 @@ async def test_collect_batch_results_attribute_reject(tmp_db):
         },
     }
     client = _build_fake_client(json.dumps(result_line) + "\n")
+    logs = []
 
     result = await collect_batch_results(
         batch_row,
         client=client,
         db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append((level, msg)),
     )
 
     assert result.matched == 0
-    assert result.rejected == 1
+    assert result.attribute_filtered == 1
+    assert result.fallback_rejected == 0
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.status == "rejected"
+    summary = next(msg for level, msg in logs if level == "summary")
+    assert summary == (
+        "Batch chunk completed: 0 matched, 1 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified"
+    )
+    assert not any("Attribute mismatch" in msg for _level, msg in logs)
+
+
+@pytest.mark.asyncio
+async def test_collect_batch_results_fallback_reject_increments_fallback_rejected(tmp_db):
+    """Poison fallback gated on scraper attributes counts as fallback-rejected."""
+    job_id = _seed_scraped_job(tmp_db, remoteType="in_office", seniority="mid")
+    batch_row = batch_jobs.create_batch_job(
+        batch_name="batches/test-fallback-reject",
+        display_name="test",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        db_path=str(tmp_db),
+    )
+    client = _build_fake_client(_malformed_result_line(job_id))
+    logs = []
+
+    for _ in range(POISON_MAX_ATTEMPTS - 1):
+        await collect_batch_results(batch_row, client=client, db_path=str(tmp_db))
+
+    result = await collect_batch_results(
+        batch_row,
+        client=client,
+        db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append((level, msg)),
+    )
+
+    assert result.attribute_filtered == 0
+    assert result.fallback_rejected == 1
+    assert result.unclassified == 0
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "rejected"
+    assert job.unclassified is True
+    summary = next(msg for level, msg in logs if level == "summary")
+    assert summary == (
+        "Batch chunk completed: 0 matched, 0 attribute-filtered, "
+        "1 fallback-rejected, 0 failed, 0 unclassified"
+    )
+    assert not any("Attribute mismatch" in msg for _level, msg in logs)
 
 @pytest.mark.asyncio
 async def test_poll_in_flight_skips_batches_not_due(tmp_db, monkeypatch):

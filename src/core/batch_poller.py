@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 from .. import db as database
 from ..db import batch_jobs as batch_jobs_db
 from .attribute_gating import (
-    format_attribute_mismatch,
     is_unclassified,
     merge_job_attributes,
     passes_attribute_gate,
@@ -172,10 +171,26 @@ def _parse_result_jsonl(content: str | bytes) -> list[dict]:
 class CollectResult:
     state: str
     matched: int = 0
-    rejected: int = 0
+    attribute_filtered: int = 0
+    fallback_rejected: int = 0
     failed: int = 0
     unclassified: int = 0
     terminal: bool = False
+
+
+def _chunk_summary_line(
+    matched: int,
+    attribute_filtered: int,
+    fallback_rejected: int,
+    failed: int,
+    unclassified: int,
+) -> str:
+    return (
+        f"Batch chunk completed: {matched} matched, "
+        f"{attribute_filtered} attribute-filtered, "
+        f"{fallback_rejected} fallback-rejected, "
+        f"{failed} failed, {unclassified} unclassified"
+    )
 
 
 def apply_unclassified_fallback(
@@ -349,7 +364,7 @@ async def collect_batch_results(
 
         raw_content = await asyncio.to_thread(gemini_client.files.download, file=result_file)
         result_lines = _parse_result_jsonl(raw_content)
-        matched = rejected = failed = unclassified = 0
+        matched = attribute_filtered = fallback_rejected = failed = unclassified = 0
         handled_job_ids: set[int] = set()
 
         for line in result_lines:
@@ -385,7 +400,7 @@ async def collect_batch_results(
                         "warning",
                     )
                 elif outcome == "rejected":
-                    rejected += 1
+                    fallback_rejected += 1
                 continue
 
             evaluation = parse_evaluation_text(text, company_name=company)
@@ -406,7 +421,7 @@ async def collect_batch_results(
                         "warning",
                     )
                 elif outcome == "rejected":
-                    rejected += 1
+                    fallback_rejected += 1
                 continue
 
             outcome = write_back_job_evaluation(
@@ -419,24 +434,7 @@ async def collect_batch_results(
             if outcome == "matched":
                 matched += 1
             elif outcome == "rejected":
-                rejected += 1
-                if job:
-                    title = job.title if hasattr(job, "title") else job.get("title", "")
-                    merged = merge_job_attributes(
-                        job.model_dump() if hasattr(job, "model_dump") else dict(job),
-                        evaluation,
-                    )
-                    await log(
-                        format_attribute_mismatch(
-                            title,
-                            company,
-                            remote_type=merged["remoteType"],
-                            seniority=merged["seniority"],
-                            allowed_remote_types=gate_remote,
-                            seniorities=gate_seniorities,
-                        ),
-                        "info",
-                    )
+                attribute_filtered += 1
             else:
                 failed += 1
 
@@ -465,17 +463,23 @@ async def collect_batch_results(
                     "warning",
                 )
             elif outcome == "rejected":
-                rejected += 1
+                fallback_rejected += 1
 
         await log(
-            f"Batch chunk completed: {matched} matched, {rejected} rejected, "
-            f"{failed} failed, {unclassified} unclassified.",
+            _chunk_summary_line(
+                matched,
+                attribute_filtered,
+                fallback_rejected,
+                failed,
+                unclassified,
+            ),
             "summary",
         )
         return CollectResult(
             state=state,
             matched=matched,
-            rejected=rejected,
+            attribute_filtered=attribute_filtered,
+            fallback_rejected=fallback_rejected,
             failed=failed,
             unclassified=unclassified,
             terminal=True,
@@ -483,7 +487,7 @@ async def collect_batch_results(
 
     if state in TERMINAL_FAILURE_STATES:
         await log(f"Batch {batch_name} ended with state {state}.", "warning")
-        matched = rejected = failed = unclassified = 0
+        matched = attribute_filtered = fallback_rejected = failed = unclassified = 0
         for job_id in batch_row.get("jobIds") or []:
             job = database.get_job(job_id, db_path=db_path)
             if not job:
@@ -507,17 +511,18 @@ async def collect_batch_results(
                     "warning",
                 )
             elif outcome == "rejected":
-                rejected += 1
-        if failed or unclassified or rejected:
+                fallback_rejected += 1
+        if failed or unclassified or fallback_rejected:
             await log(
                 f"Batch failure handled: {failed} retrying, {unclassified} unclassified, "
-                f"{rejected} rejected.",
+                f"{fallback_rejected} fallback-rejected.",
                 "summary",
             )
         return CollectResult(
             state=state,
             matched=matched,
-            rejected=rejected,
+            attribute_filtered=attribute_filtered,
+            fallback_rejected=fallback_rejected,
             failed=failed,
             unclassified=unclassified,
             terminal=True,
@@ -588,7 +593,8 @@ def _summarize_collect_results(
     return {
         "batches_polled": len(results),
         "matched": sum(result.matched for result in results),
-        "rejected": sum(result.rejected for result in results),
+        "attribute_filtered": sum(result.attribute_filtered for result in results),
+        "fallback_rejected": sum(result.fallback_rejected for result in results),
         "failed": sum(result.failed for result in results),
         "unclassified": sum(result.unclassified for result in results),
         "in_flight_remaining": len(
