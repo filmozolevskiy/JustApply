@@ -476,6 +476,9 @@ export function createDrawerController({
             ` : ''}
           </h2>
           <div class="drawer-header-actions">
+            <button type="button" class="drawer-favorite-btn${job.favorited ? ' is-favorited' : ''}" onclick="toggleJobFavorite(${job.id})" title="${job.favorited ? 'Unmark favorite' : 'Mark favorite'}" aria-pressed="${job.favorited ? 'true' : 'false'}" aria-label="${job.favorited ? 'Unmark favorite' : 'Mark favorite'}">
+              <i class="fa-${job.favorited ? 'solid' : 'regular'} fa-star"></i>
+            </button>
             <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
           </div>
         </div>
@@ -797,6 +800,32 @@ export function createDrawerController({
     }
   }
 
+  async function toggleJobFavorite(jobId) {
+    const job = findJob(jobId);
+    if (!job) return;
+    const nextFavorited = !Boolean(job.favorited);
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorited: nextFavorited }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      updateJob(jobId, updatedJob);
+      addLogLine(
+        nextFavorited
+          ? `Marked favorite: [${job.title}]`
+          : `Unmarked favorite: [${job.title}]`,
+        'success',
+      );
+      onJobMutated();
+      await openJobDetailsDrawer(jobId);
+    } catch (err) {
+      addLogLine(`Failed to toggle favorite: ${err.message}`, 'warning');
+    }
+  }
+
   async function rejectJobFromDrawer(jobId) {
     if (!(await confirmDiscardIfNeeded())) return;
     closeDrawerImmediate();
@@ -835,6 +864,7 @@ export function createDrawerController({
     selectActiveContact,
     toggleActivityLog,
     toggleContacted,
+    toggleJobFavorite,
     updateDrawerNav,
     updateOutreachCounter,
   };

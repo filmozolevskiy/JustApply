@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-CURRENT_SCHEMA_VERSION = 9
+CURRENT_SCHEMA_VERSION = 10
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -288,6 +288,15 @@ def _migration_009_rejected_at_backfill(conn: sqlite3.Connection) -> None:
     apply_rejected_at_backfill(conn)
 
 
+def _migration_010_jobs_favorited(conn: sqlite3.Connection) -> None:
+    _add_column_if_missing(
+        conn,
+        "jobs",
+        "favorited",
+        "ALTER TABLE jobs ADD COLUMN favorited INTEGER DEFAULT 0",
+    )
+
+
 _MIGRATIONS: dict[int, MigrationFn] = {
     1: _migration_001_create_jobs_table,
     2: _migration_002_jobs_extra_columns,
@@ -298,6 +307,7 @@ _MIGRATIONS: dict[int, MigrationFn] = {
     7: _migration_007_company_research_cache,
     8: _migration_008_pipeline_status_backfill,
     9: _migration_009_rejected_at_backfill,
+    10: _migration_010_jobs_favorited,
 }
 
 

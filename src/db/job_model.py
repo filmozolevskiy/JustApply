@@ -50,6 +50,7 @@ def parse_job_row(row) -> Job:
     job["archived"] = bool(job.get("archived", 0))
     job["rejectedAt"] = job.get("rejectedAt") or ""
     job["autoArchiveExempt"] = bool(job.get("autoArchiveExempt", 0))
+    job["favorited"] = bool(job.get("favorited", 0))
 
     raw_company_research = job.get("companyResearch")
     if raw_company_research in (None, ""):

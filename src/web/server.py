@@ -27,6 +27,7 @@ from ..db import (
     init_db,
     log_activity,
     save_outreach_settings,
+    set_job_favorited,
     update_contact_status,
     update_job_comment,
     update_job_status,
@@ -387,6 +388,18 @@ async def archive_job_endpoint(job_id: int):
         if job is None:
             return JSONResponse(status_code=404, content={"message": "Job not found"})
         return JSONResponse(status_code=422, content={"message": "Only Rejected jobs can be archived"})
+    return result
+
+
+class FavoriteUpdate(BaseModel):
+    favorited: bool
+
+
+@app.post("/api/jobs/{job_id}/favorite", response_model=Job)
+async def favorite_job_endpoint(job_id: int, update: FavoriteUpdate):
+    result = set_job_favorited(job_id, update.favorited)
+    if result is None:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
     return result
 
 

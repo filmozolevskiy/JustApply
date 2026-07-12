@@ -1,0 +1,11 @@
+# Ralph Loop Progress — PRD #165
+
+## 2026-07-12 — Favorite Job — persist, toggle, and card cue (#166)
+
+- Migration 010 adds `favorited` INTEGER DEFAULT 0; Job schema / parse_job_row expose `favorited: bool`.
+- DB helper `set_job_favorited` persists flag and appends `Marked favorite` / `Unmarked favorite` to Job Activity Log.
+- `POST /api/jobs/{id}/favorite` returns updated Job or 404; GET jobs expose `favorited`.
+- Drawer header star toggles via API; favorited cards show read-only Favorite chip + amber top-bar styling (variant C).
+- Lane move, archive/un-archive, and auto-archive preserve `favorited` (regression tests).
+- Quality: ruff, mypy, pytest (938 passed, cov ≥84%).
+- Closed #166.

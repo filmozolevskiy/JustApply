@@ -367,6 +367,35 @@ def update_outreach_template(job_id, audience, template, db_path=None):
     return parse_job_row_enriched(row, db_path=db_path)
 
 
+def set_job_favorited(job_id: int, favorited: bool, db_path=None):
+    """Set favorite bookmark flag and append Job Activity Log entry.
+
+    Does not change pipeline status, archive flags, or trigger enrichment.
+    """
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute(
+        "UPDATE jobs SET favorited = ? WHERE id = ?",
+        (1 if favorited else 0, job_id),
+    )
+    _append_activity_log(
+        cursor,
+        job_id,
+        "Marked favorite" if favorited else "Unmarked favorite",
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    return parse_job_row_enriched(updated, db_path=db_path)
+
+
 def archive_job(job_id: int, db_path=None):
     """Toggle archive state on a job.
     - Archived → un-archive: sets archived=0, autoArchiveExempt=1

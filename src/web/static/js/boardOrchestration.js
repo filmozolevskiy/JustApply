@@ -222,6 +222,7 @@ export function createBoardOrchestrator({
     selectActiveContact,
     toggleActivityLog,
     toggleContacted,
+    toggleJobFavorite,
     updateDrawerNav,
     updateOutreachCounter,
   } = drawer;
@@ -1006,6 +1007,7 @@ export function createBoardOrchestrator({
     selectActiveContact,
     toggleActivityLog,
     toggleContacted,
+    toggleJobFavorite,
     toggleLaneCollapse,
     updateArchiveVisibility,
     updateBoardFiltersAndSort,

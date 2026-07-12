@@ -29,6 +29,7 @@ from .jobs import (
     increment_batch_attempts,
     job_exists,
     log_activity,
+    set_job_favorited,
     update_company_research,
     update_contact_status,
     update_job_comment,

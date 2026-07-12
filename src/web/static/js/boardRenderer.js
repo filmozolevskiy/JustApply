@@ -249,7 +249,10 @@ export function renderBoard(jobs, filters = {}) {
 
     jobsInLane.forEach((job) => {
       const card = document.createElement('div');
-      card.className = 'kanban-card' + (job.archived ? ' kanban-card--archived' : '');
+      card.className =
+        'kanban-card' +
+        (job.archived ? ' kanban-card--archived' : '') +
+        (job.favorited ? ' kanban-card--favorited' : '');
       card.setAttribute('onclick', `openJobDetailsDrawer(${job.id})`);
       card.setAttribute('draggable', 'true');
       card.addEventListener('dragstart', (e) => {
@@ -281,6 +284,9 @@ export function renderBoard(jobs, filters = {}) {
       const badgesHtml = badgeParts.length
         ? `<div class="kanban-card-badges">${badgeParts.join('')}</div>`
         : '';
+      const favoriteChip = job.favorited
+        ? `<span class="favorite-header-chip" aria-hidden="true"><i class="fa-solid fa-star"></i> Favorite</span>`
+        : '';
 
       card.innerHTML = `
             <div class="kanban-card-header">
@@ -291,6 +297,7 @@ export function renderBoard(jobs, filters = {}) {
                 ` : ''}
               </div>
               <div class="kanban-card-header-actions">
+                ${favoriteChip}
                 <span class="match-pill ${matchClass}">${job.matchScore}%</span>
               </div>
             </div>

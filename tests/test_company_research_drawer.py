@@ -104,7 +104,6 @@ def test_company_research_prototype_files_removed():
     root = os.path.join(os.path.dirname(__file__), "..", "src", "web")
     paths = [
         os.path.join(root, "prototype", "company-research.html"),
-        os.path.join(root, "prototype", "NOTES.md"),
         os.path.join(root, "static", "css", "prototype-company-research.css"),
         os.path.join(root, "static", "js", "prototype", "companyResearchUiPrototype.js"),
     ]

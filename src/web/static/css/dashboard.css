@@ -961,6 +961,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      position: relative;
     }
 
     .kanban-card:hover {
@@ -1079,6 +1080,34 @@
     .kanban-card--archived {
       opacity: 0.6;
     }
+    .kanban-card--favorited {
+      border-color: rgba(245, 158, 11, 0.4);
+      background: linear-gradient(180deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.04) 12%, rgba(20, 26, 48, 0.8) 22%);
+    }
+    .kanban-card--favorited::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 10px 10px 0 0;
+      background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+    }
+    .favorite-header-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.65rem;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
     .archived-badge {
       font-size:0.6rem; background:rgba(100,116,139,0.2); color:#94a3b8;
       border:1px solid rgba(100,116,139,0.3); padding:1px 5px;
@@ -1127,6 +1156,32 @@
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
+    }
+
+    .drawer-favorite-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: rgba(30, 41, 59, 0.7);
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      font-size: 1rem;
+    }
+
+    .drawer-favorite-btn:hover {
+      border-color: rgba(245, 158, 11, 0.55);
+      color: #fbbf24;
+    }
+
+    .drawer-favorite-btn.is-favorited {
+      border-color: rgba(245, 158, 11, 0.65);
+      background: rgba(245, 158, 11, 0.22);
+      color: #fcd34d;
     }
 
     .drawer-header-linkedin {
