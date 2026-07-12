@@ -19,3 +19,12 @@
 - Drawer prev/next follows filtered set via `getBoardFiltersFromDom().favoritesOnly`.
 - Quality: ruff, mypy, pytest (942 passed, cov ≥84%).
 - Closed #167.
+
+## 2026-07-12 — Remove favorite UI prototypes (#168)
+
+- Deleted throwaway `/prototype/favorite-card` and `/prototype/favorites-filter` HTML shells plus prototype CSS/JS assets (routes were never registered; both paths 404).
+- Kept `src/web/prototype/NOTES.md` verdicts (card variant C, filter variant A) marked as shipped to production.
+- Added `tests/test_favorite_prototypes_removed.py` (404 routes, assets gone, no server route strings, NOTES retained).
+- Production Favorites Filter / Favorite Job board chrome unchanged (`test_dashboard_panel_chrome` still green).
+- Quality: ruff, mypy, pytest (947 passed, cov ≥84%).
+- Closed #168.
