@@ -7,6 +7,15 @@ import json
 from ..schemas import ActivityLogEntry, Contact, Job
 
 
+def _nullable_int(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_activity_log(raw) -> list[ActivityLogEntry]:
     try:
         entries = json.loads(raw) if raw else []
@@ -52,6 +61,13 @@ def parse_job_row(row) -> Job:
     job["autoArchiveExempt"] = bool(job.get("autoArchiveExempt", 0))
     job["favorited"] = bool(job.get("favorited", 0))
     job["employmentType"] = job.get("employmentType") or ""
+    job["annualMin"] = _nullable_int(job.get("annualMin"))
+    job["annualMax"] = _nullable_int(job.get("annualMax"))
+    raw_currency = job.get("annualCurrency")
+    if raw_currency is None or raw_currency == "":
+        job["annualCurrency"] = None
+    else:
+        job["annualCurrency"] = str(raw_currency).strip() or None
 
     raw_company_research = job.get("companyResearch")
     if raw_company_research in (None, ""):

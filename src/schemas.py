@@ -57,6 +57,9 @@ class Job(BaseModel):
     seniority: str = ""
     employmentType: str = ""
     salary: str = ""
+    annualMin: int | None = None
+    annualMax: int | None = None
+    annualCurrency: str | None = None
     description: str = ""
     matchScore: int = 0
     matchType: str = ""

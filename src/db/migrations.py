@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-CURRENT_SCHEMA_VERSION = 12
+CURRENT_SCHEMA_VERSION = 13
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -315,6 +315,16 @@ def _migration_012_batch_jobs_search_employment_types(conn: sqlite3.Connection) 
     )
 
 
+def _migration_013_jobs_annual_posted_salary(conn: sqlite3.Connection) -> None:
+    """Nullable Annual Posted Salary band alongside free-text Posted Salary."""
+    for column, ddl in (
+        ("annualMin", "ALTER TABLE jobs ADD COLUMN annualMin INTEGER"),
+        ("annualMax", "ALTER TABLE jobs ADD COLUMN annualMax INTEGER"),
+        ("annualCurrency", "ALTER TABLE jobs ADD COLUMN annualCurrency TEXT"),
+    ):
+        _add_column_if_missing(conn, "jobs", column, ddl)
+
+
 _MIGRATIONS: dict[int, MigrationFn] = {
     1: _migration_001_create_jobs_table,
     2: _migration_002_jobs_extra_columns,
@@ -328,6 +338,7 @@ _MIGRATIONS: dict[int, MigrationFn] = {
     10: _migration_010_jobs_favorited,
     11: _migration_011_jobs_employment_type,
     12: _migration_012_batch_jobs_search_employment_types,
+    13: _migration_013_jobs_annual_posted_salary,
 }
 
 

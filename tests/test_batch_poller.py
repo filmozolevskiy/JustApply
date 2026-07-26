@@ -144,6 +144,72 @@ def test_write_back_employment_type_any_does_not_reject(tmp_db):
     assert job.status == "matched"
     assert job.employmentType == "Contract"
 
+
+def test_write_back_persists_yearly_annual_posted_salary(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, salary="$125k - $145k")
+    evaluation = _evaluation()
+    evaluation["salary"] = "$125,000 - $145,000"
+    evaluation["postedSalary"] = {
+        "period": "yearly",
+        "amountMin": 125000,
+        "amountMax": 145000,
+        "currency": "USD",
+    }
+    outcome = write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["remote"],
+        seniorities="any",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "matched"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.salary == "$125,000 - $145,000"
+    assert job.annualMin == 125000
+    assert job.annualMax == 145000
+    assert job.annualCurrency == "USD"
+
+
+def test_write_back_yearly_point_salary_equal_band(tmp_db):
+    job_id = _seed_scraped_job(tmp_db)
+    evaluation = _evaluation()
+    evaluation["salary"] = "$130,000"
+    evaluation["postedSalary"] = {
+        "period": "yearly",
+        "amountMin": 130000,
+        "currency": "CAD",
+    }
+    write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["remote"],
+        seniorities="any",
+        db_path=str(tmp_db),
+    )
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.annualMin == 130000
+    assert job.annualMax == 130000
+    assert job.annualCurrency == "CAD"
+
+
+def test_write_back_without_posted_salary_facts_leaves_annual_null(tmp_db):
+    job_id = _seed_scraped_job(tmp_db)
+    evaluation = _evaluation()
+    evaluation["salary"] = "$70/hr"
+    write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["remote"],
+        seniorities="any",
+        db_path=str(tmp_db),
+    )
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.salary == "$70/hr"
+    assert job.annualMin is None
+    assert job.annualMax is None
+    assert job.annualCurrency is None
+
+
 def _build_fake_client(result_jsonl: str):
     client = MagicMock()
     batch_job = MagicMock()

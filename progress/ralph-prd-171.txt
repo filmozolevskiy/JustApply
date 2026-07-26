@@ -1,0 +1,8 @@
+# Ralph Loop Progress — PRD #171
+
+## 2026-07-26 — #178 Annual Posted Salary writeback + Matched card
+- Added yearly-only `annualize_posted_salary` and schema fields `annualMin` / `annualMax` / `annualCurrency` (migration 13).
+- Batch Poller writeback stores raw salary plus annual band when evaluation includes yearly `postedSalary` facts.
+- Matched Kanban cards prefer the annual band (with currency); equal min/max collapse to one figure.
+- Tests: annualizer, schema/migration, poller writeback, card display helpers.
+- Quality: ruff, mypy, full pytest (996 passed, cov ≥84%).

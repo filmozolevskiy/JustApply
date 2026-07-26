@@ -65,6 +65,9 @@ def test_legacy_minimal_jobs_schema_upgrades_in_place(tmp_path):
         assert "companyResearch" in cols
         assert "favorited" in cols
         assert "employmentType" in cols
+        assert "annualMin" in cols
+        assert "annualMax" in cols
+        assert "annualCurrency" in cols
         tables = {
             row[0]
             for row in conn2.execute(

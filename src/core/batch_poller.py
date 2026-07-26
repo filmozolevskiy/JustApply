@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from .. import db as database
 from ..db import batch_jobs as batch_jobs_db
+from .annual_posted_salary import annualize_posted_salary
 from .attribute_gating import (
     is_unclassified,
     merge_job_attributes,
@@ -377,6 +378,7 @@ def write_back_job_evaluation(
 
     merged = merge_job_attributes(job_dict, evaluation)
     active_resume = job_dict.get("resumeUsed") or "general_cv.md"
+    annual_band = annualize_posted_salary(evaluation.get("postedSalary"))
     fields = {
         "matchScore": evaluation.get("matchScore", 0),
         "matchType": evaluation.get("matchType", ""),
@@ -387,6 +389,9 @@ def write_back_job_evaluation(
         "description": evaluation.get("summary") or job_dict.get("description") or "",
         "isRecruiter": evaluation.get("isRecruiter", False),
         "salary": evaluation.get("salary") or job_dict.get("salary") or "",
+        "annualMin": annual_band["annualMin"] if annual_band else None,
+        "annualMax": annual_band["annualMax"] if annual_band else None,
+        "annualCurrency": annual_band["annualCurrency"] if annual_band else None,
         "remoteType": merged["remoteType"],
         "seniority": merged["seniority"],
         "employmentType": merged["employmentType"],

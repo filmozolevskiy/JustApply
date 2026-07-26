@@ -550,7 +550,8 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT matchScore, resumeUsed, employmentType FROM jobs WHERE id = ?",
+        "SELECT matchScore, resumeUsed, employmentType, annualMin, annualMax, annualCurrency "
+        "FROM jobs WHERE id = ?",
         (job_id,),
     )
     row = cursor.fetchone()
@@ -560,6 +561,9 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
     old_score = row[0] or 0
     old_resume = row[1] or ""
     old_employment_type = row[2] or ""
+    old_annual_min = row[3]
+    old_annual_max = row[4]
+    old_annual_currency = row[5]
 
     resume_used = fields.get("resumeUsed", old_resume)
     new_score = fields.get("matchScore", old_score)
@@ -567,6 +571,11 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         fields["employmentType"]
         if "employmentType" in fields
         else old_employment_type
+    )
+    annual_min = fields["annualMin"] if "annualMin" in fields else old_annual_min
+    annual_max = fields["annualMax"] if "annualMax" in fields else old_annual_max
+    annual_currency = (
+        fields["annualCurrency"] if "annualCurrency" in fields else old_annual_currency
     )
     cursor.execute("""
         UPDATE jobs SET
@@ -579,6 +588,9 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
             description = ?,
             isRecruiter = ?,
             salary = ?,
+            annualMin = ?,
+            annualMax = ?,
+            annualCurrency = ?,
             remoteType = ?,
             seniority = ?,
             employmentType = ?,
@@ -594,6 +606,9 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         fields.get("description") or "",
         1 if fields.get("isRecruiter") else 0,
         fields.get("salary") or "",
+        annual_min,
+        annual_max,
+        annual_currency,
         fields.get("remoteType") or "",
         fields.get("seniority") or "",
         employment_type or "",

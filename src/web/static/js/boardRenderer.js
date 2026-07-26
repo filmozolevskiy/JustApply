@@ -246,6 +246,34 @@ export function cardReclassifyBadge(jobId, reclassifyJobIds) {
   return '';
 }
 
+export function formatAnnualPostedSalary(job) {
+  if (!job || job.annualMin == null || job.annualMax == null || !job.annualCurrency) {
+    return '';
+  }
+  const min = Number(job.annualMin);
+  const max = Number(job.annualMax);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return '';
+  }
+  const currency = String(job.annualCurrency).trim();
+  if (!currency) {
+    return '';
+  }
+  const fmt = (n) => n.toLocaleString('en-US');
+  if (min === max) {
+    return `${currency} ${fmt(min)}`;
+  }
+  return `${currency} ${fmt(min)}–${fmt(max)}`;
+}
+
+export function cardSalaryDisplay(job) {
+  const annual = formatAnnualPostedSalary(job);
+  if (annual) {
+    return annual;
+  }
+  return job?.salary ? String(job.salary) : '';
+}
+
 export function getKanbanCardMovementButtons(job) {
   if (job.archived) {
     return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
@@ -311,6 +339,7 @@ export function renderBoard(jobs, filters = {}) {
       const favoriteChip = job.favorited
         ? `<span class="favorite-header-chip" aria-hidden="true"><i class="fa-solid fa-star"></i> Favorite</span>`
         : '';
+      const salaryDisplay = cardSalaryDisplay(job);
 
       card.innerHTML = `
             <div class="kanban-card-header">
@@ -334,7 +363,7 @@ export function renderBoard(jobs, filters = {}) {
                 <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
                 <span class="kanban-card-meta-remote">${job.remoteType}</span>
               </div>
-              ${job.salary ? `<div class="kanban-card-meta-salary"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</div>` : ''}
+              ${salaryDisplay ? `<div class="kanban-card-meta-salary"><i class="fa-solid fa-dollar-sign"></i> ${salaryDisplay}</div>` : ''}
             </div>
             ${job.comment ? `
               <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
