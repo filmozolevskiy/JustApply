@@ -634,6 +634,135 @@ def test_board_renderer_favorites_only_surfaces_favorited_archived_under_active(
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
+
+def test_board_renderer_employment_type_none_checked_passes_all_including_unknown():
+    """Empty Employment Type refine leaves all types and unknowns visible."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          { id: 1, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Full-time' },
+          { id: 2, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Contract' },
+          { id: 3, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: '' },
+          { id: 4, remoteType: 'remote', size: '10-50', isRecruiter: false },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          employmentTypes: [],
+        });
+        if (filtered.map((j) => j.id).join(',') !== '1,2,3,4') process.exit(1);
+
+        const omitted = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+        });
+        if (omitted.map((j) => j.id).join(',') !== '1,2,3,4') process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_employment_type_refine_keeps_selected_hides_unknown():
+    """Active Employment Type refine keeps matching types and hides unknowns."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          { id: 1, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Full-time' },
+          { id: 2, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Contract' },
+          { id: 3, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Part-time' },
+          { id: 4, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: '' },
+          { id: 5, remoteType: 'remote', size: '10-50', isRecruiter: false },
+        ];
+
+        const contractOnly = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          employmentTypes: ['Contract'],
+        });
+        if (contractOnly.length !== 1 || contractOnly[0].id !== 2) process.exit(1);
+
+        const multi = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          employmentTypes: ['Full-time', 'Contract'],
+        });
+        if (multi.map((j) => j.id).join(',') !== '1,2') process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_employment_type_ands_with_search_remote_favorites():
+    """Employment Type refine ANDs with search, remote, and favorites filters."""
+    result = _run_node(
+        """
+        import { filterJobs, getBoardJobOrder } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1, status: 'matched', title: 'QA Lead', company: 'Acme',
+            location: 'Remote', description: 'Testing', remoteType: 'remote',
+            size: '10-50', isRecruiter: false, favorited: true,
+            employmentType: 'Contract', matchScore: 80,
+          },
+          {
+            id: 2, status: 'matched', title: 'QA Lead', company: 'Beta',
+            location: 'Hybrid', description: 'Testing', remoteType: 'hybrid',
+            size: '10-50', isRecruiter: false, favorited: true,
+            employmentType: 'Contract', matchScore: 90,
+          },
+          {
+            id: 3, status: 'matched', title: 'QA Lead', company: 'Gamma',
+            location: 'Remote', description: 'Testing', remoteType: 'remote',
+            size: '10-50', isRecruiter: false, favorited: true,
+            employmentType: 'Full-time', matchScore: 95,
+          },
+          {
+            id: 4, status: 'matched', title: 'QA Lead', company: 'Delta',
+            location: 'Remote', description: 'Testing', remoteType: 'remote',
+            size: '10-50', isRecruiter: false, favorited: false,
+            employmentType: 'Contract', matchScore: 70,
+          },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'remote',
+          size: 'all',
+          recruiter: 'all',
+          search: 'qa',
+          favoritesOnly: true,
+          employmentTypes: ['Contract'],
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        const ordered = getBoardJobOrder(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          sortBy: 'match_desc',
+          employmentTypes: ['Contract'],
+        });
+        if (ordered.map((j) => j.id).join(',') !== '2,1,4') process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_board_renderer_job_order_follows_lanes_and_sort():
     """getBoardJobOrder returns jobs lane-by-lane using the active sort."""
     result = _run_node(

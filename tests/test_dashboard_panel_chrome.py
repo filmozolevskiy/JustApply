@@ -76,6 +76,36 @@ def test_board_controls_refine_drawer_layout():
     assert 'id="board-controls-reset"' in refine_block
 
 
+def test_board_controls_employment_type_refine_checkboxes():
+    """Refine board exposes Employment Type multi-select with five allowed values."""
+    content = _read_html()
+    dashboard_js = load_dashboard_js()
+    bc_start = content.index('id="board-controls-panel"')
+    bc_end = content.index('id="board-search-empty-hint"', bc_start)
+    refine_block = content[content.index('class="board-controls-refine"', bc_start):bc_end]
+    assert "Employment Type" in refine_block
+    assert 'name="board-filter-employment"' in refine_block
+    for value in ("Full-time", "Contract", "Part-time", "Temporary", "Volunteer"):
+        assert f'value="{value}"' in refine_block
+    assert refine_block.count('name="board-filter-employment"') == 5
+    assert "boardFilterEmploymentTypes" in dashboard_js
+    assert "employmentTypes" in dashboard_js
+    reset_fn = dashboard_js[
+        dashboard_js.find("function resetBoardControls") : dashboard_js.find(
+            "function toggleFavoritesFilter"
+        )
+    ]
+    assert "board-filter-employment" in reset_fn
+    assert "boardFilterEmploymentTypes" in reset_fn
+    hint_fn = dashboard_js[
+        dashboard_js.find("function updateBoardSearchEmptyHint") : dashboard_js.find(
+            "function persistBoardSearch"
+        )
+    ]
+    assert "hasEmploymentRefine" in hint_fn
+    assert "employmentTypes" in hint_fn
+
+
 def test_board_controls_has_search_reset_and_empty_hint():
     """Board Controls exposes search, reset-all, clear, and zero-results hint."""
     content = _read_html()

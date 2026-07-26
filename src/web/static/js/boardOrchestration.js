@@ -4,8 +4,8 @@ import {
   findJob, getJobs, integrateIncomingJobs, removeJob, setJobs, updateJob,
 } from './jobStore.js';
 import {
-  filterJobs, getBoardFiltersFromDom, parseBoardSearchTerms, renderBoard,
-  resolveJobsArchivedFetchParam,
+  filterJobs, getBoardFiltersFromDom, getSelectedEmploymentTypesFromDom,
+  parseBoardSearchTerms, renderBoard, resolveJobsArchivedFetchParam,
 } from './boardRenderer.js';
 import {
   buildApifySpendBodyHtml,
@@ -54,6 +54,7 @@ export function createBoardOrchestrator({
     sortBy: 'match_desc',
     archived: 'active',
     favorites: false,
+    employmentTypes: [],
   };
 
   function startPollingEnrichingJobs() {
@@ -108,8 +109,14 @@ export function createBoardOrchestrator({
     if (!hint) return;
     const hasSearch = parseBoardSearchTerms(filters.search || '').length > 0;
     const favoritesOnly = Boolean(filters.favoritesOnly);
+    const employmentTypes = Array.isArray(filters.employmentTypes)
+      ? filters.employmentTypes
+      : [];
+    const hasEmploymentRefine = employmentTypes.length > 0;
     const filteredCount = filterJobs(jobs, filters).length;
-    hint.hidden = !((hasSearch || favoritesOnly) && filteredCount === 0);
+    hint.hidden = !(
+      (hasSearch || favoritesOnly || hasEmploymentRefine) && filteredCount === 0
+    );
   }
 
   function persistBoardSearch() {
@@ -178,6 +185,9 @@ export function createBoardOrchestrator({
     if (sortEl) sortEl.value = BOARD_CONTROLS_DEFAULTS.sortBy;
     if (archivedEl) archivedEl.value = BOARD_CONTROLS_DEFAULTS.archived;
     setFavoritesFilterUi(BOARD_CONTROLS_DEFAULTS.favorites);
+    document.querySelectorAll('input[name="board-filter-employment"]').forEach((cb) => {
+      cb.checked = false;
+    });
 
     localStorage.setItem('boardFilterSearch', BOARD_CONTROLS_DEFAULTS.search);
     localStorage.setItem('boardFilterRemote', BOARD_CONTROLS_DEFAULTS.remote);
@@ -186,6 +196,10 @@ export function createBoardOrchestrator({
     localStorage.setItem('boardSortBy', BOARD_CONTROLS_DEFAULTS.sortBy);
     localStorage.setItem('boardFilterArchived', BOARD_CONTROLS_DEFAULTS.archived);
     localStorage.setItem('boardFilterFavorites', BOARD_CONTROLS_DEFAULTS.favorites ? 'true' : 'false');
+    localStorage.setItem(
+      'boardFilterEmploymentTypes',
+      JSON.stringify(BOARD_CONTROLS_DEFAULTS.employmentTypes),
+    );
 
     updateBoardSearchClearVisibility();
 
@@ -271,11 +285,13 @@ export function createBoardOrchestrator({
     const sizeFilter = document.getElementById('board-filter-size')?.value || 'all';
     const recruiterFilter = document.getElementById('board-filter-recruiter')?.value || 'all';
     const sortBy = document.getElementById('board-sort-by')?.value || 'match_desc';
+    const employmentTypes = getSelectedEmploymentTypesFromDom();
 
     localStorage.setItem('boardFilterRemote', remoteFilter);
     localStorage.setItem('boardFilterSize', sizeFilter);
     localStorage.setItem('boardFilterRecruiter', recruiterFilter);
     localStorage.setItem('boardSortBy', sortBy);
+    localStorage.setItem('boardFilterEmploymentTypes', JSON.stringify(employmentTypes));
 
     renderActiveVariant();
     updateDrawerNav();
@@ -285,6 +301,24 @@ export function createBoardOrchestrator({
     return document.getElementById('board-filter-archived')?.value || localStorage.getItem('boardFilterArchived') || 'active';
   }
 
+  function parseStoredEmploymentTypes() {
+    const raw = localStorage.getItem('boardFilterEmploymentTypes');
+    if (!raw) return [...BOARD_CONTROLS_DEFAULTS.employmentTypes];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
+    } catch {
+      return [...BOARD_CONTROLS_DEFAULTS.employmentTypes];
+    }
+  }
+
+  function setEmploymentTypeFilterUi(selected) {
+    const selectedSet = new Set(selected);
+    document.querySelectorAll('input[name="board-filter-employment"]').forEach((cb) => {
+      cb.checked = selectedSet.has(cb.value);
+    });
+  }
+
   function initBoardControls() {
     const remoteFilter = localStorage.getItem('boardFilterRemote') || BOARD_CONTROLS_DEFAULTS.remote;
     const sizeFilter = localStorage.getItem('boardFilterSize') || BOARD_CONTROLS_DEFAULTS.size;
@@ -292,6 +326,7 @@ export function createBoardOrchestrator({
     const sortBy = localStorage.getItem('boardSortBy') || BOARD_CONTROLS_DEFAULTS.sortBy;
     const archivedFilter = localStorage.getItem('boardFilterArchived') || BOARD_CONTROLS_DEFAULTS.archived;
     const favoritesFilter = localStorage.getItem('boardFilterFavorites') === 'true';
+    const employmentTypes = parseStoredEmploymentTypes();
 
     const remoteEl = document.getElementById('board-filter-remote');
     const sizeEl = document.getElementById('board-filter-size');
@@ -309,6 +344,7 @@ export function createBoardOrchestrator({
     if (archivedEl) archivedEl.value = archivedFilter;
     if (searchEl) searchEl.value = searchFilter;
     setFavoritesFilterUi(favoritesFilter);
+    setEmploymentTypeFilterUi(employmentTypes);
     updateBoardSearchClearVisibility();
   }
 

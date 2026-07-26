@@ -140,5 +140,10 @@ def test_drawer_job_info_shows_employment_type_when_known():
     assert "Employment Type" in drawer
     assert "employmentType" in drawer
     assert "${job.employmentType ?" in drawer or "job.employmentType ?" in drawer
-    assert "Employment Type" not in board
-    assert "employmentType" not in board
+    # Board refine may read employmentType; Kanban card HTML must not badge it.
+    card_fn_start = board.find("function createKanbanCard")
+    if card_fn_start < 0:
+        card_fn_start = board.find("kanban-card")
+    card_slice = board[card_fn_start : card_fn_start + 2500] if card_fn_start >= 0 else board
+    assert "Employment Type" not in card_slice
+    assert "employmentType" not in card_slice

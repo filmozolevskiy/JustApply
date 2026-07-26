@@ -89,6 +89,9 @@ export function filterJobs(jobs, filters) {
   const searchQuery = filters.search ?? '';
   const archivedVisibility = filters.archivedVisibility || 'active';
   const favoritesOnly = Boolean(filters.favoritesOnly);
+  const employmentTypes = Array.isArray(filters.employmentTypes)
+    ? filters.employmentTypes.filter(Boolean)
+    : [];
   const hasSearch = parseBoardSearchTerms(searchQuery).length > 0;
 
   return jobs.filter((job) => {
@@ -142,6 +145,13 @@ export function filterJobs(jobs, filters) {
       }
     }
 
+    if (employmentTypes.length > 0) {
+      const jobType = (job.employmentType || '').trim();
+      if (!jobType || !employmentTypes.includes(jobType)) {
+        return false;
+      }
+    }
+
     return true;
   });
 }
@@ -176,6 +186,12 @@ export function sortJobs(jobs, sortBy) {
   return sorted;
 }
 
+export function getSelectedEmploymentTypesFromDom() {
+  return Array.from(
+    document.querySelectorAll('input[name="board-filter-employment"]:checked'),
+  ).map((el) => el.value);
+}
+
 export function getBoardFiltersFromDom() {
   const favoritesBtn = document.getElementById('board-favorites-filter');
   return {
@@ -191,6 +207,7 @@ export function getBoardFiltersFromDom() {
     favoritesOnly: favoritesBtn
       ? favoritesBtn.getAttribute('aria-pressed') === 'true'
       : localStorage.getItem('boardFilterFavorites') === 'true',
+    employmentTypes: getSelectedEmploymentTypesFromDom(),
   };
 }
 

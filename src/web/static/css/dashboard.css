@@ -713,6 +713,24 @@
       font-size: 0.78rem;
     }
 
+    .board-controls-field--employment {
+      grid-column: 1 / -1;
+    }
+
+    .board-controls-field-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .board-employment-type-group {
+      gap: 8px 12px;
+      padding: 2px 0 0;
+    }
+
+    .board-employment-type-group .checkbox-item {
+      font-size: 0.78rem;
+    }
+
     .board-search-empty-hint {
       margin: 0 0 12px 0;
       padding: 8px 12px;

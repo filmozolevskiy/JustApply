@@ -10,3 +10,12 @@
 - Tests: `tests/test_employment_type.py`, scraper normalize/error-skip, migrations column check.
 - Quality: ruff, mypy, pytest --cov (960 passed, ≥84% coverage).
 
+## 2026-07-26 — #173 Board Controls multi-select Employment Type refine
+
+- Refine board: five Employment Type checkboxes (Full-time, Contract, Part-time, Temporary, Volunteer).
+- `filterJobs` ANDs selected types; none checked = no refine (unknowns visible); any checked hides unknowns/non-matches.
+- Persists in `boardFilterEmploymentTypes` localStorage; Reset filters clears to none; empty hint when refine yields zero cards.
+- Drawer prev/next follows filtered set via existing `getBoardJobOrder` + `getBoardFiltersFromDom`.
+- Tests: `filterJobs` / `getBoardJobOrder` seams + panel chrome checkboxes/reset/hint wiring.
+- Quality: ruff, mypy, pytest --cov (964 passed, ≥84% coverage).
+

@@ -250,6 +250,16 @@
                     <option value="all">All</option>
                   </select>
                 </div>
+                <div class="board-controls-field board-controls-field--employment">
+                  <span class="board-controls-field-label">Employment Type</span>
+                  <div class="checkbox-group board-employment-type-group" role="group" aria-label="Employment Type">
+                    <label class="checkbox-item"><input type="checkbox" name="board-filter-employment" value="Full-time" onchange="updateBoardFiltersAndSort()"> Full-time</label>
+                    <label class="checkbox-item"><input type="checkbox" name="board-filter-employment" value="Contract" onchange="updateBoardFiltersAndSort()"> Contract</label>
+                    <label class="checkbox-item"><input type="checkbox" name="board-filter-employment" value="Part-time" onchange="updateBoardFiltersAndSort()"> Part-time</label>
+                    <label class="checkbox-item"><input type="checkbox" name="board-filter-employment" value="Temporary" onchange="updateBoardFiltersAndSort()"> Temporary</label>
+                    <label class="checkbox-item"><input type="checkbox" name="board-filter-employment" value="Volunteer" onchange="updateBoardFiltersAndSort()"> Volunteer</label>
+                  </div>
+                </div>
                 <div class="board-controls-field board-controls-field--reset">
                   <label for="board-controls-reset">Reset filters</label>
                   <button type="button" id="board-controls-reset" class="board-controls-reset btn btn-secondary" onclick="resetBoardControls()" title="Reset all board filters">
