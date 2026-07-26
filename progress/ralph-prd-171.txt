@@ -6,3 +6,10 @@
 - Matched Kanban cards prefer the annual band (with currency); equal min/max collapse to one figure.
 - Tests: annualizer, schema/migration, poller writeback, card display helpers.
 - Quality: ruff, mypy, full pytest (996 passed, cov ≥84%).
+
+## 2026-07-26 — #179 Structured matcher Posted Salary + full annualizer
+- Extended Resume Matcher JSON contract with structured `postedSalary` facts (period, amounts, currency, hoursPerWeek, multi-location `bands`) while keeping raw `salary` string.
+- Full annualizer: hourly (2080 or hoursPerWeek×52), monthly ×12, daily ×260; location pick by job.location else first band.
+- Batch Poller writeback passes job location into annualizer so hourly and multi-location evaluations persist correct annual bands.
+- Tests: period conversion, hours override, location pick/fallback, matcher mock + prompt contract, poller hourly/multi-location writeback.
+- Quality: ruff, mypy, full pytest (1006 passed, cov 85.67%).

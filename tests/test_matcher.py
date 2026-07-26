@@ -134,6 +134,10 @@ def test_build_prompt_formatting():
     assert "Full-time" in prompt
     assert "summary" in prompt
     assert "Allowed Remote Preferences" not in prompt
+    assert "postedSalary" in prompt
+    assert "hoursPerWeek" in prompt
+    assert "amountMin" in prompt
+    assert '"salary"' in prompt
 
 def test_recruiter_company_detection_local():
     from src.core.matcher import check_recruiter_by_name
@@ -165,6 +169,39 @@ async def test_evaluate_job_applies_recruiter_override():
             assert result["matchType"] == "no-match"
             assert "Posted by a recruiting agency/staffing firm" in result["gaps"]
             assert result["salary"] == "$110k"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_job_returns_structured_posted_salary_facts():
+    from unittest.mock import AsyncMock, patch
+
+    from src.core.matcher import evaluate_job
+
+    job = {
+        "title": "QA Engineer",
+        "company": "Acme",
+        "description": "Pay $70-80/hr.",
+        "location": "Toronto, ON",
+    }
+    mock_json = (
+        '{"matchScore": 88, "matchType": "match", "strengths": ["QA"], "gaps": [], '
+        '"shouldProceed": true, "remoteType": "remote", "seniority": "mid", '
+        '"employmentType": "Full-time", "summary": "QA role", "isRecruiter": false, '
+        '"salary": "$70-80/hr", '
+        '"postedSalary": {"period": "hourly", "amountMin": 70, "amountMax": 80, '
+        '"currency": "USD"}}'
+    )
+    with patch("src.core.matcher.gemini_generate_text", new=AsyncMock(return_value=mock_json)):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            result = await evaluate_job(job, "resume content")
+
+    assert result["salary"] == "$70-80/hr"
+    assert result["postedSalary"] == {
+        "period": "hourly",
+        "amountMin": 70,
+        "amountMax": 80,
+        "currency": "USD",
+    }
 
 # --- evaluate_jobs_batch ---
 

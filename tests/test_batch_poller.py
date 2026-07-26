@@ -210,6 +210,70 @@ def test_write_back_without_posted_salary_facts_leaves_annual_null(tmp_db):
     assert job.annualCurrency is None
 
 
+def test_write_back_hourly_posted_salary_annualizes_with_2080_default(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, location="Toronto, ON", salary="$70-80/hr")
+    evaluation = _evaluation()
+    evaluation["salary"] = "$70-80/hr"
+    evaluation["postedSalary"] = {
+        "period": "hourly",
+        "amountMin": 70,
+        "amountMax": 80,
+        "currency": "USD",
+    }
+    outcome = write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["remote"],
+        seniorities="any",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "matched"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.salary == "$70-80/hr"
+    assert job.annualMin == 70 * 2080
+    assert job.annualMax == 80 * 2080
+    assert job.annualCurrency == "USD"
+
+
+def test_write_back_multi_location_picks_job_location_band(tmp_db):
+    job_id = _seed_scraped_job(
+        tmp_db,
+        location="New York, United States",
+        salary="Toronto $100k-$120k CAD; New York $130k-$150k USD",
+    )
+    evaluation = _evaluation()
+    evaluation["salary"] = "Toronto $100k-$120k CAD; New York $130k-$150k USD"
+    evaluation["postedSalary"] = {
+        "bands": [
+            {
+                "location": "Toronto, ON",
+                "period": "yearly",
+                "amountMin": 100000,
+                "amountMax": 120000,
+                "currency": "CAD",
+            },
+            {
+                "location": "New York, NY",
+                "period": "yearly",
+                "amountMin": 130000,
+                "amountMax": 150000,
+                "currency": "USD",
+            },
+        ]
+    }
+    write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["remote"],
+        seniorities="any",
+        db_path=str(tmp_db),
+    )
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.annualMin == 130000
+    assert job.annualMax == 150000
+    assert job.annualCurrency == "USD"
+
+
 def _build_fake_client(result_jsonl: str):
     client = MagicMock()
     batch_job = MagicMock()

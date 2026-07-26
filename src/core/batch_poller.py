@@ -378,7 +378,10 @@ def write_back_job_evaluation(
 
     merged = merge_job_attributes(job_dict, evaluation)
     active_resume = job_dict.get("resumeUsed") or "general_cv.md"
-    annual_band = annualize_posted_salary(evaluation.get("postedSalary"))
+    annual_band = annualize_posted_salary(
+        evaluation.get("postedSalary"),
+        job_location=job_dict.get("location") or "",
+    )
     fields = {
         "matchScore": evaluation.get("matchScore", 0),
         "matchType": evaluation.get("matchType", ""),
