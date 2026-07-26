@@ -6,6 +6,7 @@ resolution (job listing location match, else first band).
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _YEARLY_PERIODS = frozenset({"yearly", "year", "annual", "annually"})
@@ -142,3 +143,29 @@ def annualize_posted_salary(
     if not isinstance(band, dict):
         return None
     return _band_to_annual(band)
+
+
+def parse_salary_min(raw: str | None) -> int | None:
+    """Parse Job Search Settings Salary Min free text to an annual integer.
+
+    Empty or unparseable input returns None (salary gate disabled). Accepts
+    forms like ``$120k``, ``120000``, and ``120,000``. No FX — bare number only.
+    """
+    if raw is None:
+        return None
+    text = str(raw).strip().lower().replace(",", "").replace(" ", "").lstrip("$")
+    if not text:
+        return None
+    multiplier = 1
+    if text.endswith("k"):
+        multiplier = 1000
+        text = text[:-1]
+    if not text or not re.fullmatch(r"\d+(\.\d+)?", text):
+        return None
+    try:
+        amount = int(round(float(text) * multiplier))
+    except (TypeError, ValueError):
+        return None
+    if amount < 0:
+        return None
+    return amount

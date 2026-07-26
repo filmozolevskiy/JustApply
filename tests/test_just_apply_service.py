@@ -78,6 +78,28 @@ def test_parse_remote_types_accepts_comma_string():
 
     assert parse_remote_types("remote, hybrid") == ["remote", "hybrid"]
 
+
+@pytest.mark.asyncio
+async def test_search_jobs_parses_salary_min_for_pipeline():
+    from src.service.just_apply import search_jobs
+
+    with patch("src.service.just_apply.scrape_limiter.acquire"), \
+         patch("src.service.just_apply.run_search_pipeline", new=AsyncMock(return_value=[])) as mock_pipeline:
+        await search_jobs(query="QA", mock_eval=False, salary="$120k")
+
+    assert mock_pipeline.await_args.kwargs["salary_min"] == 120000
+
+
+@pytest.mark.asyncio
+async def test_search_jobs_empty_salary_disables_gate():
+    from src.service.just_apply import search_jobs
+
+    with patch("src.service.just_apply.scrape_limiter.acquire"), \
+         patch("src.service.just_apply.run_search_pipeline", new=AsyncMock(return_value=[])) as mock_pipeline:
+        await search_jobs(query="QA", mock_eval=False, salary="")
+
+    assert mock_pipeline.await_args.kwargs["salary_min"] is None
+
 @pytest.mark.asyncio
 async def test_complete_enrichment_runs_pipeline_for_enriching_job():
     from src.schemas import Job

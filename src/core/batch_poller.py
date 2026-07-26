@@ -95,11 +95,20 @@ def _parse_search_remote_types(raw) -> list[str] | None:
     return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
-def _search_preferences(batch_row: dict) -> tuple[list[str] | None, str, str]:
+def _search_preferences(batch_row: dict) -> tuple[list[str] | None, str, str, int | None]:
     remote_types = _parse_search_remote_types(batch_row.get("searchRemoteTypes"))
     seniorities = batch_row.get("searchSeniorities") or "any"
     employment_types = batch_row.get("searchEmploymentTypes") or "any"
-    return remote_types, seniorities, employment_types
+    raw_salary_min = batch_row.get("searchSalaryMin")
+    salary_min: int | None
+    if raw_salary_min is None or raw_salary_min == "":
+        salary_min = None
+    else:
+        try:
+            salary_min = int(raw_salary_min)
+        except (TypeError, ValueError):
+            salary_min = None
+    return remote_types, seniorities, employment_types, salary_min
 
 
 def _extract_response_text(line: dict) -> str | None:
@@ -289,6 +298,7 @@ def apply_unclassified_fallback(
     allowed_remote_types: list[str] | None,
     seniorities: str,
     employment_types: str = "any",
+    salary_min: int | None = None,
     db_path=None,
 ) -> str:
     """Fall back to scraper attributes after poison retries are exhausted."""
@@ -327,6 +337,9 @@ def apply_unclassified_fallback(
         seniorities,
         employment_type=employment_type,
         employment_types=employment_types,
+        annual_max=job_dict.get("annualMax"),
+        annual_min=job_dict.get("annualMin"),
+        salary_min=salary_min,
     ):
         database.update_job_status(job_id, "matched", db_path=db_path)
         return "matched"
@@ -341,6 +354,7 @@ def handle_poison_job_failure(
     allowed_remote_types: list[str] | None,
     seniorities: str,
     employment_types: str = "any",
+    salary_min: int | None = None,
     db_path=None,
 ) -> str:
     """Increment batchAttempts; Unclassified fallback after POISON_MAX_ATTEMPTS."""
@@ -353,6 +367,7 @@ def handle_poison_job_failure(
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
         employment_types=employment_types,
+        salary_min=salary_min,
         db_path=db_path,
     )
 
@@ -364,6 +379,7 @@ def write_back_job_evaluation(
     allowed_remote_types: list[str] | None,
     seniorities: str,
     employment_types: str = "any",
+    salary_min: int | None = None,
     db_path=None,
 ) -> str:
     """Persist evaluation and move lane. Returns 'matched', 'rejected', or 'skipped'."""
@@ -409,6 +425,9 @@ def write_back_job_evaluation(
         seniorities,
         employment_type=merged["employmentType"],
         employment_types=employment_types,
+        annual_max=fields["annualMax"],
+        annual_min=fields["annualMin"],
+        salary_min=salary_min,
     ):
         database.update_job_status(job_id, "matched", db_path=db_path)
         return "matched"
@@ -426,6 +445,7 @@ async def collect_batch_results(
     allowed_remote_types: list[str] | None = None,
     seniorities: str | None = None,
     employment_types: str | None = None,
+    salary_min: int | None = None,
 ) -> CollectResult:
     """Poll one batch job, write back results when succeeded."""
 
@@ -445,12 +465,15 @@ async def collect_batch_results(
         await log("GEMINI_API_KEY not set; skipping batch poll.", "warning")
         return CollectResult(state=batch_row.get("state", ""))
 
-    remote_types, batch_seniorities, batch_employment_types = _search_preferences(batch_row)
+    remote_types, batch_seniorities, batch_employment_types, batch_salary_min = (
+        _search_preferences(batch_row)
+    )
     gate_remote = allowed_remote_types if allowed_remote_types is not None else remote_types
     gate_seniorities = seniorities if seniorities is not None else batch_seniorities
     gate_employment_types = (
         employment_types if employment_types is not None else batch_employment_types
     )
+    gate_salary_min = salary_min if salary_min is not None else batch_salary_min
 
     batch_job = await asyncio.to_thread(gemini_client.batches.get, name=batch_name)
     state = _batch_state_name(batch_job)
@@ -501,6 +524,7 @@ async def collect_batch_results(
                     allowed_remote_types=gate_remote,
                     seniorities=gate_seniorities,
                     employment_types=gate_employment_types,
+                    salary_min=gate_salary_min,
                     db_path=db_path,
                 )
                 if outcome == "retry":
@@ -523,6 +547,7 @@ async def collect_batch_results(
                     allowed_remote_types=gate_remote,
                     seniorities=gate_seniorities,
                     employment_types=gate_employment_types,
+                    salary_min=gate_salary_min,
                     db_path=db_path,
                 )
                 if outcome == "retry":
@@ -544,6 +569,7 @@ async def collect_batch_results(
                 allowed_remote_types=gate_remote,
                 seniorities=gate_seniorities,
                 employment_types=gate_employment_types,
+                salary_min=gate_salary_min,
                 db_path=db_path,
             )
             if outcome == "matched":
@@ -567,6 +593,7 @@ async def collect_batch_results(
                 allowed_remote_types=gate_remote,
                 seniorities=gate_seniorities,
                 employment_types=gate_employment_types,
+                salary_min=gate_salary_min,
                 db_path=db_path,
             )
             if outcome == "retry":
@@ -616,6 +643,7 @@ async def collect_batch_results(
                 allowed_remote_types=gate_remote,
                 seniorities=gate_seniorities,
                 employment_types=gate_employment_types,
+                salary_min=gate_salary_min,
                 db_path=db_path,
             )
             if outcome == "retry":

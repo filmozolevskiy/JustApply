@@ -952,6 +952,7 @@ async def run_scraping_task(task_id: str):
             seniorities=params.get("seniority", "any"),
             company_sizes=params.get("company_size", "any"),
             employment_types=params.get("employment_type", "any"),
+            salary=params.get("salary", ""),
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
             log_func=log_callback,

@@ -142,6 +142,26 @@ async def test_allowed_remote_types_any_still_saves_and_submits():
 
 
 @pytest.mark.asyncio
+async def test_salary_min_forwarded_to_batch_submit_not_scrape():
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job()]) as mock_scrape, \
+         patch("src.pipelines.load_resume", return_value="# Resume"), \
+         patch("src.pipelines.submit_batch_evaluation", new=AsyncMock(return_value=[{}])) as mock_submit, \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job", return_value=1):
+
+        await run_search_pipeline(
+            "QA",
+            mock_eval=False,
+            salary_min=120000,
+        )
+
+    assert "salary" not in mock_scrape.await_args.kwargs
+    assert "salary_min" not in mock_scrape.await_args.kwargs
+    assert mock_submit.await_args.kwargs["salary_min"] == 120000
+
+
+@pytest.mark.asyncio
 async def test_mock_scraper_forwarded_to_scraper_as_force_mock():
     with patch("src.pipelines.scrape_linkedin_jobs", return_value=[]) as mock_scrape, \
          patch("src.pipelines.database.init_db"):

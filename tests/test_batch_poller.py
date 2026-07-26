@@ -129,20 +129,70 @@ def test_write_back_employment_type_mismatch_rejected(tmp_db):
     assert job.employmentType == "Contract"
 
 
-def test_write_back_employment_type_any_does_not_reject(tmp_db):
-    job_id = _seed_scraped_job(tmp_db, employmentType="Contract")
+def test_write_back_salary_min_rejects_when_annual_max_below(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, salary="$100k - $110k")
+    evaluation = _evaluation()
+    evaluation["salary"] = "$100,000 - $110,000"
+    evaluation["postedSalary"] = {
+        "period": "yearly",
+        "amountMin": 100000,
+        "amountMax": 110000,
+        "currency": "USD",
+    }
     outcome = write_back_job_evaluation(
         job_id,
-        _evaluation(employment_type="Contract"),
+        evaluation,
         allowed_remote_types=["any"],
         seniorities="any",
-        employment_types="any",
+        salary_min=120000,
+        db_path=str(tmp_db),
+    )
+    assert outcome == "rejected"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "rejected"
+    assert job.annualMax == 110000
+
+
+def test_write_back_salary_min_passes_when_annual_max_reaches_min(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, salary="$100k - $130k")
+    evaluation = _evaluation()
+    evaluation["salary"] = "$100,000 - $130,000"
+    evaluation["postedSalary"] = {
+        "period": "yearly",
+        "amountMin": 100000,
+        "amountMax": 130000,
+        "currency": "USD",
+    }
+    outcome = write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["any"],
+        seniorities="any",
+        salary_min=120000,
         db_path=str(tmp_db),
     )
     assert outcome == "matched"
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.status == "matched"
-    assert job.employmentType == "Contract"
+    assert job.annualMax == 130000
+
+
+def test_write_back_salary_min_unknown_pay_still_matches(tmp_db):
+    job_id = _seed_scraped_job(tmp_db)
+    evaluation = _evaluation()
+    evaluation["salary"] = ""
+    outcome = write_back_job_evaluation(
+        job_id,
+        evaluation,
+        allowed_remote_types=["any"],
+        seniorities="any",
+        salary_min=120000,
+        db_path=str(tmp_db),
+    )
+    assert outcome == "matched"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "matched"
+    assert job.annualMax is None
 
 
 def test_write_back_persists_yearly_annual_posted_salary(tmp_db):
@@ -284,20 +334,28 @@ def _build_fake_client(result_jsonl: str):
     return client
 
 @pytest.mark.asyncio
-async def test_collect_batch_results_rejects_employment_type_from_batch_prefs(tmp_db):
-    job_id = _seed_scraped_job(tmp_db, employmentType="Full-time")
+async def test_collect_batch_results_rejects_salary_min_from_batch_prefs(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, salary="$100k")
     batch_row = batch_jobs.create_batch_job(
-        batch_name="batches/test-emp-reject",
+        batch_name="batches/test-salary-reject",
         display_name="test",
         state="JOB_STATE_RUNNING",
         kind="search",
         job_ids=[job_id],
         search_remote_types=["any"],
         search_seniorities="any",
-        search_employment_types="Full-time",
+        search_employment_types="any",
+        search_salary_min=120000,
         db_path=str(tmp_db),
     )
-    evaluation = _evaluation(employment_type="Contract")
+    evaluation = _evaluation()
+    evaluation["salary"] = "$100,000"
+    evaluation["postedSalary"] = {
+        "period": "yearly",
+        "amountMin": 100000,
+        "amountMax": 100000,
+        "currency": "USD",
+    }
     result_line = {
         "key": str(job_id),
         "response": {
@@ -318,7 +376,7 @@ async def test_collect_batch_results_rejects_employment_type_from_batch_prefs(tm
     assert result.matched == 0
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.status == "rejected"
-    assert job.employmentType == "Contract"
+    assert job.annualMax == 100000
 
 
 @pytest.mark.asyncio

@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-CURRENT_SCHEMA_VERSION = 13
+CURRENT_SCHEMA_VERSION = 14
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -325,6 +325,16 @@ def _migration_013_jobs_annual_posted_salary(conn: sqlite3.Connection) -> None:
         _add_column_if_missing(conn, "jobs", column, ddl)
 
 
+def _migration_014_batch_jobs_search_salary_min(conn: sqlite3.Connection) -> None:
+    """Parsed Salary Min (annual integer) for attribute gating at writeback."""
+    _add_column_if_missing(
+        conn,
+        "batch_jobs",
+        "searchSalaryMin",
+        "ALTER TABLE batch_jobs ADD COLUMN searchSalaryMin INTEGER",
+    )
+
+
 _MIGRATIONS: dict[int, MigrationFn] = {
     1: _migration_001_create_jobs_table,
     2: _migration_002_jobs_extra_columns,
@@ -339,6 +349,7 @@ _MIGRATIONS: dict[int, MigrationFn] = {
     11: _migration_011_jobs_employment_type,
     12: _migration_012_batch_jobs_search_employment_types,
     13: _migration_013_jobs_annual_posted_salary,
+    14: _migration_014_batch_jobs_search_salary_min,
 }
 
 

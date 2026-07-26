@@ -41,6 +41,7 @@ def create_batch_job(
     search_remote_types: list[str] | None = None,
     search_seniorities: str = "any",
     search_employment_types: str = "any",
+    search_salary_min: int | None = None,
     db_path=None,
 ) -> dict:
     if db_path is None:
@@ -53,8 +54,8 @@ def create_batch_job(
         """
         INSERT INTO batch_jobs (
             batchName, displayName, state, kind, submittedAt, lastPolledAt, resultFileName, jobIds,
-            searchRemoteTypes, searchSeniorities, searchEmploymentTypes
-        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
+            searchRemoteTypes, searchSeniorities, searchEmploymentTypes, searchSalaryMin
+        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)
         """,
         (
             batch_name,
@@ -66,6 +67,7 @@ def create_batch_job(
             remote_types_json,
             search_seniorities,
             search_employment_types,
+            search_salary_min,
         ),
     )
     batch_id = cursor.lastrowid
@@ -104,6 +106,7 @@ def update_batch_job(batch_id: int, fields: dict, db_path=None) -> dict | None:
     allowed = {
         "displayName", "state", "lastPolledAt", "resultFileName", "jobIds",
         "searchRemoteTypes", "searchSeniorities", "searchEmploymentTypes",
+        "searchSalaryMin",
     }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:

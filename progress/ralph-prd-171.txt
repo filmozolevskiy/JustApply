@@ -13,3 +13,11 @@
 - Batch Poller writeback passes job location into annualizer so hourly and multi-location evaluations persist correct annual bands.
 - Tests: period conversion, hours override, location pick/fallback, matcher mock + prompt contract, poller hourly/multi-location writeback.
 - Quality: ruff, mypy, full pytest (1006 passed, cov 85.67%).
+
+## 2026-07-26 — #181 Salary Min attribute gate
+- Added `parse_salary_min` for Job Search Settings free text (`$120k`, commas, empty/invalid → gate off).
+- Extended attribute gate + mismatch reasons for Salary Min on `annualMax` (ADR 0014); unknown/missing band still passes.
+- Migration 14: `batch_jobs.searchSalaryMin`; search/backfill submit persist parsed Min; Batch Poller writeback rejects underpaid jobs as Attribute-filtered.
+- Dashboard search request salary flows through service → pipeline → batch (scrape still ignores salary).
+- Tests: parser, gate cases, batch persistence, poller Rejected vs Matched, search/backfill wiring.
+- Quality: ruff, mypy, full pytest (1022 passed, cov 85.70%).

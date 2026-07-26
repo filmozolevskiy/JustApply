@@ -63,12 +63,14 @@ async def test_submit_batch_evaluation_persists_rows(tmp_path, monkeypatch):
         kind="search",
         db_path=str(db_path),
         employment_types="Full-time",
+        salary_min=120000,
     )
 
     assert len(created) == 1
     assert created[0]["batchName"] == "batches/test-1"
     assert created[0]["jobIds"] == [1, 2, 3]
     assert created[0]["searchEmploymentTypes"] == "Full-time"
+    assert created[0]["searchSalaryMin"] == 120000
 
 @pytest.mark.asyncio
 async def test_submit_batch_evaluation_skips_in_flight_job_ids(tmp_path, monkeypatch):

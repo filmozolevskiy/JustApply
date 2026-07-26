@@ -131,3 +131,129 @@ def test_unclassified_only_on_full_matcher_failure():
     assert is_unclassified({}) is True
     assert is_unclassified({"remoteType": "remote"}) is False
     assert is_unclassified({"seniority": "mid"}) is False
+
+
+def test_attribute_gate_rejects_when_annual_max_below_salary_min():
+    from src.core.attribute_gating import passes_attribute_gate
+
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=110000,
+            salary_min=120000,
+        )
+        is False
+    )
+
+
+def test_attribute_gate_passes_when_annual_max_reaches_salary_min():
+    from src.core.attribute_gating import passes_attribute_gate
+
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=130000,
+            salary_min=120000,
+        )
+        is True
+    )
+    # Band 100k–130k vs Min 120k: gate on annualMax (ADR 0014).
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=130000,
+            annual_min=100000,
+            salary_min=120000,
+        )
+        is True
+    )
+
+
+def test_attribute_gate_unknown_pay_passes_when_salary_min_set():
+    from src.core.attribute_gating import passes_attribute_gate
+
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=None,
+            salary_min=120000,
+        )
+        is True
+    )
+
+
+def test_attribute_gate_disabled_salary_min_skips_check():
+    from src.core.attribute_gating import passes_attribute_gate
+
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=50000,
+            salary_min=None,
+        )
+        is True
+    )
+
+
+def test_attribute_gate_salary_compare_is_currency_agnostic():
+    from src.core.attribute_gating import passes_attribute_gate
+
+    # CAD 120000 and USD floor 120000 compare as bare numbers.
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=120000,
+            salary_min=120000,
+        )
+        is True
+    )
+    assert (
+        passes_attribute_gate(
+            "remote",
+            "senior",
+            ["any"],
+            "any",
+            annual_max=119999,
+            salary_min=120000,
+        )
+        is False
+    )
+
+
+def test_format_attribute_mismatch_includes_salary_reason():
+    from src.core.attribute_gating import format_attribute_mismatch
+
+    msg = format_attribute_mismatch(
+        "QA Lead",
+        "Acme",
+        remote_type="remote",
+        seniority="senior",
+        allowed_remote_types=["any"],
+        seniorities="any",
+        annual_max=100000,
+        salary_min=120000,
+    )
+
+    assert "Attribute mismatch" in msg
+    assert "QA Lead" in msg
+    assert "salary" in msg.lower()
+    assert "100000" in msg
+    assert "120000" in msg

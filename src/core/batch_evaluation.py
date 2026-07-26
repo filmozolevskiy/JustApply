@@ -99,6 +99,7 @@ async def _create_batch_job_for_chunk(
     allowed_remote_types: list[str] | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary_min: int | None = None,
 ) -> dict:
     job_ids = [job["id"] for job in chunk]
     jsonl_content = build_batch_jsonl(chunk, resume_content)
@@ -120,6 +121,7 @@ async def _create_batch_job_for_chunk(
         search_remote_types=allowed_remote_types,
         search_seniorities=seniorities,
         search_employment_types=employment_types,
+        search_salary_min=salary_min,
         db_path=db_path,
     )
 
@@ -135,6 +137,7 @@ async def submit_batch_evaluation(
     allowed_remote_types: list[str] | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary_min: int | None = None,
 ) -> list[dict]:
     """Submit chunked Batch Evaluation Jobs and persist batch_jobs rows."""
 
@@ -176,6 +179,7 @@ async def submit_batch_evaluation(
             allowed_remote_types=allowed_remote_types,
             seniorities=seniorities,
             employment_types=employment_types,
+            salary_min=salary_min,
         )
         created.append(row)
 
@@ -198,6 +202,7 @@ async def submit_backfill_batches(
     allowed_remote_types: list[str] | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary_min: int | None = None,
     max_in_flight: int = MAX_IN_FLIGHT_BATCHES,
 ) -> dict:
     """Submit backfill batches with an in-flight cap; optionally wait until all are terminal."""
@@ -251,6 +256,7 @@ async def submit_backfill_batches(
                 allowed_remote_types=allowed_remote_types,
                 seniorities=seniorities,
                 employment_types=employment_types,
+                salary_min=salary_min,
             )
             batches_submitted += 1
             jobs_submitted += len(chunk)

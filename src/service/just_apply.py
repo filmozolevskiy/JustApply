@@ -6,6 +6,7 @@ import inspect
 import os
 from collections.abc import Awaitable, Callable
 
+from ..core.annual_posted_salary import parse_salary_min
 from ..core.batch_poller import run_batch_collection
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..core.evaluation_lock import assert_evaluation_lock_clear
@@ -67,6 +68,7 @@ async def search_jobs(
     seniorities: str = "any",
     company_sizes: str = "any",
     employment_types: str = "any",
+    salary: str = "",
     countries: str = "us",
     time_range: str = "any",
     log_func=None,
@@ -90,6 +92,7 @@ async def search_jobs(
         seniorities=seniorities,
         company_sizes=company_sizes,
         employment_types=employment_types,
+        salary_min=parse_salary_min(salary),
         countries=countries,
         time_range=time_range,
         log_func=log_func,
@@ -199,6 +202,7 @@ async def backfill_unevaluated_jobs(
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary: str = "",
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -212,6 +216,7 @@ async def backfill_unevaluated_jobs(
         allowed_remote_types=remote_types,
         seniorities=seniorities,
         employment_types=employment_types,
+        salary_min=parse_salary_min(salary),
         wait=wait,
         log_func=log_func,
         db_path=db_path,

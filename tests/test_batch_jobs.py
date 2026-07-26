@@ -55,6 +55,35 @@ def test_create_batch_job_persists_employment_type_prefs(tmp_db):
     assert fetched["searchEmploymentTypes"] == "Full-time,Contract"
     assert fetched["searchSeniorities"] == "senior"
 
+
+def test_create_batch_job_persists_salary_min_pref(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/salary-min",
+        display_name="salary",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        search_salary_min=120000,
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchSalaryMin"] == 120000
+    fetched = batch_jobs.get_batch_job(row["id"], db_path=str(tmp_db))
+    assert fetched["searchSalaryMin"] == 120000
+
+
+def test_create_batch_job_null_salary_min_when_unset(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/no-salary-min",
+        display_name="none",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchSalaryMin"] is None
+
 def test_batch_name_uniqueness_enforced(tmp_db):
     batch_jobs.create_batch_job(
         batch_name="batches/dup",

@@ -52,6 +52,7 @@ async def run_search_pipeline(
     seniorities: str = "any",
     company_sizes: str = "any",
     employment_types: str = "any",
+    salary_min: int | None = None,
     countries: str = "us",
     time_range: str = "any",
     log_func=None,
@@ -169,6 +170,7 @@ async def run_search_pipeline(
             allowed_remote_types=allowed_remote_types,
             seniorities=seniorities,
             employment_types=employment_types,
+            salary_min=salary_min,
         )
         batches_submitted = len(created_batches)
 
@@ -186,6 +188,7 @@ async def run_backfill_pipeline(
     allowed_remote_types: list = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary_min: int | None = None,
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -237,6 +240,7 @@ async def run_backfill_pipeline(
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
         employment_types=employment_types,
+        salary_min=salary_min,
     )
 
     await log(
