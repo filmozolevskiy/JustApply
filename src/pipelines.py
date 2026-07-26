@@ -1,6 +1,7 @@
 import inspect
 
 from . import db as database
+from .core.annual_posted_salary import annualize_posted_salary
 from .core.attribute_gating import (
     format_attribute_mismatch,
     merge_job_attributes,
@@ -262,6 +263,7 @@ async def run_reassess_pipeline(
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary_min: int | None = None,
     log_func=None,
 ) -> Job:
     """Re-run Resume Matcher on an existing job and persist updated scores.
@@ -306,6 +308,10 @@ async def run_reassess_pipeline(
         raise ValueError("Resume Matcher failed — no evaluation returned")
 
     merged = merge_job_attributes(job_dict, evaluation)
+    annual_band = annualize_posted_salary(
+        evaluation.get("postedSalary"),
+        job_location=job_dict.get("location") or "",
+    )
     fields = {
         "matchScore": evaluation.get("matchScore", 0),
         "matchType": evaluation.get("matchType", ""),
@@ -316,6 +322,9 @@ async def run_reassess_pipeline(
         "description": evaluation.get("summary") or job.description or "",
         "isRecruiter": evaluation.get("isRecruiter", False),
         "salary": evaluation.get("salary") or job.salary or "",
+        "annualMin": annual_band["annualMin"] if annual_band else None,
+        "annualMax": annual_band["annualMax"] if annual_band else None,
+        "annualCurrency": annual_band["annualCurrency"] if annual_band else None,
         "remoteType": merged["remoteType"],
         "seniority": merged["seniority"],
         "employmentType": merged["employmentType"],
@@ -333,6 +342,9 @@ async def run_reassess_pipeline(
         seniorities,
         employment_type=merged["employmentType"],
         employment_types=employment_types,
+        annual_max=fields["annualMax"],
+        annual_min=fields["annualMin"],
+        salary_min=salary_min,
     )
     if not gate_ok and original_status in _REASSESS_DEMOTE_STATUSES:
         mismatch = format_attribute_mismatch(
@@ -344,6 +356,9 @@ async def run_reassess_pipeline(
             seniorities=seniorities,
             employment_type=merged["employmentType"],
             employment_types=employment_types,
+            annual_max=fields["annualMax"],
+            annual_min=fields["annualMin"],
+            salary_min=salary_min,
         )
         await log(mismatch, "warning")
         demoted = database.update_job_status(job_id, "rejected")

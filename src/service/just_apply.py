@@ -129,12 +129,14 @@ async def reassess_job(
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary: str = "",
     log_func=None,
 ) -> Job:
     """Re-run Resume Matcher on a single existing job.
 
     Gate prefs default to “any” (CLI v1). Dashboard callers pass current
-    Job Search Settings so Employment Type / remote / seniority gate apply.
+    Job Search Settings so Employment Type / remote / seniority / Salary Min
+    gate apply.
     """
     init_db()
     return await run_reassess_pipeline(
@@ -143,6 +145,7 @@ async def reassess_job(
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
         employment_types=employment_types,
+        salary_min=parse_salary_min(salary),
         log_func=log_func,
     )
 
@@ -154,12 +157,14 @@ async def reassess_all_jobs(
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
     employment_types: str = "any",
+    salary: str = "",
     log_func=None,
 ) -> list[Job]:
     """Re-run Resume Matcher on every job in the given archive filter."""
     init_db()
     jobs = get_jobs(archived_filter=archived_filter)
     updated = []
+    salary_min = parse_salary_min(salary)
     for job in jobs:
         try:
             result = await run_reassess_pipeline(
@@ -168,6 +173,7 @@ async def reassess_all_jobs(
                 allowed_remote_types=allowed_remote_types,
                 seniorities=seniorities,
                 employment_types=employment_types,
+                salary_min=salary_min,
                 log_func=log_func,
             )
             updated.append(result)
