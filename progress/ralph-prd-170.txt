@@ -38,3 +38,12 @@
 - Tests: `test_attribute_gating`, `test_batch_poller`, batch prefs persistence, search/backfill wire.
 - Quality: ruff, mypy, pytest --cov (978 passed, ≥84% coverage).
 
+
+## 2026-07-26 — #176 Reassess gates Employment Type with Scraped/Matched-only Reject
+
+- Reassess pipeline applies attribute gate (remote/seniority/Employment Type) from caller prefs; defaults “any” for CLI.
+- Gate failure: Scraped/Matched → Rejected; Accepted/Applied/Interviewing/Rejected keep lane while matcher fields (incl. Employment Type) update.
+- Service `reassess_job` / `reassess_all_jobs` forward Job Search Settings prefs for dashboard path.
+- Tests: `tests/test_reassess.py` lane rules, any-skip, service forward.
+- Quality: ruff, mypy, pytest --cov (986 passed, ≥84% coverage).
+

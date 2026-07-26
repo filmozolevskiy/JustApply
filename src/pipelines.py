@@ -2,7 +2,9 @@ import inspect
 
 from . import db as database
 from .core.attribute_gating import (
+    format_attribute_mismatch,
     merge_job_attributes,
+    passes_attribute_gate,
 )
 from .core.batch_evaluation import submit_backfill_batches, submit_batch_evaluation
 from .core.company_research.glassdoor_intel import (
@@ -33,6 +35,9 @@ from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
 from .core.scraper import scrape_linkedin_jobs
 from .db.job_model import coerce_job
 from .schemas import Job, OutreachSettings
+
+# Reassess demotes on attribute-gate failure only from these lanes.
+_REASSESS_DEMOTE_STATUSES = frozenset({"scraped", "matched"})
 
 
 async def run_search_pipeline(
@@ -250,12 +255,22 @@ async def run_backfill_pipeline(
 async def run_reassess_pipeline(
     job_id: int,
     active_resume: str = "general_cv.md",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    employment_types: str = "any",
     log_func=None,
 ) -> Job:
-    """Re-run Resume Matcher on an existing job and persist updated scores."""
+    """Re-run Resume Matcher on an existing job and persist updated scores.
+
+    Applies the attribute gate from the caller's Job Search Settings (defaults
+    are “any” — CLI v1). On gate failure, only Scraped/Matched jobs move to
+    Rejected; Accepted+ keep their lane while matcher fields still update.
+    """
     job = database.get_job(job_id)
     if not job:
         raise ValueError("Job not found")
+
+    remote_prefs = allowed_remote_types if allowed_remote_types is not None else ["any"]
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -280,6 +295,7 @@ async def run_reassess_pipeline(
     await log(f"Re-assessing '{title}' at {company} with {active_resume}...")
 
     job_dict = job.model_dump()
+    original_status = (job_dict.get("status") or "").strip().lower()
     evaluation = await evaluate_job(job_dict, resume_content, log_func)
     if not evaluation:
         await log("Resume Matcher returned no result; job unchanged.", "warning")
@@ -305,6 +321,30 @@ async def run_reassess_pipeline(
     updated = database.update_job_evaluation(job_id, fields)
     if not updated:
         raise ValueError("Failed to persist reassessed job")
+
+    gate_ok = passes_attribute_gate(
+        merged["remoteType"],
+        merged["seniority"],
+        remote_prefs,
+        seniorities,
+        employment_type=merged["employmentType"],
+        employment_types=employment_types,
+    )
+    if not gate_ok and original_status in _REASSESS_DEMOTE_STATUSES:
+        mismatch = format_attribute_mismatch(
+            title,
+            company,
+            remote_type=merged["remoteType"],
+            seniority=merged["seniority"],
+            allowed_remote_types=remote_prefs,
+            seniorities=seniorities,
+            employment_type=merged["employmentType"],
+            employment_types=employment_types,
+        )
+        await log(mismatch, "warning")
+        demoted = database.update_job_status(job_id, "rejected")
+        if demoted:
+            updated = demoted
 
     await log(
         f"Re-assessed: score {fields['matchScore']}, "

@@ -123,17 +123,34 @@ async def reassess_job(
     job_id: int,
     *,
     active_resume: str = "general_cv.md",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    employment_types: str = "any",
     log_func=None,
 ) -> Job:
-    """Re-run Resume Matcher on a single existing job."""
+    """Re-run Resume Matcher on a single existing job.
+
+    Gate prefs default to “any” (CLI v1). Dashboard callers pass current
+    Job Search Settings so Employment Type / remote / seniority gate apply.
+    """
     init_db()
-    return await run_reassess_pipeline(job_id, active_resume=active_resume, log_func=log_func)
+    return await run_reassess_pipeline(
+        job_id,
+        active_resume=active_resume,
+        allowed_remote_types=allowed_remote_types,
+        seniorities=seniorities,
+        employment_types=employment_types,
+        log_func=log_func,
+    )
 
 
 async def reassess_all_jobs(
     *,
     active_resume: str = "general_cv.md",
     archived_filter: str = "active",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    employment_types: str = "any",
     log_func=None,
 ) -> list[Job]:
     """Re-run Resume Matcher on every job in the given archive filter."""
@@ -143,7 +160,12 @@ async def reassess_all_jobs(
     for job in jobs:
         try:
             result = await run_reassess_pipeline(
-                job.id, active_resume=active_resume, log_func=log_func
+                job.id,
+                active_resume=active_resume,
+                allowed_remote_types=allowed_remote_types,
+                seniorities=seniorities,
+                employment_types=employment_types,
+                log_func=log_func,
             )
             updated.append(result)
         except ValueError as e:
