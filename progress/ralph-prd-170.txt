@@ -28,3 +28,13 @@
 - Tests: trigger payload, post-filter, API/pipeline wire, panel chrome settings UI.
 - Quality: ruff, mypy, pytest --cov (971 passed, ≥84% coverage).
 
+
+## 2026-07-26 — #175 Resume Matcher Employment Type + attribute gate on search/backfill
+
+- Matcher prompt/JSON includes Employment Type; merge prefers matcher over scrape (per-field scraper fallback on Unclassified).
+- Migration 012: `searchEmploymentTypes` on Batch Evaluation Job; search/backfill submit persist prefs from Job Search Settings (CLI stays “any”).
+- Batch Poller attribute-gates Employment Type when prefs are not “any”; mismatch → Rejected (attribute-filtered); “any” skips that dimension.
+- `update_job_evaluation` persists Employment Type; evaluation summaries count Employment Type rejects in attribute-filtered totals.
+- Tests: `test_attribute_gating`, `test_batch_poller`, batch prefs persistence, search/backfill wire.
+- Quality: ruff, mypy, pytest --cov (978 passed, ≥84% coverage).
+

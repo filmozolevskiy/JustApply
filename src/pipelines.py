@@ -163,6 +163,7 @@ async def run_search_pipeline(
             log_func=log_func,
             allowed_remote_types=allowed_remote_types,
             seniorities=seniorities,
+            employment_types=employment_types,
         )
         batches_submitted = len(created_batches)
 
@@ -179,6 +180,7 @@ async def run_backfill_pipeline(
     active_resume: str = "general_cv.md",
     allowed_remote_types: list = None,
     seniorities: str = "any",
+    employment_types: str = "any",
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -229,6 +231,7 @@ async def run_backfill_pipeline(
         db_path=db_path,
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
+        employment_types=employment_types,
     )
 
     await log(
@@ -295,6 +298,7 @@ async def run_reassess_pipeline(
         "salary": evaluation.get("salary") or job.salary or "",
         "remoteType": merged["remoteType"],
         "seniority": merged["seniority"],
+        "employmentType": merged["employmentType"],
         "unclassified": False,
     }
 

@@ -549,16 +549,25 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT matchScore, resumeUsed FROM jobs WHERE id = ?", (job_id,))
+    cursor.execute(
+        "SELECT matchScore, resumeUsed, employmentType FROM jobs WHERE id = ?",
+        (job_id,),
+    )
     row = cursor.fetchone()
     if not row:
         conn.close()
         return None
     old_score = row[0] or 0
     old_resume = row[1] or ""
+    old_employment_type = row[2] or ""
 
     resume_used = fields.get("resumeUsed", old_resume)
     new_score = fields.get("matchScore", old_score)
+    employment_type = (
+        fields["employmentType"]
+        if "employmentType" in fields
+        else old_employment_type
+    )
     cursor.execute("""
         UPDATE jobs SET
             matchScore = ?,
@@ -572,6 +581,7 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
             salary = ?,
             remoteType = ?,
             seniority = ?,
+            employmentType = ?,
             unclassified = ?
         WHERE id = ?
     """, (
@@ -586,6 +596,7 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         fields.get("salary") or "",
         fields.get("remoteType") or "",
         fields.get("seniority") or "",
+        employment_type or "",
         1 if fields.get("unclassified") else 0,
         job_id,
     ))

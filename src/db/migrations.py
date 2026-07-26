@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -306,6 +306,15 @@ def _migration_011_jobs_employment_type(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migration_012_batch_jobs_search_employment_types(conn: sqlite3.Connection) -> None:
+    _add_column_if_missing(
+        conn,
+        "batch_jobs",
+        "searchEmploymentTypes",
+        "ALTER TABLE batch_jobs ADD COLUMN searchEmploymentTypes TEXT DEFAULT 'any'",
+    )
+
+
 _MIGRATIONS: dict[int, MigrationFn] = {
     1: _migration_001_create_jobs_table,
     2: _migration_002_jobs_extra_columns,
@@ -318,6 +327,7 @@ _MIGRATIONS: dict[int, MigrationFn] = {
     9: _migration_009_rejected_at_backfill,
     10: _migration_010_jobs_favorited,
     11: _migration_011_jobs_employment_type,
+    12: _migration_012_batch_jobs_search_employment_types,
 }
 
 

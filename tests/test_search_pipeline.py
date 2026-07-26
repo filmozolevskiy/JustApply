@@ -210,6 +210,24 @@ async def test_aggregate_summary_logged_with_summary_level():
 
 
 @pytest.mark.asyncio
+async def test_search_passes_employment_types_to_batch_submit():
+    with patch("src.pipelines.scrape_linkedin_jobs", return_value=[_make_job()]), \
+         patch("src.pipelines.load_resume", return_value="# Resume"), \
+         patch("src.pipelines.database.init_db"), \
+         patch("src.pipelines.database.job_exists", return_value=False), \
+         patch("src.pipelines.database.add_job", return_value=1), \
+         patch("src.pipelines.submit_batch_evaluation", new=AsyncMock(return_value=[{}])) as mock_submit:
+
+        await run_search_pipeline(
+            "QA",
+            mock_eval=False,
+            employment_types="Full-time,Contract",
+        )
+
+    assert mock_submit.await_args.kwargs["employment_types"] == "Full-time,Contract"
+
+
+@pytest.mark.asyncio
 async def test_submit_batch_evaluation_receives_only_new_saved_jobs():
     jobs = [
         _make_job(title="Job A", link="https://example.com/1"),

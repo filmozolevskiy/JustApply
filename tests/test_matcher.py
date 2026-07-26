@@ -130,6 +130,8 @@ def test_build_prompt_formatting():
     )
     assert "remoteType" in prompt
     assert "seniority" in prompt
+    assert "employmentType" in prompt
+    assert "Full-time" in prompt
     assert "summary" in prompt
     assert "Allowed Remote Preferences" not in prompt
 

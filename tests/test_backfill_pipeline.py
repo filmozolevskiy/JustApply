@@ -66,6 +66,7 @@ async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
 
     result = await run_backfill_pipeline(
         allowed_remote_types=["remote"],
+        employment_types="Full-time,Contract",
         log_func=None,
         db_path=str(tmp_db),
     )
@@ -77,6 +78,7 @@ async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
     assert len(batches) == 1
     assert batches[0]["kind"] == "backfill"
     assert batches[0]["jobIds"] == [job_id]
+    assert batches[0]["searchEmploymentTypes"] == "Full-time,Contract"
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.matchType == ""
     assert job.status == "scraped"

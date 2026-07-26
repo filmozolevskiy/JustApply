@@ -94,10 +94,11 @@ def _parse_search_remote_types(raw) -> list[str] | None:
     return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
-def _search_preferences(batch_row: dict) -> tuple[list[str] | None, str]:
+def _search_preferences(batch_row: dict) -> tuple[list[str] | None, str, str]:
     remote_types = _parse_search_remote_types(batch_row.get("searchRemoteTypes"))
     seniorities = batch_row.get("searchSeniorities") or "any"
-    return remote_types, seniorities
+    employment_types = batch_row.get("searchEmploymentTypes") or "any"
+    return remote_types, seniorities, employment_types
 
 
 def _extract_response_text(line: dict) -> str | None:
@@ -286,6 +287,7 @@ def apply_unclassified_fallback(
     *,
     allowed_remote_types: list[str] | None,
     seniorities: str,
+    employment_types: str = "any",
     db_path=None,
 ) -> str:
     """Fall back to scraper attributes after poison retries are exhausted."""
@@ -299,6 +301,7 @@ def apply_unclassified_fallback(
 
     remote_type = job_dict.get("remoteType") or ""
     seniority = job_dict.get("seniority") or ""
+    employment_type = job_dict.get("employmentType") or ""
     fields = {
         "matchScore": 0,
         "matchType": "no-match",
@@ -311,6 +314,7 @@ def apply_unclassified_fallback(
         "salary": job_dict.get("salary") or "",
         "remoteType": remote_type,
         "seniority": seniority,
+        "employmentType": employment_type,
         "unclassified": True,
     }
     database.update_job_evaluation(job_id, fields, db_path=db_path)
@@ -320,6 +324,8 @@ def apply_unclassified_fallback(
         seniority,
         allowed_remote_types,
         seniorities,
+        employment_type=employment_type,
+        employment_types=employment_types,
     ):
         database.update_job_status(job_id, "matched", db_path=db_path)
         return "matched"
@@ -333,6 +339,7 @@ def handle_poison_job_failure(
     *,
     allowed_remote_types: list[str] | None,
     seniorities: str,
+    employment_types: str = "any",
     db_path=None,
 ) -> str:
     """Increment batchAttempts; Unclassified fallback after POISON_MAX_ATTEMPTS."""
@@ -344,6 +351,7 @@ def handle_poison_job_failure(
         job_id,
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
+        employment_types=employment_types,
         db_path=db_path,
     )
 
@@ -354,6 +362,7 @@ def write_back_job_evaluation(
     *,
     allowed_remote_types: list[str] | None,
     seniorities: str,
+    employment_types: str = "any",
     db_path=None,
 ) -> str:
     """Persist evaluation and move lane. Returns 'matched', 'rejected', or 'skipped'."""
@@ -380,6 +389,7 @@ def write_back_job_evaluation(
         "salary": evaluation.get("salary") or job_dict.get("salary") or "",
         "remoteType": merged["remoteType"],
         "seniority": merged["seniority"],
+        "employmentType": merged["employmentType"],
         "unclassified": is_unclassified(evaluation),
     }
     database.update_job_evaluation(job_id, fields, db_path=db_path)
@@ -389,6 +399,8 @@ def write_back_job_evaluation(
         merged["seniority"],
         allowed_remote_types,
         seniorities,
+        employment_type=merged["employmentType"],
+        employment_types=employment_types,
     ):
         database.update_job_status(job_id, "matched", db_path=db_path)
         return "matched"
@@ -405,6 +417,7 @@ async def collect_batch_results(
     log_func=None,
     allowed_remote_types: list[str] | None = None,
     seniorities: str | None = None,
+    employment_types: str | None = None,
 ) -> CollectResult:
     """Poll one batch job, write back results when succeeded."""
 
@@ -424,9 +437,12 @@ async def collect_batch_results(
         await log("GEMINI_API_KEY not set; skipping batch poll.", "warning")
         return CollectResult(state=batch_row.get("state", ""))
 
-    remote_types, batch_seniorities = _search_preferences(batch_row)
+    remote_types, batch_seniorities, batch_employment_types = _search_preferences(batch_row)
     gate_remote = allowed_remote_types if allowed_remote_types is not None else remote_types
     gate_seniorities = seniorities if seniorities is not None else batch_seniorities
+    gate_employment_types = (
+        employment_types if employment_types is not None else batch_employment_types
+    )
 
     batch_job = await asyncio.to_thread(gemini_client.batches.get, name=batch_name)
     state = _batch_state_name(batch_job)
@@ -476,6 +492,7 @@ async def collect_batch_results(
                     job_id,
                     allowed_remote_types=gate_remote,
                     seniorities=gate_seniorities,
+                    employment_types=gate_employment_types,
                     db_path=db_path,
                 )
                 if outcome == "retry":
@@ -497,6 +514,7 @@ async def collect_batch_results(
                     job_id,
                     allowed_remote_types=gate_remote,
                     seniorities=gate_seniorities,
+                    employment_types=gate_employment_types,
                     db_path=db_path,
                 )
                 if outcome == "retry":
@@ -517,6 +535,7 @@ async def collect_batch_results(
                 evaluation,
                 allowed_remote_types=gate_remote,
                 seniorities=gate_seniorities,
+                employment_types=gate_employment_types,
                 db_path=db_path,
             )
             if outcome == "matched":
@@ -539,6 +558,7 @@ async def collect_batch_results(
                 job_id,
                 allowed_remote_types=gate_remote,
                 seniorities=gate_seniorities,
+                employment_types=gate_employment_types,
                 db_path=db_path,
             )
             if outcome == "retry":
@@ -587,6 +607,7 @@ async def collect_batch_results(
                 job_id,
                 allowed_remote_types=gate_remote,
                 seniorities=gate_seniorities,
+                employment_types=gate_employment_types,
                 db_path=db_path,
             )
             if outcome == "retry":

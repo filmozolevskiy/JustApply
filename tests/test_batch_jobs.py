@@ -36,6 +36,25 @@ def test_create_and_get_batch_job_round_trip(tmp_db):
     by_name = batch_jobs.get_batch_job_by_name("batches/abc123", db_path=str(tmp_db))
     assert by_name == row
 
+
+def test_create_batch_job_persists_employment_type_prefs(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/emp-prefs",
+        display_name="emp",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        search_remote_types=["remote"],
+        search_seniorities="senior",
+        search_employment_types="Full-time,Contract",
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchEmploymentTypes"] == "Full-time,Contract"
+    fetched = batch_jobs.get_batch_job(row["id"], db_path=str(tmp_db))
+    assert fetched["searchEmploymentTypes"] == "Full-time,Contract"
+    assert fetched["searchSeniorities"] == "senior"
+
 def test_batch_name_uniqueness_enforced(tmp_db):
     batch_jobs.create_batch_job(
         batch_name="batches/dup",

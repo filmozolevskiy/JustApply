@@ -68,7 +68,7 @@ def _seed_scraped_job(db_path, **overrides):
     job.update(overrides)
     return database.add_job(job, db_path=str(db_path))
 
-def _evaluation(remote_type="remote", score=82):
+def _evaluation(remote_type="remote", score=82, employment_type="Full-time"):
     return {
         "matchScore": score,
         "matchType": "match",
@@ -77,6 +77,7 @@ def _evaluation(remote_type="remote", score=82):
         "gaps": [],
         "remoteType": remote_type,
         "seniority": "mid",
+        "employmentType": employment_type,
         "summary": "Strong QA fit.",
         "isRecruiter": False,
         "salary": "",
@@ -96,6 +97,7 @@ def test_write_back_moves_scraped_to_matched(tmp_db):
     assert job.status == "matched"
     assert job.matchScore == 82
     assert job.matchType == "match"
+    assert job.employmentType == "Full-time"
 
 def test_write_back_gate_fail_moves_to_rejected(tmp_db):
     job_id = _seed_scraped_job(tmp_db, remoteType="in_office")
@@ -110,6 +112,38 @@ def test_write_back_gate_fail_moves_to_rejected(tmp_db):
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.status == "rejected"
 
+
+def test_write_back_employment_type_mismatch_rejected(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, employmentType="Full-time")
+    outcome = write_back_job_evaluation(
+        job_id,
+        _evaluation(employment_type="Contract"),
+        allowed_remote_types=["any"],
+        seniorities="any",
+        employment_types="Full-time",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "rejected"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "rejected"
+    assert job.employmentType == "Contract"
+
+
+def test_write_back_employment_type_any_does_not_reject(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, employmentType="Contract")
+    outcome = write_back_job_evaluation(
+        job_id,
+        _evaluation(employment_type="Contract"),
+        allowed_remote_types=["any"],
+        seniorities="any",
+        employment_types="any",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "matched"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "matched"
+    assert job.employmentType == "Contract"
+
 def _build_fake_client(result_jsonl: str):
     client = MagicMock()
     batch_job = MagicMock()
@@ -118,6 +152,44 @@ def _build_fake_client(result_jsonl: str):
     client.batches.get.return_value = batch_job
     client.files.download.return_value = result_jsonl.encode("utf-8")
     return client
+
+@pytest.mark.asyncio
+async def test_collect_batch_results_rejects_employment_type_from_batch_prefs(tmp_db):
+    job_id = _seed_scraped_job(tmp_db, employmentType="Full-time")
+    batch_row = batch_jobs.create_batch_job(
+        batch_name="batches/test-emp-reject",
+        display_name="test",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["any"],
+        search_seniorities="any",
+        search_employment_types="Full-time",
+        db_path=str(tmp_db),
+    )
+    evaluation = _evaluation(employment_type="Contract")
+    result_line = {
+        "key": str(job_id),
+        "response": {
+            "candidates": [
+                {"content": {"parts": [{"text": json.dumps(evaluation)}]}}
+            ]
+        },
+    }
+    client = _build_fake_client(json.dumps(result_line) + "\n")
+
+    result = await collect_batch_results(
+        batch_row,
+        client=client,
+        db_path=str(tmp_db),
+    )
+
+    assert result.attribute_filtered == 1
+    assert result.matched == 0
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "rejected"
+    assert job.employmentType == "Contract"
+
 
 @pytest.mark.asyncio
 async def test_collect_batch_results_writes_back_and_updates_batch_row(tmp_db):
@@ -375,11 +447,17 @@ async def test_poison_job_unclassified_fallback_after_max_attempts(tmp_db):
     assert result.unclassified == 1
 
 def test_apply_unclassified_fallback_uses_scraper_attributes(tmp_db):
-    job_id = _seed_scraped_job(tmp_db, remoteType="remote", seniority="senior")
+    job_id = _seed_scraped_job(
+        tmp_db,
+        remoteType="remote",
+        seniority="senior",
+        employmentType="Full-time",
+    )
     outcome = apply_unclassified_fallback(
         job_id,
         allowed_remote_types=["remote"],
         seniorities="senior",
+        employment_types="Full-time",
         db_path=str(tmp_db),
     )
     assert outcome == "matched"
@@ -387,6 +465,28 @@ def test_apply_unclassified_fallback_uses_scraper_attributes(tmp_db):
     assert job.unclassified is True
     assert job.remoteType == "remote"
     assert job.seniority == "senior"
+    assert job.employmentType == "Full-time"
+
+
+def test_apply_unclassified_fallback_rejects_employment_type_mismatch(tmp_db):
+    job_id = _seed_scraped_job(
+        tmp_db,
+        remoteType="remote",
+        seniority="mid",
+        employmentType="Contract",
+    )
+    outcome = apply_unclassified_fallback(
+        job_id,
+        allowed_remote_types=["any"],
+        seniorities="any",
+        employment_types="Full-time",
+        db_path=str(tmp_db),
+    )
+    assert outcome == "rejected"
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "rejected"
+    assert job.unclassified is True
+    assert job.employmentType == "Contract"
 
 def test_handle_poison_job_failure_retries_before_fallback(tmp_db):
     job_id = _seed_scraped_job(tmp_db)

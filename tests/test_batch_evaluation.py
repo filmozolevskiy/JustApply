@@ -57,11 +57,18 @@ async def test_submit_batch_evaluation_persists_rows(tmp_path, monkeypatch):
     database.init_db(str(db_path))
 
     jobs = [{"id": i, "title": f"Job {i}", "company": "Co", "description": "Desc"} for i in range(1, 4)]
-    created = await submit_batch_evaluation(jobs, "# Resume", kind="search", db_path=str(db_path))
+    created = await submit_batch_evaluation(
+        jobs,
+        "# Resume",
+        kind="search",
+        db_path=str(db_path),
+        employment_types="Full-time",
+    )
 
     assert len(created) == 1
     assert created[0]["batchName"] == "batches/test-1"
     assert created[0]["jobIds"] == [1, 2, 3]
+    assert created[0]["searchEmploymentTypes"] == "Full-time"
 
 @pytest.mark.asyncio
 async def test_submit_batch_evaluation_skips_in_flight_job_ids(tmp_path, monkeypatch):
