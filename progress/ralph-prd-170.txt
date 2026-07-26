@@ -19,3 +19,12 @@
 - Tests: `filterJobs` / `getBoardJobOrder` seams + panel chrome checkboxes/reset/hint wiring.
 - Quality: ruff, mypy, pytest --cov (964 passed, ≥84% coverage).
 
+## 2026-07-26 — #174 Job Search Settings + Bright Data Employment Type scrape rules
+
+- Job Search Settings: five Employment Type checkboxes (default/Reset = none = “any”).
+- Search POST carries `employment_type`; pipeline forwards prefs to scrape.
+- Bright Data trigger sets `job_type` only for exactly one selected type; multi/any omit it.
+- Scrape post-filter enforces selected types when prefs active; drops blank/unknown and error rows; “any” does not filter by type.
+- Tests: trigger payload, post-filter, API/pipeline wire, panel chrome settings UI.
+- Quality: ruff, mypy, pytest --cov (971 passed, ≥84% coverage).
+

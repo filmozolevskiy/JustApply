@@ -1,6 +1,7 @@
-"""Employment Type persist path: scrape → Job model → API → drawer (#172)."""
+"""Employment Type persist path + Job Search Settings scrape prefs (#172, #174)."""
 
 import sqlite3
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import src.db.connection as _db_connection
@@ -8,7 +9,8 @@ from fastapi.testclient import TestClient
 from src import db as database
 from src.db.migrations import CURRENT_SCHEMA_VERSION, get_schema_version
 from src.schemas import Job
-from src.web.server import app
+from src.service.just_apply import search_jobs
+from src.web.server import SearchRequest, app
 
 client = TestClient(app)
 
@@ -147,3 +149,38 @@ def test_drawer_job_info_shows_employment_type_when_known():
     card_slice = board[card_fn_start : card_fn_start + 2500] if card_fn_start >= 0 else board
     assert "Employment Type" not in card_slice
     assert "employmentType" not in card_slice
+
+
+def test_search_request_accepts_employment_type():
+    """POST /api/search body carries Employment Type prefs (default any)."""
+    req = SearchRequest(
+        query="QA",
+        search_regions=[{"country": "US", "region": "California"}],
+        employment_type="Full-time,Contract",
+    )
+    assert req.employment_type == "Full-time,Contract"
+    default = SearchRequest(
+        query="QA",
+        search_regions=[{"country": "US", "region": "California"}],
+    )
+    assert default.employment_type == "any"
+
+
+@pytest.mark.asyncio
+async def test_search_jobs_passes_employment_types_to_scraper():
+    """Dashboard search pipeline forwards Employment Type prefs to scrape."""
+    with patch(
+        "src.pipelines.scrape_linkedin_jobs",
+        new=AsyncMock(return_value=[]),
+    ) as mock_scrape, patch(
+        "src.service.just_apply.scrape_limiter.acquire"
+    ), patch("src.pipelines.database.init_db"):
+        await search_jobs(
+            query="QA",
+            mock_eval=True,
+            mock_scraper=True,
+            employment_types="Full-time",
+            rate_limit=False,
+        )
+        assert mock_scrape.called
+        assert mock_scrape.await_args.kwargs["employment_types"] == "Full-time"

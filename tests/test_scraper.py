@@ -5,6 +5,7 @@ import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
 from src.core.scraper import (
+    _build_brightdata_trigger_payload,
     is_eastern_timezone,
     match_company_size,
     matches_position_keywords,
@@ -108,6 +109,152 @@ def test_normalize_brightdata_job_missing_employment_type_is_blank():
     }
     result = normalize_brightdata_job(raw_job)
     assert result["employmentType"] == ""
+
+
+def test_trigger_payload_includes_job_type_for_single_employment_type():
+    """Exactly one Employment Type preference sets Bright Data job_type."""
+    payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("CA", "Ontario, Canada")],
+        time_range="any",
+        employment_types=["Full-time"],
+    )
+    assert len(payload) == 1
+    assert payload[0]["job_type"] == "Full-time"
+    assert payload[0]["keyword"] == "QA"
+    assert payload[0]["location"] == "Ontario, Canada"
+
+
+def test_trigger_payload_omits_job_type_for_any_and_multi_employment_types():
+    """Any / multi-select omit Bright Data job_type (post-filter handles multi)."""
+    any_payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("US", "Remote")],
+        time_range="any",
+        employment_types=["any"],
+    )
+    assert "job_type" not in any_payload[0]
+
+    none_payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("US", "Remote")],
+        time_range="any",
+        employment_types=None,
+    )
+    assert "job_type" not in none_payload[0]
+
+    multi_payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("US", "Remote")],
+        time_range="any",
+        employment_types=["Full-time", "Contract"],
+    )
+    assert "job_type" not in multi_payload[0]
+
+
+@pytest.mark.asyncio
+async def test_scrape_post_filters_employment_types_and_drops_unknown(monkeypatch):
+    """Active Employment Type prefs keep selected types and drop blank/unknown."""
+
+    async def fake_mock(query, location, log):
+        return [
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-ft",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Full-time listing",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Full-time",
+                "is_remote": True,
+            },
+            {
+                "job_title": f"Contract {query}",
+                "company_name": "BrightFlow Co.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-ct",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Contract listing",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Contract",
+                "is_remote": True,
+            },
+            {
+                "job_title": f"Unknown {query}",
+                "company_name": "Mystery LLC",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-blank",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "No employment type",
+                "job_seniority_level": "senior",
+                "is_remote": True,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "src.core.scraper._scrape_linkedin_jobs_mock",
+        fake_mock,
+    )
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="Toronto",
+        company_sizes="any",
+        employment_types="Full-time,Contract",
+        log_func=print,
+    )
+    types = {j["employmentType"] for j in jobs}
+    assert types == {"Full-time", "Contract"}
+    assert all(j["employmentType"] for j in jobs)
+
+
+@pytest.mark.asyncio
+async def test_scrape_any_employment_type_does_not_post_filter(monkeypatch):
+    """“Any” keeps all Employment Types including blank/unknown."""
+
+    async def fake_mock(query, location, log):
+        return [
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-any-ft",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Full-time",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Full-time",
+                "is_remote": True,
+            },
+            {
+                "job_title": f"Blank {query}",
+                "company_name": "Mystery LLC",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-any-blank",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Unknown type",
+                "job_seniority_level": "senior",
+                "is_remote": True,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "src.core.scraper._scrape_linkedin_jobs_mock",
+        fake_mock,
+    )
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="Toronto",
+        company_sizes="any",
+        employment_types="any",
+        log_func=print,
+    )
+    assert len(jobs) == 2
+    assert {j["employmentType"] for j in jobs} == {"Full-time", ""}
 
 
 @pytest.mark.asyncio

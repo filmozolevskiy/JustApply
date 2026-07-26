@@ -106,6 +106,36 @@ def test_board_controls_employment_type_refine_checkboxes():
     assert "employmentTypes" in hint_fn
 
 
+def test_job_search_settings_employment_type_checkboxes():
+    """Job Search Settings has Employment Type checkboxes; default none; reset clears."""
+    content = _read_html()
+    dashboard_js = load_dashboard_js()
+    settings_start = content.index('id="job-search-settings-body"')
+    settings_end = content.index('id="contact-search-settings-section"', settings_start)
+    settings_block = content[settings_start:settings_end]
+    assert "Employment Type" in settings_block
+    assert 'name="kb-filter-employment"' in settings_block
+    for value in ("Full-time", "Contract", "Part-time", "Temporary", "Volunteer"):
+        assert f'value="{value}"' in settings_block
+    assert settings_block.count('name="kb-filter-employment"') == 5
+    for chunk in settings_block.split('name="kb-filter-employment"')[1:]:
+        input_tail = chunk.split(">", 1)[0]
+        assert "checked" not in input_tail
+
+    trigger_idx = dashboard_js.find("async function triggerScrapeRun")
+    if trigger_idx < 0:
+        trigger_idx = dashboard_js.find("function triggerScrapeRun")
+    assert trigger_idx >= 0
+    trigger_fn = dashboard_js[trigger_idx : trigger_idx + 6000]
+    assert "kb-filter-employment" in trigger_fn
+    assert "employment_type" in trigger_fn
+
+    reset_idx = dashboard_js.find("function resetKbFilters")
+    assert reset_idx >= 0
+    reset_fn = dashboard_js[reset_idx : reset_idx + 2000]
+    assert "kb-filter-employment" in reset_fn
+
+
 def test_board_controls_has_search_reset_and_empty_hint():
     """Board Controls exposes search, reset-all, clear, and zero-results hint."""
     content = _read_html()

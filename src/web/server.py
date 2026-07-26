@@ -914,6 +914,7 @@ class SearchRequest(BaseModel):
     seniority: str = "any"
     salary: str = ""
     company_size: str = "any"
+    employment_type: str = "any"
     countries: str = "us"
     time_range: str = "any"
 
@@ -950,6 +951,7 @@ async def run_scraping_task(task_id: str):
             allowed_remote_types=parse_remote_types(params.get("remote_type", "any")),
             seniorities=params.get("seniority", "any"),
             company_sizes=params.get("company_size", "any"),
+            employment_types=params.get("employment_type", "any"),
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
             log_func=log_callback,

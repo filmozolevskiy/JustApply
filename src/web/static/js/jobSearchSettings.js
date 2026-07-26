@@ -15,6 +15,7 @@ export function createJobSearchSettingsController({
   getActiveResume,
   integrateSearchResultFromStream,
   isEvaluationLockActive,
+  refreshBoardQuietly = null,
   taskLog,
 }) {
   const COUNTRY_CODE_MAP = { us: 'US', ca: 'CA', gb: 'GB', de: 'DE' };
@@ -178,6 +179,7 @@ export function createJobSearchSettingsController({
     let seniority = "any";
     let salary = "";
     let company_size = "any";
+    let employment_type = "any";
     
     const queryEl = document.getElementById('kb-filter-position');
     if (queryEl) query = queryEl.value;
@@ -198,6 +200,11 @@ export function createJobSearchSettingsController({
     const sizeEls = document.querySelectorAll('input[name="kb-filter-size"]:checked');
     if (sizeEls.length > 0) {
       company_size = Array.from(sizeEls).map(el => el.value).join(',');
+    }
+
+    const employmentEls = document.querySelectorAll('input[name="kb-filter-employment"]:checked');
+    if (employmentEls.length > 0) {
+      employment_type = Array.from(employmentEls).map(el => el.value).join(',');
     }
 
     const platformEl = document.getElementById('kb-filter-platform');
@@ -238,6 +245,7 @@ export function createJobSearchSettingsController({
     if (seniority !== 'any') activeFilters.push(`Seniority: ${seniority}`);
     if (salary) activeFilters.push(`Salary Min: ${salary}`);
     if (company_size !== 'any') activeFilters.push(`Company Size: ${company_size}`);
+    if (employment_type !== 'any') activeFilters.push(`Employment Type: ${employment_type}`);
     if (activeFilters.length > 0) {
       logMsg += ` | Filters: [${activeFilters.join(', ')}]`;
     }
@@ -271,6 +279,7 @@ export function createJobSearchSettingsController({
         seniority: seniority,
         salary: salary,
         company_size: company_size,
+        employment_type: employment_type,
         countries: countries,
         time_range: time_range
       })
@@ -309,10 +318,16 @@ export function createJobSearchSettingsController({
         onDone() {
           addLogLine('Scraper process complete.', 'success');
           resetScrapeButtons();
+          if (typeof refreshBoardQuietly === 'function') {
+            refreshBoardQuietly();
+          }
         },
         onError() {
           addLogLine('Scraper SSE stream closed unexpectedly.', 'warning');
           resetScrapeButtons();
+          if (typeof refreshBoardQuietly === 'function') {
+            refreshBoardQuietly();
+          }
         },
       }));
     })
@@ -395,6 +410,7 @@ export function createJobSearchSettingsController({
     document.querySelectorAll('input[name="kb-filter-remote"]').forEach(cb => cb.checked = cb.value === 'remote');
     document.querySelectorAll('input[name="kb-filter-seniority"]').forEach(cb => cb.checked = cb.value === 'senior');
     document.querySelectorAll('input[name="kb-filter-size"]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('input[name="kb-filter-employment"]').forEach(cb => cb.checked = false);
     selectedSearchRegions.clear();
     activeRegionTab = COUNTRY_ORDER.find(code => regionsMap[code]) || 'US';
     

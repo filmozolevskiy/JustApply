@@ -251,12 +251,69 @@ async def _scrape_linkedin_jobs_mock(
         }
     ]
 
+ALLOWED_EMPLOYMENT_TYPES = (
+    "Full-time",
+    "Contract",
+    "Part-time",
+    "Temporary",
+    "Volunteer",
+)
+_EMPLOYMENT_TYPE_BY_LOWER = {t.lower(): t for t in ALLOWED_EMPLOYMENT_TYPES}
+
+
+def parse_employment_types(employment_types) -> list[str]:
+    """Normalize Employment Type prefs to canonical labels, or ``["any"]``."""
+    if employment_types is None:
+        return ["any"]
+    if isinstance(employment_types, str):
+        parts = [p.strip() for p in employment_types.split(",") if p.strip()]
+    elif isinstance(employment_types, list):
+        parts = [str(p).strip() for p in employment_types if p]
+    else:
+        return ["any"]
+    if not parts or any(p.lower() == "any" for p in parts):
+        return ["any"]
+    result: list[str] = []
+    for part in parts:
+        canonical = _EMPLOYMENT_TYPE_BY_LOWER.get(part.lower())
+        if canonical and canonical not in result:
+            result.append(canonical)
+    return result or ["any"]
+
+
+def match_employment_type(job_employment_type: str, allowed_types: list) -> bool:
+    """Return True when job Employment Type is allowed (or prefs are any).
+
+    Blank/unknown types fail when any preference is active.
+    """
+    if not allowed_types or "any" in allowed_types:
+        return True
+    if not job_employment_type or not str(job_employment_type).strip():
+        return False
+    canonical = _EMPLOYMENT_TYPE_BY_LOWER.get(str(job_employment_type).strip().lower())
+    return canonical in allowed_types if canonical else False
+
+
 def _build_brightdata_trigger_payload(
     query: str,
     search_regions: list[tuple[str, str]],
     time_range: str,
+    employment_types: list | None = None,
 ) -> list[dict]:
-    """Build one Bright Data input item per (country, Search Region)."""
+    """Build one Bright Data input item per (country, Search Region).
+
+    Sets ``job_type`` only when exactly one Employment Type preference is
+    selected (Bright Data accepts a single value). Multi-select / any omit it.
+    """
+    job_type = None
+    if (
+        employment_types
+        and len(employment_types) == 1
+        and employment_types[0]
+        and str(employment_types[0]).lower() != "any"
+    ):
+        job_type = employment_types[0]
+
     payload = []
     for country, region in search_regions:
         item = {
@@ -272,6 +329,8 @@ def _build_brightdata_trigger_payload(
             }
             normalized_key = time_range.lower().replace("_", " ")
             item["time_range"] = time_range_mapping.get(normalized_key, time_range)
+        if job_type:
+            item["job_type"] = job_type
         payload.append(item)
     return payload
 
@@ -284,6 +343,7 @@ async def _scrape_linkedin_jobs_real(
     api_key: str,
     scraper_id: str,
     log: callable,
+    employment_types: list | None = None,
 ) -> list:
     """Trigger and poll the Bright Data LinkedIn scraper API to retrieve job listings."""
     region_summary = ", ".join(f"{r} ({c})" for c, r in search_regions)
@@ -306,7 +366,9 @@ async def _scrape_linkedin_jobs_real(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    payload = _build_brightdata_trigger_payload(query, search_regions, time_range)
+    payload = _build_brightdata_trigger_payload(
+        query, search_regions, time_range, employment_types=employment_types
+    )
 
     await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -459,6 +521,7 @@ async def scrape_linkedin_jobs(
     remote_types: list = None,
     seniorities: list = None,
     company_sizes: list = None,
+    employment_types: list = None,
     countries: list = None,
     time_range: str = "any",
     log_func = None,
@@ -466,7 +529,7 @@ async def scrape_linkedin_jobs(
 ) -> list:
     """
     Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
-    Applies post-filtering for company size.
+    Applies post-filtering for company size and Employment Type.
     """
     async def log(msg: str, level: str = "info"):
         if log_func:
@@ -492,6 +555,7 @@ async def scrape_linkedin_jobs(
     remote_types = remote_types or ["any"]
     seniorities = seniorities or ["any"]
     company_sizes = company_sizes or ["any"]
+    employment_types = parse_employment_types(employment_types)
     
     if countries and isinstance(countries, str):
         countries = [c.strip().lower() for c in countries.split(",") if c.strip()]
@@ -517,6 +581,7 @@ async def scrape_linkedin_jobs(
             api_key=api_key,
             scraper_id=scraper_id,
             log=log,
+            employment_types=employment_types,
         )
 
     # Post-filtering phase
@@ -533,6 +598,14 @@ async def scrape_linkedin_jobs(
 
         if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):
             await log(f"Skipping '{normalized['title']}': Company Size '{normalized['size']}' does not match {company_sizes}", "info")
+            continue
+
+        if not match_employment_type(normalized.get("employmentType", ""), employment_types):
+            await log(
+                f"Skipping '{normalized['title']}': Employment Type "
+                f"'{normalized.get('employmentType') or 'unknown'}' does not match {employment_types}",
+                "info",
+            )
             continue
 
         filtered_jobs.append(normalized)
