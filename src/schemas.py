@@ -55,6 +55,7 @@ class Job(BaseModel):
     location: str = ""
     remoteType: str = ""
     seniority: str = ""
+    employmentType: str = ""
     salary: str = ""
     description: str = ""
     matchScore: int = 0

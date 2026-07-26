@@ -51,6 +51,7 @@ def parse_job_row(row) -> Job:
     job["rejectedAt"] = job.get("rejectedAt") or ""
     job["autoArchiveExempt"] = bool(job.get("autoArchiveExempt", 0))
     job["favorited"] = bool(job.get("favorited", 0))
+    job["employmentType"] = job.get("employmentType") or ""
 
     raw_company_research = job.get("companyResearch")
     if raw_company_research in (None, ""):
@@ -86,6 +87,7 @@ def normalize_add_job_input(job: dict) -> dict:
         "date": job.get("date") or job.get("Posting date") or "",
         "location": job.get("location") or job.get("Location + Remote type (in office, hybrid, remote)") or "",
         "seniority": job.get("seniority") or job.get("Seniority type (junior, mid, senior)") or "",
+        "employmentType": job.get("employmentType") or "",
         "salary": job.get("salary") or job.get("Salary type") or "",
         "description": job.get("description") or job.get("Short description") or "",
         "comment": job.get("comment") or job.get("Comment") or "",

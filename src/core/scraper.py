@@ -108,6 +108,17 @@ def match_company_size(job_size_str: str, allowed_sizes: list) -> bool:
         matched = True
     return matched
 
+def is_brightdata_error_row(job: dict) -> bool:
+    """True for Bright Data snapshot rows that are errors, not listings."""
+    if not isinstance(job, dict):
+        return True
+    if job.get("error") or job.get("error_code"):
+        title = job.get("job_title") or job.get("title") or ""
+        company = job.get("company_name") or job.get("company") or ""
+        return not (str(title).strip() or str(company).strip())
+    return False
+
+
 def normalize_brightdata_job(job: dict) -> dict:
     """Normalize a Bright Data job object into the standard database schema."""
     title = job.get("job_title") or job.get("title") or ""
@@ -141,7 +152,14 @@ def normalize_brightdata_job(job: dict) -> dict:
         
     salary = job.get("salary") or job.get("salary_formatted") or ""
     description = job.get("job_summary") or job.get("description") or ""
-    
+    employment_type = (
+        job.get("job_employment_type") or job.get("employmentType") or ""
+    )
+    if isinstance(employment_type, str):
+        employment_type = employment_type.strip()
+    else:
+        employment_type = ""
+
     # Preserve job_poster if it exists
     contacts = []
     job_poster = job.get("job_poster")
@@ -165,6 +183,7 @@ def normalize_brightdata_job(job: dict) -> dict:
         "location": location,
         "remoteType": remote_type,
         "seniority": seniority,
+        "employmentType": employment_type,
         "salary": salary,
         "description": description,
         "status": "scraped",
@@ -196,6 +215,7 @@ async def _scrape_linkedin_jobs_mock(
             "job_location": location,
             "job_summary": f"We are seeking a senior practitioner in {query} to lead our automation pipelines and delivery patterns. The ideal candidate will work remote or hybrid.",
             "job_seniority_level": "senior",
+            "job_employment_type": "Full-time",
             "salary": "$145k - $175k",
             "is_remote": True,
             "job_poster": {
@@ -213,6 +233,7 @@ async def _scrape_linkedin_jobs_mock(
             "job_location": location,
             "job_summary": f"Lead development and QA integrations for our data processing streams. High proficiency in {query} required.",
             "job_seniority_level": "senior",
+            "job_employment_type": "Contract",
             "is_hybrid": True,
             "salary": "$160k - $190k"
         },
@@ -225,6 +246,7 @@ async def _scrape_linkedin_jobs_mock(
             "job_location": "San Francisco, CA",
             "job_summary": f"Help our engineering team with entry level tasks regarding {query}. Work in PST timezone only.",
             "job_seniority_level": "junior",
+            "job_employment_type": "Part-time",
             "salary": "$70k - $90k"
         }
     ]
@@ -503,6 +525,10 @@ async def scrape_linkedin_jobs(
     filtered_jobs = []
 
     for raw_job in raw_jobs:
+        if is_brightdata_error_row(raw_job):
+            await log("Skipping Bright Data error/mismatch snapshot row.", "info")
+            continue
+
         normalized = normalize_brightdata_job(raw_job)
 
         if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):

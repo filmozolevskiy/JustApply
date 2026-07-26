@@ -505,6 +505,7 @@ export function createDrawerController({
               <div>${buildDrawerCompanyRowHtml(job.company, job.companyUrl)}</div>
               <div>Location: ${job.location}</div>
               <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
+              ${job.employmentType ? `<div>Employment Type: <span>${job.employmentType}</span></div>` : ''}
               <div>Salary: <span class="drawer-salary">${job.salary || 'Not specified'}</span></div>
               <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
             </div>

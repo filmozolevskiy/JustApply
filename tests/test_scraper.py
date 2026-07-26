@@ -82,6 +82,74 @@ def test_normalize_brightdata_job_preserves_company_url():
         "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
     )
 
+
+def test_normalize_brightdata_job_maps_employment_type():
+    """Bright Data job_employment_type becomes stored Employment Type."""
+    raw_job = {
+        "job_title": "Senior QA",
+        "company_name": "Acme",
+        "url": "https://linkedin.com/jobs/et-1",
+        "job_location": "Remote",
+        "is_remote": True,
+        "job_employment_type": "Full-time",
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert result["employmentType"] == "Full-time"
+
+
+def test_normalize_brightdata_job_missing_employment_type_is_blank():
+    """Blank/missing Employment Type stays unknown — no fake value."""
+    raw_job = {
+        "job_title": "Senior QA",
+        "company_name": "Acme",
+        "url": "https://linkedin.com/jobs/et-2",
+        "job_location": "Remote",
+        "is_remote": True,
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert result["employmentType"] == ""
+
+
+@pytest.mark.asyncio
+async def test_scrape_skips_error_only_snapshot_rows(monkeypatch):
+    """Bright Data mismatch/error rows are not treated as jobs."""
+
+    async def fake_mock(query, location, log):
+        return [
+            {
+                "error": "The value of `job_type` is invalid for this input",
+                "error_code": "validation_error",
+                "input": {"job_type": "Internship"},
+            },
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-ok",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Valid listing",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Contract",
+                "salary": "$145k - $175k",
+                "is_remote": True,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "src.core.scraper._scrape_linkedin_jobs_mock",
+        fake_mock,
+    )
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="Toronto",
+        company_sizes="large",
+        log_func=print,
+    )
+    assert len(jobs) == 1
+    assert jobs[0]["company"] == "ScaleLabs Inc."
+    assert jobs[0]["employmentType"] == "Contract"
+
 def test_normalize_brightdata_job_sets_is_job_poster_flag():
     raw_job = {
         "job_title": "Senior QA",

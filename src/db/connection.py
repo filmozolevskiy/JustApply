@@ -52,6 +52,13 @@ def init_db(db_path=None, allow_seed=False):
     count = cursor.fetchone()[0]
     if count == 0 and _seeding_allowed(db_existed, allow_seed):
         _seed_db(cursor)
+        from .seed_data_employment import SEED_EMPLOYMENT_TYPES
+
+        for job_id, employment_type in SEED_EMPLOYMENT_TYPES.items():
+            cursor.execute(
+                "UPDATE jobs SET employmentType = ? WHERE id = ?",
+                (employment_type, job_id),
+            )
         conn.commit()
 
     apply_pipeline_status_backfill(conn)

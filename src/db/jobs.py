@@ -492,12 +492,12 @@ def add_job(job, db_path=None):
 
     cursor.execute("""
         INSERT INTO jobs (
-            title, company, size, link, date, location, remoteType, seniority, salary,
-            description, matchScore, matchType, shouldProceed, status, resumeUsed,
+            title, company, size, link, date, location, remoteType, seniority, employmentType,
+            salary, description, matchScore, matchType, shouldProceed, status, resumeUsed,
             strengths, gaps, contacts, outreachMessage, comment, isRecruiter, companyUrl,
             unclassified
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         title,
@@ -508,6 +508,7 @@ def add_job(job, db_path=None):
         fields["location"],
         fields["remoteType"],
         fields["seniority"],
+        fields["employmentType"],
         fields["salary"],
         fields["description"],
         fields["matchScore"],

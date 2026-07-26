@@ -1,0 +1,12 @@
+# Ralph Loop Progress — PRD #170
+
+
+## 2026-07-26 — #172 Persist Employment Type from scrape → API → drawer
+
+- Added `employmentType` on Job schema + migration 011 (empty default for legacy rows).
+- Scrape normalize maps Bright Data `job_employment_type`; error-only snapshot rows skipped.
+- Mock scrape + post-seed Employment Type values for local demos; GET `/api/jobs` exposes field.
+- Drawer Job Info shows Employment Type when known (omitted when blank); no Kanban card badge.
+- Tests: `tests/test_employment_type.py`, scraper normalize/error-skip, migrations column check.
+- Quality: ruff, mypy, pytest --cov (960 passed, ≥84% coverage).
+
