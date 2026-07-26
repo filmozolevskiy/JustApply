@@ -2,10 +2,22 @@
 
 import { buildCompanyResearchSectionHtml } from './companyResearchUi.js';
 import { findJob, getJobs, setJobs, updateJob, upsertJob } from './jobStore.js';
-import { getBoardJobOrder, resolveJobsArchivedFetchParam } from './boardRenderer.js';
+import {
+  formatAnnualPostedSalary,
+  getBoardJobOrder,
+  resolveJobsArchivedFetchParam,
+} from './boardRenderer.js';
 
 export const NAME_PLACEHOLDER = '______';
 
+/** Primary drawer salary line — Annual Posted Salary band only (not raw listing text). */
+export function drawerSalaryDisplay(job) {
+  const annual = formatAnnualPostedSalary(job);
+  if (annual) {
+    return annual;
+  }
+  return 'Not specified';
+}
 export function applyGreetingName(template, firstName) {
   return template.replace(/^((?:Hello|Hi|Dear)\s+)\S+,/m, `$1${firstName},`);
 }
@@ -506,7 +518,7 @@ export function createDrawerController({
               <div>Location: ${job.location}</div>
               <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
               ${job.employmentType ? `<div>Employment Type: <span>${job.employmentType}</span></div>` : ''}
-              <div>Salary: <span class="drawer-salary">${job.salary || 'Not specified'}</span></div>
+              <div>Salary: <span class="drawer-salary">${drawerSalaryDisplay(job)}</span></div>
               <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
             </div>
           </div>

@@ -21,3 +21,10 @@
 - Dashboard search request salary flows through service → pipeline → batch (scrape still ignores salary).
 - Tests: parser, gate cases, batch persistence, poller Rejected vs Matched, search/backfill wiring.
 - Quality: ruff, mypy, full pytest (1022 passed, cov 85.70%).
+
+## 2026-07-26 — #182 Drawer + Scraped salary display
+- Scraped / no-band cards omit salary line (`cardSalaryDisplay` annual-only; no raw fallback).
+- Drawer Job Info uses `drawerSalaryDisplay`: annual band matches card (equal min/max collapse); no band → "Not specified" (raw string not primary).
+- Glassdoor Company Research salary row unchanged.
+- Tests: scraped omit, drawer band/point, drawer no-band, drawer helper wiring.
+- Quality: ruff, mypy, full pytest (1026 passed, cov 85.72%).

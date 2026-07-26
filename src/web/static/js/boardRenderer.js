@@ -267,11 +267,8 @@ export function formatAnnualPostedSalary(job) {
 }
 
 export function cardSalaryDisplay(job) {
-  const annual = formatAnnualPostedSalary(job);
-  if (annual) {
-    return annual;
-  }
-  return job?.salary ? String(job.salary) : '';
+  // Annual band only — Scraped / legacy rows without a band omit the salary line.
+  return formatAnnualPostedSalary(job);
 }
 
 export function getKanbanCardMovementButtons(job) {
