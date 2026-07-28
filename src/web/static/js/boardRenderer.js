@@ -271,6 +271,15 @@ export function cardSalaryDisplay(job) {
   return formatAnnualPostedSalary(job);
 }
 
+export function cardCommentRootCountChip(job) {
+  const comments = Array.isArray(job?.comments) ? job.comments : [];
+  const rootCount = comments.filter((c) => c && (c.parentId == null || c.parentId === '')).length;
+  if (rootCount < 1) {
+    return '';
+  }
+  return `<span class="comment-root-count-chip" aria-label="${rootCount} comment${rootCount === 1 ? '' : 's'}"><i class="fa-regular fa-comment-dots" aria-hidden="true"></i> ${rootCount}</span>`;
+}
+
 export function getKanbanCardMovementButtons(job) {
   if (job.archived) {
     return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
@@ -336,6 +345,7 @@ export function renderBoard(jobs, filters = {}) {
       const favoriteChip = job.favorited
         ? `<span class="favorite-header-chip" aria-hidden="true"><i class="fa-solid fa-star"></i> Favorite</span>`
         : '';
+      const commentChip = cardCommentRootCountChip(job);
       const salaryDisplay = cardSalaryDisplay(job);
 
       card.innerHTML = `
@@ -347,6 +357,7 @@ export function renderBoard(jobs, filters = {}) {
                 ` : ''}
               </div>
               <div class="kanban-card-header-actions">
+                ${commentChip}
                 ${favoriteChip}
                 <span class="match-pill ${matchClass}">${job.matchScore}%</span>
               </div>

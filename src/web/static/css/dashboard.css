@@ -1153,6 +1153,21 @@
       letter-spacing: 0.02em;
       pointer-events: none;
     }
+    .comment-root-count-chip {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.68rem;
+      font-style: normal;
+      font-family: var(--font-mono);
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.18);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      border-radius: 999px;
+      padding: 2px 8px;
+      pointer-events: none;
+    }
     .archived-badge {
       font-size:0.6rem; background:rgba(100,116,139,0.2); color:#94a3b8;
       border:1px solid rgba(100,116,139,0.3); padding:1px 5px;

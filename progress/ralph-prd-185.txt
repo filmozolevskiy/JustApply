@@ -7,3 +7,9 @@
 - Drawer Notes / Comments lists persisted roots and posts new roots via compose + Post.
 - Tests: `tests/test_job_comments.py` plus updated DB/API/drawer draft suites; ruff/mypy/pytest coverage gate green.
 - Commit includes this progress file. Closed #186.
+
+## 2026-07-28 12:15 UTC — #187 Job Comments: Kanban root-count chip
+- Kanban cards show a header `comment-root-count-chip` of root Job Comments only (prototype B); zero roots hide chrome; no body text preview.
+- Chip updates after posting a root via existing `onJobMutated` → `renderBoard` path.
+- Tests: `cardCommentRootCountChip` behavior + board/CSS/drawer wiring in `tests/test_dashboard_modules.py`; ruff/mypy/pytest coverage gate green.
+- Commit includes this progress file. Closed #187.

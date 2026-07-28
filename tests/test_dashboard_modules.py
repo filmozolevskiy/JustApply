@@ -1150,3 +1150,75 @@ def test_drawer_inline_handlers_exported_to_window():
         "updateOutreachCounter",
     ):
         assert f"{name}," in window_block, f"{name} must be exported to window for drawer inline handlers"
+
+
+def test_card_comment_root_count_chip_counts_roots_only():
+    """Kanban card chip shows root Job Comment count; zero roots → no chrome; never body text."""
+    result = _run_node(
+        """
+        import { cardCommentRootCountChip } from './src/web/static/js/boardRenderer.js';
+
+        const empty = cardCommentRootCountChip({ comments: [] });
+        if (empty !== '') process.exit(1);
+
+        const missing = cardCommentRootCountChip({});
+        if (missing !== '') process.exit(2);
+
+        const oneRoot = cardCommentRootCountChip({
+          comments: [
+            { id: 'c1', parentId: null, body: 'Secret note body', createdAt: '2026-07-01T10:00:00Z' },
+          ],
+        });
+        if (!oneRoot.includes('comment-root-count-chip')) process.exit(3);
+        if (!oneRoot.includes('>1<') && !oneRoot.includes('> 1<') && !/\\b1\\b/.test(oneRoot)) process.exit(4);
+        if (oneRoot.includes('Secret note body')) process.exit(5);
+
+        const rootsAndReply = cardCommentRootCountChip({
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root A', createdAt: '2026-07-01T10:00:00Z' },
+            { id: 'r2', parentId: null, body: 'Root B', createdAt: '2026-07-02T10:00:00Z' },
+            { id: 'reply', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-03T10:00:00Z' },
+          ],
+        });
+        if (!/\\b2\\b/.test(rootsAndReply)) process.exit(6);
+        if (rootsAndReply.includes('Root A') || rootsAndReply.includes('Nested reply')) process.exit(7);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_card_uses_comment_root_count_chip_not_text_preview():
+    """Card header shows root-count chip; no italic comment body preview on the card."""
+    with open(BOARD_RENDERER_PATH, encoding="utf-8") as f:
+        board = f.read()
+    css = read_dashboard_css()
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+
+    assert "cardCommentRootCountChip(job)" in board
+    assert "comment-root-count-chip" in board
+    assert "${commentChip}" in board
+    assert "kanban-card-header-actions" in board
+    # No legacy string-blob field or body text preview on the card.
+    assert "job.comment " not in board
+    assert "job.comment}" not in board
+    assert "job.comment." not in board
+    assert "fa-comment-dots" in board
+    assert ".comment-root-count-chip" in css
+    # Chip helper must not interpolate comment bodies onto the card.
+    helper_start = board.find("function cardCommentRootCountChip")
+    assert helper_start != -1
+    helper_end = board.find("\nexport function", helper_start + 1)
+    helper = board[helper_start:helper_end if helper_end != -1 else helper_start + 600]
+    assert "body" not in helper or ".body" not in helper
+    assert "c.body" not in helper
+    assert "${" not in helper or "rootCount" in helper
+    # Posting a root refreshes the board so the chip count updates without full page reload.
+    post_start = drawer.find("function postJobComment(")
+    assert post_start != -1
+    post_body = drawer[post_start : post_start + 1600]
+    assert "onJobMutated()" in post_body
+    assert "job.comments" in post_body
