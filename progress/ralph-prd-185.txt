@@ -13,3 +13,11 @@
 - Chip updates after posting a root via existing `onJobMutated` → `renderBoard` path.
 - Tests: `cardCommentRootCountChip` behavior + board/CSS/drawer wiring in `tests/test_dashboard_modules.py`; ruff/mypy/pytest coverage gate green.
 - Commit includes this progress file. Closed #187.
+
+## 2026-07-28 13:40 UTC — #188 Job Comments: bubble thread + last-3 + show-more
+- Notes / Comments uses prototype-C bubble thread in the existing drawer slot (after Strengths/Gaps); heading unchanged.
+- Default shows three newest root Job Comments with creation times; replies under visible roots always render.
+- Show more reveals all older roots; Show fewer collapses to three; state resets on drawer open/job switch.
+- CSS in dashboard.css; showMore/Fewer wired through board + window for inline handlers.
+- Tests: renderCommentThreadHtml behavior + section/CSS/window wiring in test_dashboard_modules.py; ruff/mypy/pytest coverage gate green.
+- Commit includes this progress file. Closed #188.

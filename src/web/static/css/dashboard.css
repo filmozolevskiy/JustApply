@@ -1168,6 +1168,46 @@
       padding: 2px 8px;
       pointer-events: none;
     }
+    /* Comment Thread bubbles (Notes / Comments) — from locked prototype C */
+    .comment-thread.jc-feed-c,
+    .drawer-comments-list.jc-feed-c {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .drawer-comment-bubble.jc-bubble-c {
+      max-width: 92%;
+      padding: 10px 12px;
+      border-radius: 12px 12px 12px 4px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+    }
+    .drawer-comment-bubble.jc-bubble-c.is-reply {
+      margin-left: 28px;
+      max-width: calc(92% - 28px);
+      background: rgba(139, 92, 246, 0.12);
+      border-color: rgba(139, 92, 246, 0.28);
+      border-radius: 12px 12px 4px 12px;
+    }
+    .jc-bubble-meta-c {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 4px;
+    }
+    .jc-bubble-body-c {
+      font-size: 0.84rem;
+      color: var(--text-primary);
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .comment-thread-show-more,
+    .comment-thread-show-fewer {
+      align-self: flex-start;
+      font-size: 0.72rem;
+      padding: 4px 10px;
+    }
     .archived-badge {
       font-size:0.6rem; background:rgba(100,116,139,0.2); color:#94a3b8;
       border:1px solid rgba(100,116,139,0.3); padding:1px 5px;

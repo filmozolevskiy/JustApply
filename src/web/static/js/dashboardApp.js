@@ -256,6 +256,8 @@ export function bootstrapDashboard() {
     selectActiveContact: board.selectActiveContact,
     selectProfileManagerProfile: profileManager.selectProfileManagerProfile,
     setActiveProfileManagerProfile: profileManager.setActiveProfileManagerProfile,
+    showFewerCommentRoots: board.showFewerCommentRoots,
+    showMoreCommentRoots: board.showMoreCommentRoots,
     toggleActivityLog: board.toggleActivityLog,
     toggleContacted: board.toggleContacted,
     toggleFavoritesFilter: board.toggleFavoritesFilter,

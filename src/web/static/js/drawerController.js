@@ -84,6 +84,82 @@ export function pickDefaultActiveContact(contacts) {
   return 0;
 }
 
+export function escapeCommentHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function formatCommentTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch (_) {
+    return iso;
+  }
+}
+
+/** Root Job Comments newest-first. */
+export function commentThreadRoots(comments) {
+  return (Array.isArray(comments) ? comments : [])
+    .filter((c) => c && (c.parentId == null || c.parentId === ''))
+    .slice()
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+/** Direct replies under a root, oldest-first. */
+export function commentThreadReplies(comments, rootId) {
+  return (Array.isArray(comments) ? comments : [])
+    .filter((c) => c && c.parentId === rootId)
+    .slice()
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+/**
+ * Bubble Comment Thread HTML for Notes / Comments.
+ * Default: three newest roots; replies under each visible root always included.
+ */
+export function renderCommentThreadHtml(job, { showAllRoots = false } = {}) {
+  const comments = Array.isArray(job?.comments) ? job.comments : [];
+  const roots = commentThreadRoots(comments);
+  if (!roots.length) {
+    return '<div id="drawer-comments-list" class="drawer-comments-list comment-thread" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:8px;">No comments yet.</div>';
+  }
+  const visible = showAllRoots ? roots : roots.slice(0, 3);
+  const hidden = Math.max(0, roots.length - 3);
+  const bubbles = [];
+  for (const root of visible) {
+    bubbles.push(`
+      <div class="drawer-comment-bubble jc-bubble-c" data-comment-id="${escapeCommentHtml(root.id)}" data-parent-id="">
+        <div class="jc-bubble-meta-c">${escapeCommentHtml(formatCommentTime(root.createdAt))}</div>
+        <div class="jc-bubble-body-c">${escapeCommentHtml(root.body || '')}</div>
+      </div>`);
+    for (const reply of commentThreadReplies(comments, root.id)) {
+      bubbles.push(`
+        <div class="drawer-comment-bubble jc-bubble-c is-reply" data-comment-id="${escapeCommentHtml(reply.id)}" data-parent-id="${escapeCommentHtml(reply.parentId)}">
+          <div class="jc-bubble-meta-c">${escapeCommentHtml(formatCommentTime(reply.createdAt))}</div>
+          <div class="jc-bubble-body-c">${escapeCommentHtml(reply.body || '')}</div>
+        </div>`);
+    }
+  }
+  let controls = '';
+  if (!showAllRoots && hidden > 0) {
+    controls = `<button type="button" class="btn btn-secondary comment-thread-show-more" data-show-more onclick="showMoreCommentRoots()">Show ${hidden} older</button>`;
+  } else if (showAllRoots && roots.length > 3) {
+    controls = `<button type="button" class="btn btn-secondary comment-thread-show-fewer" data-show-less onclick="showFewerCommentRoots()">Show fewer</button>`;
+  }
+  return `<div id="drawer-comments-list" class="drawer-comments-list comment-thread jc-feed-c">${bubbles.join('')}${controls}</div>`;
+}
+
 function contactedElsewhereBadgeHtml(contact) {
   if (contact.contacted || !hasContactedElsewhere(contact)) return '';
   const { jobId, company, title } = contact.contactedElsewhere;
@@ -154,46 +230,30 @@ export function createDrawerController({
   let drawerJobId = null;
   let postedRecruiterTemplate = '';
   let postedRussianSpeakerTemplate = '';
-
-  function escapeCommentHtml(text) {
-    return String(text)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function formatCommentTime(iso) {
-    if (!iso) return '';
-    try {
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return iso;
-      return d.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-    } catch (_) {
-      return iso;
-    }
-  }
+  let showAllCommentRoots = false;
 
   function renderCommentsListHtml(job) {
-    const comments = Array.isArray(job.comments) ? job.comments : [];
-    if (!comments.length) {
-      return '<div id="drawer-comments-list" class="drawer-comments-list" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:8px;">No comments yet.</div>';
-    }
-    const items = comments
-      .map(
-        (c) => `
-      <div class="drawer-comment-item" data-comment-id="${escapeCommentHtml(c.id)}" style="padding:8px 10px;margin-bottom:6px;background:rgba(10,14,26,0.45);border:1px solid var(--border-color);border-radius:6px;">
-        <div style="font-size:0.85rem;color:var(--text-primary);white-space:pre-wrap;">${escapeCommentHtml(c.body || '')}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">${escapeCommentHtml(formatCommentTime(c.createdAt))}</div>
-      </div>`,
-      )
-      .join('');
-    return `<div id="drawer-comments-list" class="drawer-comments-list" style="margin-bottom:8px;">${items}</div>`;
+    return renderCommentThreadHtml(job, { showAllRoots: showAllCommentRoots });
+  }
+
+  function refreshCommentsListInDrawer() {
+    const job = drawerJobId != null ? findJob(drawerJobId) : null;
+    const listHost = document.getElementById('drawer-comments-list');
+    if (!listHost || !job) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderCommentsListHtml(job);
+    const next = wrapper.firstElementChild;
+    if (next) listHost.replaceWith(next);
+  }
+
+  function showMoreCommentRoots() {
+    showAllCommentRoots = true;
+    refreshCommentsListInDrawer();
+  }
+
+  function showFewerCommentRoots() {
+    showAllCommentRoots = false;
+    refreshCommentsListInDrawer();
   }
 
   function initPostedBaselines(job) {
@@ -337,13 +397,7 @@ export function createDrawerController({
       addLogLine(`Posted comment for [${job ? job.title : jobId}]`, 'success');
       updateDraftButtonStates();
       onJobMutated();
-      const listHost = document.getElementById('drawer-comments-list');
-      if (listHost && job) {
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = renderCommentsListHtml(job);
-        const next = wrapper.firstElementChild;
-        if (next) listHost.replaceWith(next);
-      }
+      refreshCommentsListInDrawer();
     } catch (err) {
       addLogLine(`Failed to save comment: ${err.message}`, 'warning');
       await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
@@ -491,6 +545,7 @@ export function createDrawerController({
     if (!job) return;
 
     drawerJobId = id;
+    showAllCommentRoots = false;
     initPostedBaselines(job);
 
     const body = document.getElementById('drawer-body');
@@ -928,6 +983,8 @@ export function createDrawerController({
     rejectJobFromDrawer,
     runWithDiscardGuard,
     selectActiveContact,
+    showFewerCommentRoots,
+    showMoreCommentRoots,
     toggleActivityLog,
     toggleContacted,
     toggleJobFavorite,

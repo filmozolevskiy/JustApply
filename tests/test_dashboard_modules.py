@@ -1148,6 +1148,8 @@ def test_drawer_inline_handlers_exported_to_window():
         "onCommentDraftInput",
         "onOutreachDraftInput",
         "updateOutreachCounter",
+        "showMoreCommentRoots",
+        "showFewerCommentRoots",
     ):
         assert f"{name}," in window_block, f"{name} must be exported to window for drawer inline handlers"
 
@@ -1222,3 +1224,111 @@ def test_board_card_uses_comment_root_count_chip_not_text_preview():
     post_body = drawer[post_start : post_start + 1600]
     assert "onJobMutated()" in post_body
     assert "job.comments" in post_body
+
+
+def test_comment_thread_default_shows_three_newest_root_bubbles():
+    """Notes / Comments bubble thread shows at most three newest roots by default."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            { id: 'r1', parentId: null, body: 'Oldest root', createdAt: '2026-07-20T09:00:00Z' },
+            { id: 'r2', parentId: null, body: 'Middle root', createdAt: '2026-07-22T09:00:00Z' },
+            { id: 'r3', parentId: null, body: 'Newer root', createdAt: '2026-07-24T09:00:00Z' },
+            { id: 'r4', parentId: null, body: 'Newest root', createdAt: '2026-07-26T09:00:00Z' },
+          ],
+        };
+        const html = renderCommentThreadHtml(job);
+        if (!html.includes('comment-thread') && !html.includes('jc-feed') && !html.includes('drawer-comment-bubble')) {
+          process.exit(1);
+        }
+        if (!html.includes('Newest root') || !html.includes('Newer root') || !html.includes('Middle root')) {
+          process.exit(2);
+        }
+        if (html.includes('Oldest root')) process.exit(3);
+        if (!html.includes('drawer-comment-bubble') && !html.includes('jc-bubble')) process.exit(4);
+        // creation time must appear (formatted or raw iso)
+        if (!html.includes('Jul') && !html.includes('2026-07-26')) process.exit(5);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_thread_shows_replies_under_visible_roots():
+    """Replies under a visible root always render as nested bubbles."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root note', createdAt: '2026-07-26T09:00:00Z' },
+            { id: 'r1a', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-26T10:00:00Z' },
+          ],
+        };
+        const html = renderCommentThreadHtml(job);
+        if (!html.includes('Root note') || !html.includes('Nested reply')) process.exit(1);
+        if (!html.includes('is-reply')) process.exit(2);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_thread_show_more_and_show_fewer():
+    """Show more reveals all older roots; show fewer collapses to three."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            { id: 'r1', parentId: null, body: 'Oldest root', createdAt: '2026-07-20T09:00:00Z' },
+            { id: 'r2', parentId: null, body: 'Middle root', createdAt: '2026-07-22T09:00:00Z' },
+            { id: 'r3', parentId: null, body: 'Newer root', createdAt: '2026-07-24T09:00:00Z' },
+            { id: 'r4', parentId: null, body: 'Newest root', createdAt: '2026-07-26T09:00:00Z' },
+          ],
+        };
+        const collapsed = renderCommentThreadHtml(job, { showAllRoots: false });
+        if (!collapsed.includes('Show 1 older') && !collapsed.includes('data-show-more')) process.exit(1);
+        if (collapsed.includes('Oldest root')) process.exit(2);
+        if (collapsed.includes('Show fewer') || collapsed.includes('data-show-less')) process.exit(3);
+
+        const expanded = renderCommentThreadHtml(job, { showAllRoots: true });
+        if (!expanded.includes('Oldest root')) process.exit(4);
+        if (!expanded.includes('Show fewer') && !expanded.includes('data-show-less')) process.exit(5);
+        if (expanded.includes('data-show-more')) process.exit(6);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_notes_comments_section_uses_bubble_thread_in_place():
+    """Notes / Comments keeps heading after Strengths/Gaps and uses bubble thread markup/CSS."""
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    css = read_dashboard_css()
+    notes_heading = '">Notes / Comments</h4>'
+    notes_idx = drawer.find(notes_heading)
+    strengths_idx = drawer.find("Strengths</div>")
+    assert notes_idx != -1
+    assert strengths_idx != -1
+    assert strengths_idx < notes_idx
+    assert "renderCommentThreadHtml" in drawer or "renderCommentsListHtml" in drawer
+    assert "jc-bubble-c" in drawer or "drawer-comment-bubble" in drawer
+    assert "showMoreCommentRoots" in drawer
+    assert "showFewerCommentRoots" in drawer
+    assert ".jc-bubble-c" in css or ".drawer-comment-bubble" in css
+    assert ".jc-feed-c" in css or ".comment-thread" in css
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "showMoreCommentRoots," in window_block
+    assert "showFewerCommentRoots," in window_block
