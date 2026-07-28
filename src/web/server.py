@@ -19,6 +19,7 @@ from ..core.batch_poller import poll_in_flight_batches
 from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
 from ..core.gemini_client import generate_text_from_pdf, get_api_key
 from ..db import (
+    add_job_comment,
     archive_job,
     archive_stale_rejected_jobs,
     get_job,
@@ -29,7 +30,6 @@ from ..db import (
     save_outreach_settings,
     set_job_favorited,
     update_contact_status,
-    update_job_comment,
     update_job_status,
     update_outreach_template,
 )
@@ -338,13 +338,17 @@ async def update_status(job_id: int, update: StatusUpdate):
     return updated
 
 
-class CommentUpdate(BaseModel):
-    comment: str
+class CommentCreate(BaseModel):
+    body: str
+    parentId: str | None = None
 
 
-@app.put("/api/jobs/{job_id}/comment", response_model=Job)
-async def update_comment(job_id: int, update: CommentUpdate):
-    updated = update_job_comment(job_id, update.comment)
+@app.post("/api/jobs/{job_id}/comments", response_model=Job)
+async def create_comment(job_id: int, payload: CommentCreate):
+    try:
+        updated = add_job_comment(job_id, payload.body, parent_id=payload.parentId)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
     return updated

@@ -157,14 +157,14 @@ def test_activity_log_capped_at_50_entries(tmp_path):
 
 # --- Job Comment Post (PRD #105) ---
 
-def test_update_job_comment_appends_notes_updated(tmp_path):
+def test_add_job_comment_appends_comment_added(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
-    from src.db import update_job_comment
+    from src.db import add_job_comment
 
-    update_job_comment(job_id, "Phone screen next week", db_str)
+    add_job_comment(job_id, "Phone screen next week", db_path=db_str)
     job = _get_job(db_str, job_id)
-    assert "Notes updated" in [e.message for e in job.activityLog]
+    assert "Comment added" in [e.message for e in job.activityLog]
 
 def test_update_outreach_template_appends_outreach_template_updated(tmp_path):
     db_str = _fresh_db(tmp_path)

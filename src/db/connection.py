@@ -1,7 +1,12 @@
 import os
 import sqlite3
 
-from .migrations import apply_pipeline_status_backfill, apply_rejected_at_backfill, run_migrations
+from .migrations import (
+    apply_legacy_comment_blob_migration,
+    apply_pipeline_status_backfill,
+    apply_rejected_at_backfill,
+    run_migrations,
+)
 from .seed import _seed_db
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -63,6 +68,7 @@ def init_db(db_path=None, allow_seed=False):
 
     apply_pipeline_status_backfill(conn)
     apply_rejected_at_backfill(conn)
+    apply_legacy_comment_blob_migration(conn)
 
     from .contacted_elsewhere import ensure_contacted_profiles_index
 

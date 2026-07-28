@@ -362,11 +362,6 @@ export function renderBoard(jobs, filters = {}) {
               </div>
               ${salaryDisplay ? `<div class="kanban-card-meta-salary"><i class="fa-solid fa-dollar-sign"></i> ${salaryDisplay}</div>` : ''}
             </div>
-            ${job.comment ? `
-              <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <i class="fa-regular fa-comment-dots"></i> ${job.comment}
-              </div>
-            ` : ''}
             <div class="kanban-card-footer">
               <span style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">${job.resumeUsed}</span>
               <div class="kanban-card-actions" onclick="event.stopPropagation()">

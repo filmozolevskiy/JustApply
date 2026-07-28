@@ -77,37 +77,41 @@ def test_put_job_comment_endpoint():
     response = client.get("/api/jobs")
     jobs = response.json()
     job1 = next(j for j in jobs if j["id"] == 1)
-    assert job1["comment"] == "Excellent match. Framework matches 100%."
+    before = len(job1["comments"])
 
-    put_response = client.put("/api/jobs/1/comment", json={"comment": "Verified API testing framework."})
-    assert put_response.status_code == 200
-    updated_job = put_response.json()
-    assert updated_job["comment"] == "Verified API testing framework."
-    assert "Notes updated" in [e["message"] for e in updated_job["activityLog"]]
+    post_response = client.post(
+        "/api/jobs/1/comments",
+        json={"body": "Verified API testing framework."},
+    )
+    assert post_response.status_code == 200
+    updated_job = post_response.json()
+    assert len(updated_job["comments"]) == before + 1
+    assert updated_job["comments"][-1]["body"] == "Verified API testing framework."
+    assert "Comment added" in [e["message"] for e in updated_job["activityLog"]]
 
     response = client.get("/api/jobs")
     jobs = response.json()
     job1_updated = next(j for j in jobs if j["id"] == 1)
-    assert job1_updated["comment"] == "Verified API testing framework."
+    assert job1_updated["comments"][-1]["body"] == "Verified API testing framework."
 
 def test_post_job_activity_log_endpoint():
     response = client.post(
         "/api/jobs/1/activity-log",
-        json={"message": "Notes save failed · HTTP error 503"},
+        json={"message": "Comment save failed · HTTP error 503"},
     )
     assert response.status_code == 200
     updated = response.json()
-    assert "Notes save failed · HTTP error 503" in [e["message"] for e in updated["activityLog"]]
+    assert "Comment save failed · HTTP error 503" in [e["message"] for e in updated["activityLog"]]
 
 def test_post_job_activity_log_nonexistent():
     response = client.post(
         "/api/jobs/999/activity-log",
-        json={"message": "Notes save failed · HTTP error 404"},
+        json={"message": "Comment save failed · HTTP error 404"},
     )
     assert response.status_code == 404
 
 def test_put_job_comment_nonexistent():
-    put_response = client.put("/api/jobs/999/comment", json={"comment": "No job here"})
+    put_response = client.post("/api/jobs/999/comments", json={"body": "No job here"})
     assert put_response.status_code == 404
     assert put_response.json() == {"message": "Job not found"}
 

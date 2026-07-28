@@ -47,7 +47,7 @@ def test_post_comment_calls_comment_endpoint_without_debounce():
     start = drawer.find("function postJobComment(")
     assert start != -1
     body = drawer[start : start + 1200]
-    assert "/comment" in body
+    assert "/comments" in body
     assert "setTimeout" not in body
 
 
@@ -78,7 +78,7 @@ def test_discard_guard_uses_injected_confirm_callback():
 def test_post_failure_appends_activity_log():
     drawer = _drawer()
     assert "/activity-log" in drawer
-    assert "Notes save failed" in drawer
+    assert "Comment save failed" in drawer
     assert "Outreach template save failed" in drawer
 
 
@@ -87,5 +87,5 @@ def test_draft_input_does_not_mutate_job_comment():
     start = drawer.find("function onCommentDraftInput(")
     assert start != -1
     body = drawer[start : start + 300]
-    assert "job.comment" not in body
+    assert "job.comments" not in body
     assert "onJobMutated" not in body

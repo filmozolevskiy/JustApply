@@ -68,6 +68,7 @@ def test_legacy_minimal_jobs_schema_upgrades_in_place(tmp_path):
         assert "annualMin" in cols
         assert "annualMax" in cols
         assert "annualCurrency" in cols
+        assert "comments" in cols
         tables = {
             row[0]
             for row in conn2.execute(

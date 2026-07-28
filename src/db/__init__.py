@@ -20,6 +20,7 @@ from .connection import DB_PATH, get_db_connection, init_db
 from .jobs import (
     VALID_STATUSES,
     add_job,
+    add_job_comment,
     archive_job,
     archive_stale_rejected_jobs,
     enrich_job,
@@ -32,7 +33,6 @@ from .jobs import (
     set_job_favorited,
     update_company_research,
     update_contact_status,
-    update_job_comment,
     update_job_evaluation,
     update_job_status,
     update_outreach_template,

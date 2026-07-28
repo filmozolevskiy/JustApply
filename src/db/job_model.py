@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import uuid
+from datetime import UTC, datetime
 
-from ..schemas import ActivityLogEntry, Contact, Job
+from ..schemas import ActivityLogEntry, Contact, Job, JobComment
+
+COMMENT_BODY_MAX = 2000
 
 
 def _nullable_int(value) -> int | None:
@@ -27,6 +31,36 @@ def _parse_activity_log(raw) -> list[ActivityLogEntry]:
 def activity_log_as_dicts(raw) -> list[dict]:
     """Parse activity log JSON into plain dicts for index/sync callers."""
     return [e.model_dump() for e in _parse_activity_log(raw)]
+
+
+def _parse_job_comments(raw) -> list[JobComment]:
+    try:
+        entries = json.loads(raw) if raw else []
+    except Exception:
+        return []
+    if not isinstance(entries, list):
+        return []
+    out: list[JobComment] = []
+    for entry in entries:
+        if isinstance(entry, JobComment):
+            out.append(entry)
+        elif isinstance(entry, dict) and entry.get("id") and entry.get("body") is not None:
+            try:
+                out.append(JobComment(**entry))
+            except Exception:
+                continue
+    return out
+
+
+def _legacy_blob_as_root_comment(blob: str, created_at: str) -> JobComment:
+    """Wrap a pre-Comment-Thread notes blob as one root Job Comment."""
+    return JobComment(
+        id=f"c{uuid.uuid4().hex[:12]}",
+        parentId=None,
+        body=blob,
+        createdAt=created_at,
+        editedAt=None,
+    )
 
 
 def parse_job_row(row) -> Job:
@@ -84,6 +118,13 @@ def parse_job_row(row) -> Job:
     if not job["recruiterOutreachTemplate"] and job.get("outreachMessage"):
         job["recruiterOutreachTemplate"] = job["outreachMessage"]
 
+    comments = _parse_job_comments(job.get("comments"))
+    legacy_blob = (job.get("comment") or "").strip() if "comment" in job else ""
+    if not comments and legacy_blob:
+        comments = [_legacy_blob_as_root_comment(legacy_blob, datetime.now(UTC).isoformat())]
+    job["comments"] = comments
+    job.pop("comment", None)
+
     return Job(**job)
 
 
@@ -106,7 +147,7 @@ def normalize_add_job_input(job: dict) -> dict:
         "employmentType": job.get("employmentType") or "",
         "salary": job.get("salary") or job.get("Salary type") or "",
         "description": job.get("description") or job.get("Short description") or "",
-        "comment": job.get("comment") or job.get("Comment") or "",
+        "comments": job.get("comments") or [],
         "shouldProceed": bool(job.get("shouldProceed") or job.get("Should proceed?")),
         "size": job.get("size") or "",
         "remoteType": job.get("remoteType") or "",

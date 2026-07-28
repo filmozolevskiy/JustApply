@@ -1,0 +1,9 @@
+# Ralph Loop Progress — PRD #185
+
+## 2026-07-28 12:09 UTC — #186 Job Comments: post root end-to-end
+- Replaced overwriteable `comment` string with `comments: list[JobComment]` on the Job model (schema version 15).
+- Migrates non-empty legacy notes blobs to one root Job Comment (one-shot + post-seed + read path).
+- Added `POST /api/jobs/{id}/comments` with blank/whitespace and 2,000-char validation; activity log `Comment added` / client `Comment save failed · …`.
+- Drawer Notes / Comments lists persisted roots and posts new roots via compose + Post.
+- Tests: `tests/test_job_comments.py` plus updated DB/API/drawer draft suites; ruff/mypy/pytest coverage gate green.
+- Commit includes this progress file. Closed #186.

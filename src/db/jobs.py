@@ -1,14 +1,17 @@
 import json
+import uuid
 from datetime import UTC, datetime
 
-from ..schemas import ActivityLogEntry
+from ..schemas import ActivityLogEntry, JobComment
 from . import connection
 from .contacted_elsewhere import (
     enrich_jobs_with_contacted_elsewhere,
     sync_job_contacted_profiles_index,
 )
 from .job_model import (
+    COMMENT_BODY_MAX,
     _parse_activity_log,
+    _parse_job_comments,
     activity_log_as_dicts,
     normalize_add_job_input,
     parse_job_row,
@@ -137,24 +140,51 @@ def update_job_status(job_id, status, db_path=None):
     return parse_job_row_enriched(row, db_path=db_path)
 
 
-def update_job_comment(job_id, comment, db_path=None):
+def add_job_comment(job_id, body, parent_id=None, db_path=None):
+    """Append a Job Comment (root when parent_id is None). Returns updated Job or None."""
     if db_path is None:
         db_path = connection.DB_PATH
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("Comment body cannot be blank or whitespace-only")
+    if len(text) > COMMENT_BODY_MAX:
+        raise ValueError(f"Comment body exceeds {COMMENT_BODY_MAX} characters")
+    if parent_id is not None:
+        # Reply support lands in a later slice; roots only for #186.
+        raise ValueError("Replies are not supported yet")
+
     conn = connection.get_db_connection(db_path)
+    from .migrations import apply_legacy_comment_blob_migration
+
+    apply_legacy_comment_blob_migration(conn)
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-    if not cursor.fetchone():
+    cursor.execute("SELECT comments FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
         conn.close()
         return None
-    cursor.execute("UPDATE jobs SET comment = ? WHERE id = ?", (comment, job_id))
-    _append_activity_log(cursor, job_id, "Notes updated")
+
+    comments = _parse_job_comments(row[0])
+    comment = JobComment(
+        id=f"c{uuid.uuid4().hex[:12]}",
+        parentId=None,
+        body=text,
+        createdAt=datetime.now(UTC).isoformat(),
+        editedAt=None,
+    )
+    comments.append(comment)
+    cursor.execute(
+        "UPDATE jobs SET comments = ?, comment = '' WHERE id = ?",
+        (json.dumps([c.model_dump() for c in comments]), job_id),
+    )
+    _append_activity_log(cursor, job_id, "Comment added")
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-    row = cursor.fetchone()
+    updated = cursor.fetchone()
     conn.close()
-    if not row:
+    if not updated:
         return None
-    return parse_job_row_enriched(row, db_path=db_path)
+    return parse_job_row_enriched(updated, db_path=db_path)
 
 
 def update_contact_status(job_id, contact_idx, contacted, db_path=None):
@@ -494,7 +524,7 @@ def add_job(job, db_path=None):
         INSERT INTO jobs (
             title, company, size, link, date, location, remoteType, seniority, employmentType,
             salary, description, matchScore, matchType, shouldProceed, status, resumeUsed,
-            strengths, gaps, contacts, outreachMessage, comment, isRecruiter, companyUrl,
+            strengths, gaps, contacts, outreachMessage, comments, isRecruiter, companyUrl,
             unclassified
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
@@ -520,7 +550,10 @@ def add_job(job, db_path=None):
         json.dumps(fields["gaps"]),
         json.dumps(fields["contacts"]),
         fields["outreachMessage"],
-        fields["comment"],
+        json.dumps([
+            c.model_dump() if hasattr(c, "model_dump") else c
+            for c in fields["comments"]
+        ]),
         1 if fields["isRecruiter"] else 0,
         fields["companyUrl"],
         1 if fields["unclassified"] else 0,

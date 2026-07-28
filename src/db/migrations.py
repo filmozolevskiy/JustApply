@@ -14,10 +14,13 @@ Adding the next migration:
 
 from __future__ import annotations
 
+import json
 import sqlite3
+import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 
-CURRENT_SCHEMA_VERSION = 14
+CURRENT_SCHEMA_VERSION = 15
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -335,6 +338,50 @@ def _migration_014_batch_jobs_search_salary_min(conn: sqlite3.Connection) -> Non
     )
 
 
+def _migration_015_jobs_comments_json(conn: sqlite3.Connection) -> None:
+    """Replace overwriteable notes blob with Job Comments JSON list."""
+    _add_column_if_missing(
+        conn,
+        "jobs",
+        "comments",
+        "ALTER TABLE jobs ADD COLUMN comments TEXT DEFAULT '[]'",
+    )
+    apply_legacy_comment_blob_migration(conn)
+
+
+def apply_legacy_comment_blob_migration(conn: sqlite3.Connection) -> None:
+    """Idempotent: non-empty legacy ``comment`` TEXT → one root in ``comments``."""
+    cols = _table_columns(conn, "jobs")
+    if "comments" not in cols or "comment" not in cols:
+        return
+    rows = conn.execute(
+        "SELECT id, comment, comments FROM jobs "
+        "WHERE comment IS NOT NULL AND TRIM(comment) != ''"
+    ).fetchall()
+    migrated_at = datetime.now(UTC).isoformat()
+    for row in rows:
+        job_id, blob, raw_comments = row[0], row[1], row[2]
+        try:
+            existing = json.loads(raw_comments) if raw_comments else []
+        except Exception:
+            existing = []
+        if isinstance(existing, list) and existing:
+            conn.execute("UPDATE jobs SET comment = '' WHERE id = ?", (job_id,))
+            continue
+        root = {
+            "id": f"c{uuid.uuid4().hex[:12]}",
+            "parentId": None,
+            "body": str(blob).strip(),
+            "createdAt": migrated_at,
+            "editedAt": None,
+        }
+        conn.execute(
+            "UPDATE jobs SET comments = ?, comment = '' WHERE id = ?",
+            (json.dumps([root]), job_id),
+        )
+    conn.commit()
+
+
 _MIGRATIONS: dict[int, MigrationFn] = {
     1: _migration_001_create_jobs_table,
     2: _migration_002_jobs_extra_columns,
@@ -350,6 +397,7 @@ _MIGRATIONS: dict[int, MigrationFn] = {
     12: _migration_012_batch_jobs_search_employment_types,
     13: _migration_013_jobs_annual_posted_salary,
     14: _migration_014_batch_jobs_search_salary_min,
+    15: _migration_015_jobs_comments_json,
 }
 
 

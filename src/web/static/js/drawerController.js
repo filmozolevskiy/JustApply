@@ -152,12 +152,51 @@ export function createDrawerController({
 }) {
   let activeContactIdx = -1;
   let drawerJobId = null;
-  let postedComment = '';
   let postedRecruiterTemplate = '';
   let postedRussianSpeakerTemplate = '';
 
+  function escapeCommentHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatCommentTime(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  function renderCommentsListHtml(job) {
+    const comments = Array.isArray(job.comments) ? job.comments : [];
+    if (!comments.length) {
+      return '<div id="drawer-comments-list" class="drawer-comments-list" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:8px;">No comments yet.</div>';
+    }
+    const items = comments
+      .map(
+        (c) => `
+      <div class="drawer-comment-item" data-comment-id="${escapeCommentHtml(c.id)}" style="padding:8px 10px;margin-bottom:6px;background:rgba(10,14,26,0.45);border:1px solid var(--border-color);border-radius:6px;">
+        <div style="font-size:0.85rem;color:var(--text-primary);white-space:pre-wrap;">${escapeCommentHtml(c.body || '')}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">${escapeCommentHtml(formatCommentTime(c.createdAt))}</div>
+      </div>`,
+      )
+      .join('');
+    return `<div id="drawer-comments-list" class="drawer-comments-list" style="margin-bottom:8px;">${items}</div>`;
+  }
+
   function initPostedBaselines(job) {
-    postedComment = job.comment || '';
     postedRecruiterTemplate = job.recruiterOutreachTemplate || job.outreachMessage || '';
     postedRussianSpeakerTemplate = job.russianSpeakerOutreachTemplate || '';
   }
@@ -182,7 +221,7 @@ export function createDrawerController({
 
   function isCommentDirty() {
     const el = document.getElementById('drawer-comment-text');
-    return Boolean(el && el.value !== postedComment);
+    return Boolean(el && el.value.trim().length > 0);
   }
 
   function isOutreachDirty() {
@@ -209,7 +248,7 @@ export function createDrawerController({
 
   function revertDraftFields() {
     const commentEl = document.getElementById('drawer-comment-text');
-    if (commentEl) commentEl.value = postedComment;
+    if (commentEl) commentEl.value = '';
     const job = drawerJobId != null ? findJob(drawerJobId) : null;
     const outreachEl = document.getElementById('drawer-outreach-text');
     if (outreachEl && job) {
@@ -276,31 +315,44 @@ export function createDrawerController({
     if (!el || !isCommentDirty()) return;
     const job = findJob(jobId);
     const value = el.value;
+    if (!value.trim()) return;
+    if (value.trim().length > 2000) {
+      addLogLine('Comment is too long (max 2,000 characters)', 'warning');
+      return;
+    }
     try {
-      const resp = await fetch(`/api/jobs/${jobId}/comment`, {
-        method: 'PUT',
+      const resp = await fetch(`/api/jobs/${jobId}/comments`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ comment: value }),
+        body: JSON.stringify({ body: value }),
       });
       if (!resp.ok) throw new Error('HTTP error ' + resp.status);
       const updatedJob = await resp.json();
-      postedComment = updatedJob.comment;
       if (job) {
-        job.comment = updatedJob.comment;
+        job.comments = updatedJob.comments || job.comments;
         job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
       }
-      addLogLine(`Posted notes for [${job ? job.title : jobId}]`, 'success');
+      el.value = '';
+      addLogLine(`Posted comment for [${job ? job.title : jobId}]`, 'success');
       updateDraftButtonStates();
       onJobMutated();
+      const listHost = document.getElementById('drawer-comments-list');
+      if (listHost && job) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = renderCommentsListHtml(job);
+        const next = wrapper.firstElementChild;
+        if (next) listHost.replaceWith(next);
+      }
     } catch (err) {
       addLogLine(`Failed to save comment: ${err.message}`, 'warning');
-      await appendActivityLogFailure(jobId, `Notes save failed · ${err.message}`, job);
+      await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
     }
   }
 
   function cancelJobComment() {
     const el = document.getElementById('drawer-comment-text');
-    if (el) el.value = postedComment;
+    if (el) el.value = '';
     updateDraftButtonStates();
   }
 
@@ -593,7 +645,8 @@ export function createDrawerController({
 
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Notes / Comments</h4>
-            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="onCommentDraftInput(${job.id})">${postedComment}</textarea>
+            ${renderCommentsListHtml(job)}
+            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write a new comment..." oninput="onCommentDraftInput(${job.id})"></textarea>
             <div class="drawer-draft-actions">
               <button id="drawer-comment-cancel" type="button" class="btn btn-secondary drawer-draft-btn" disabled onclick="cancelJobComment(${job.id})">Cancel</button>
               <button id="drawer-comment-post" type="button" class="btn btn-primary drawer-draft-btn" disabled onclick="void postJobComment(${job.id})">Post</button>

@@ -19,6 +19,16 @@ class ActivityLogEntry(BaseModel):
     message: str
 
 
+class JobComment(BaseModel):
+    """A single user-written Job Comment on a job (root or reply)."""
+
+    id: str
+    parentId: str | None = None
+    body: str
+    createdAt: str
+    editedAt: str | None = None
+
+
 class Contact(BaseModel):
     """Outreach contact stored inside Job.contacts JSON.
 
@@ -72,7 +82,7 @@ class Job(BaseModel):
     outreachMessage: str = ""
     recruiterOutreachTemplate: str = ""
     russianSpeakerOutreachTemplate: str = ""
-    comment: str = ""
+    comments: list[JobComment] = []
     isRecruiter: bool = False
     unclassified: bool = False
     batchAttempts: int = 0
