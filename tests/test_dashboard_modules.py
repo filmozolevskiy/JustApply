@@ -1332,3 +1332,57 @@ def test_notes_comments_section_uses_bubble_thread_in_place():
     ]
     assert "showMoreCommentRoots," in window_block
     assert "showFewerCommentRoots," in window_block
+
+
+def test_comment_thread_inline_edit_and_edited_marker():
+    """Edit opens inline textarea with Post/Cancel; editedAt shows quiet marker."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            {
+              id: 'c1',
+              parentId: null,
+              body: 'Posted body',
+              createdAt: '2026-07-26T09:00:00Z',
+              editedAt: '2026-07-26T10:00:00Z',
+            },
+          ],
+        };
+        const viewed = renderCommentThreadHtml(job);
+        if (!viewed.includes('data-edit-comment') && !viewed.includes('startEditJobComment')) process.exit(1);
+        if (!viewed.includes('(edited)') && !viewed.includes('jc-edited')) process.exit(2);
+        if (!viewed.includes('Edited') && !viewed.includes('title=')) process.exit(3);
+        if (viewed.includes('drawer-comment-edit-text')) process.exit(4);
+
+        const editing = renderCommentThreadHtml(job, { editingCommentId: 'c1' });
+        if (!editing.includes('drawer-comment-edit-text') && !editing.includes('textarea')) process.exit(5);
+        if (!editing.includes('Posted body')) process.exit(6);
+        if (!editing.includes('postEditJobComment') && !editing.includes('data-post-edit')) process.exit(7);
+        if (!editing.includes('cancelEditJobComment') && !editing.includes('data-cancel-edit')) process.exit(8);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_inline_edit_handlers_wired_to_window():
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    css = read_dashboard_css()
+    assert "startEditJobComment" in drawer
+    assert "cancelEditJobComment" in drawer
+    assert "postEditJobComment" in drawer
+    assert ".jc-edited" in css or "jc-edited-a" in css
+    assert ".jc-actions" in css or "jc-comment-actions" in css
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "startEditJobComment," in window_block
+    assert "cancelEditJobComment," in window_block
+    assert "postEditJobComment," in window_block

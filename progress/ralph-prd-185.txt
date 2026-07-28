@@ -21,3 +21,10 @@
 - CSS in dashboard.css; showMore/Fewer wired through board + window for inline handlers.
 - Tests: renderCommentThreadHtml behavior + section/CSS/window wiring in test_dashboard_modules.py; ruff/mypy/pytest coverage gate green.
 - Commit includes this progress file. Closed #188.
+
+## 2026-07-28 15:55 UTC — #189 Job Comments: inline edit
+- PUT `/api/jobs/{id}/comments/{commentId}` updates body, keeps `createdAt`, sets `editedAt`, appends activity `Comment edited` (no body text).
+- Rejects blank/whitespace and >2,000 chars like create; missing job/comment → 404.
+- Drawer bubbles: Edit opens inline textarea with Post/Cancel; Cancel restores posted body; quiet `(edited)` marker with edited time on hover.
+- Tests: DB/API in test_job_comments.py; render + window wiring in test_dashboard_modules.py; ruff/mypy/pytest coverage gate green.
+- Commit includes this progress file. Closed #189.

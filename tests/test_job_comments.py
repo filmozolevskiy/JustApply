@@ -231,6 +231,66 @@ def test_post_comment_save_failed_activity_message(api_client):
     ]
 
 
+def test_put_job_comment_endpoint(api_client):
+    client, _ = api_client
+    post = client.post("/api/jobs/1/comments", json={"body": "Before edit"})
+    assert post.status_code == 200
+    comment = post.json()["comments"][-1]
+    created_at = comment["createdAt"]
+
+    put = client.put(
+        f"/api/jobs/1/comments/{comment['id']}",
+        json={"body": "After edit"},
+    )
+    assert put.status_code == 200
+    updated = put.json()
+    edited = next(c for c in updated["comments"] if c["id"] == comment["id"])
+    assert edited["body"] == "After edit"
+    assert edited["createdAt"] == created_at
+    assert edited["editedAt"]
+    assert "Comment edited" in [e["message"] for e in updated["activityLog"]]
+    assert not any("After edit" in e["message"] for e in updated["activityLog"])
+
+
+def test_put_job_comment_rejects_whitespace(api_client):
+    client, _ = api_client
+    post = client.post("/api/jobs/1/comments", json={"body": "Keep"})
+    comment_id = post.json()["comments"][-1]["id"]
+    response = client.put(f"/api/jobs/1/comments/{comment_id}", json={"body": "   "})
+    assert response.status_code == 422
+
+
+def test_put_job_comment_rejects_over_length(api_client):
+    client, _ = api_client
+    post = client.post("/api/jobs/1/comments", json={"body": "Keep"})
+    comment_id = post.json()["comments"][-1]["id"]
+    response = client.put(
+        f"/api/jobs/1/comments/{comment_id}",
+        json={"body": "x" * 2001},
+    )
+    assert response.status_code == 422
+
+
+def test_put_job_comment_missing_job_or_comment(api_client):
+    client, _ = api_client
+    post = client.post("/api/jobs/1/comments", json={"body": "Keep"})
+    comment_id = post.json()["comments"][-1]["id"]
+
+    missing_job = client.put(
+        f"/api/jobs/999/comments/{comment_id}",
+        json={"body": "Nope"},
+    )
+    assert missing_job.status_code == 404
+    assert missing_job.json() == {"message": "Job not found"}
+
+    missing_comment = client.put(
+        "/api/jobs/1/comments/cdoesnotexist",
+        json={"body": "Nope"},
+    )
+    assert missing_comment.status_code == 404
+    assert missing_comment.json() == {"message": "Comment not found"}
+
+
 # ---------------------------------------------------------------------------
 # Slice 5: Drawer wiring (static surface)
 # ---------------------------------------------------------------------------
@@ -253,3 +313,96 @@ def test_drawer_lists_existing_comments_under_notes_heading():
     assert "job.comments" in drawer or "(job.comments" in drawer
     assert "drawer-comment-text" in drawer
     assert "drawer-comments-list" in drawer or "comment-thread" in drawer
+
+
+def test_drawer_inline_edit_posts_via_put_comments_endpoint():
+    drawer = read_drawer_controller()
+    assert "startEditJobComment" in drawer
+    assert "cancelEditJobComment" in drawer
+    assert "postEditJobComment" in drawer
+    start = drawer.find("function postEditJobComment(")
+    assert start != -1
+    body = drawer[start : start + 1800]
+    assert "/comments/" in body
+    assert "method: 'PUT'" in body or 'method: "PUT"' in body
+    assert "Comment edited" not in body or "Comment save failed" in body
+    assert "Comment save failed" in body
+
+
+# ---------------------------------------------------------------------------
+# Slice 6: Inline edit Job Comment (#189)
+# ---------------------------------------------------------------------------
+
+
+def test_update_job_comment_edits_body_keeps_created_at_and_logs(tmp_path):
+    from src.db import add_job_comment, update_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    created = add_job_comment(job_id, "Original note", db_path=db_str)
+    root = created.comments[0]
+    original_created = root.createdAt
+
+    updated = update_job_comment(job_id, root.id, "Fixed note", db_path=db_str)
+
+    assert updated is not None
+    assert len(updated.comments) == 1
+    edited = updated.comments[0]
+    assert edited.id == root.id
+    assert edited.body == "Fixed note"
+    assert edited.createdAt == original_created
+    assert edited.editedAt is not None
+    assert edited.editedAt != original_created
+    assert "Comment edited" in [e.message for e in updated.activityLog]
+    assert not any("Fixed note" in e.message for e in updated.activityLog)
+
+    reloaded = get_job(job_id, db_str)
+    assert reloaded.comments[0].body == "Fixed note"
+    assert reloaded.comments[0].createdAt == original_created
+    assert reloaded.comments[0].editedAt is not None
+
+
+def test_update_job_comment_rejects_whitespace_without_log(tmp_path):
+    from src.db import add_job_comment, update_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    created = add_job_comment(job_id, "Keep me", db_path=db_str)
+    before = get_job(job_id, db_str)
+    comment_id = created.comments[0].id
+
+    with pytest.raises(ValueError, match="empty|whitespace|blank"):
+        update_job_comment(job_id, comment_id, "   \n\t  ", db_path=db_str)
+
+    after = get_job(job_id, db_str)
+    assert after.comments[0].body == "Keep me"
+    assert after.comments[0].editedAt is None
+    assert len(after.activityLog) == len(before.activityLog)
+
+
+def test_update_job_comment_rejects_over_length(tmp_path):
+    from src.db import add_job_comment, update_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    created = add_job_comment(job_id, "Short", db_path=db_str)
+    comment_id = created.comments[0].id
+
+    with pytest.raises(ValueError, match="2,?000|too long|max"):
+        update_job_comment(job_id, comment_id, "x" * 2001, db_path=db_str)
+
+    after = get_job(job_id, db_str)
+    assert after.comments[0].body == "Short"
+    assert after.comments[0].editedAt is None
+
+
+def test_update_job_comment_missing_returns_none(tmp_path):
+    from src.db import add_job_comment, update_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    add_job_comment(job_id, "Exists", db_path=db_str)
+
+    assert update_job_comment(99999, "cdoesnotexist", "Nope", db_path=db_str) is None
+    assert update_job_comment(job_id, "cdoesnotexist", "Nope", db_path=db_str) is None
+    assert get_job(job_id, db_str).comments[0].body == "Exists"

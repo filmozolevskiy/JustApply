@@ -33,6 +33,7 @@ from .jobs import (
     set_job_favorited,
     update_company_research,
     update_contact_status,
+    update_job_comment,
     update_job_evaluation,
     update_job_status,
     update_outreach_template,

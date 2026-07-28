@@ -1202,6 +1202,34 @@
       line-height: 1.4;
       white-space: pre-wrap;
     }
+    .jc-edited-a {
+      font-style: italic;
+      color: var(--text-muted);
+      cursor: help;
+    }
+    .jc-actions-a.jc-comment-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .jc-actions-a.jc-comment-actions button {
+      font-size: 0.72rem;
+      padding: 4px 10px;
+    }
+    .drawer-comment-edit-text {
+      width: 100%;
+      min-height: 64px;
+      margin-top: 4px;
+      resize: vertical;
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: var(--text-primary);
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: inherit;
+    }
     .comment-thread-show-more,
     .comment-thread-show-fewer {
       align-self: flex-start;

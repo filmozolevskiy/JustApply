@@ -30,6 +30,7 @@ from ..db import (
     save_outreach_settings,
     set_job_favorited,
     update_contact_status,
+    update_job_comment,
     update_job_status,
     update_outreach_template,
 )
@@ -351,6 +352,23 @@ async def create_comment(job_id: int, payload: CommentCreate):
         return JSONResponse(status_code=422, content={"message": str(e)})
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return updated
+
+
+class CommentUpdate(BaseModel):
+    body: str
+
+
+@app.put("/api/jobs/{job_id}/comments/{comment_id}", response_model=Job)
+async def update_comment(job_id: int, comment_id: str, payload: CommentUpdate):
+    if not get_job(job_id):
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    try:
+        updated = update_job_comment(job_id, comment_id, payload.body)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Comment not found"})
     return updated
 
 

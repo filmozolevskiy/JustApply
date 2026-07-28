@@ -128,7 +128,7 @@ export function commentThreadReplies(comments, rootId) {
  * Bubble Comment Thread HTML for Notes / Comments.
  * Default: three newest roots; replies under each visible root always included.
  */
-export function renderCommentThreadHtml(job, { showAllRoots = false } = {}) {
+export function renderCommentThreadHtml(job, { showAllRoots = false, editingCommentId = null } = {}) {
   const comments = Array.isArray(job?.comments) ? job.comments : [];
   const roots = commentThreadRoots(comments);
   if (!roots.length) {
@@ -137,18 +137,43 @@ export function renderCommentThreadHtml(job, { showAllRoots = false } = {}) {
   const visible = showAllRoots ? roots : roots.slice(0, 3);
   const hidden = Math.max(0, roots.length - 3);
   const bubbles = [];
+
+  function editedMarkHtml(comment) {
+    if (!comment?.editedAt) return '';
+    const when = formatCommentTime(comment.editedAt);
+    return ` <span class="jc-edited-a" title="Edited ${escapeCommentHtml(when)}">(edited)</span>`;
+  }
+
+  function renderBubble(comment, { isReply = false } = {}) {
+    const id = escapeCommentHtml(comment.id);
+    const parentAttr = isReply ? escapeCommentHtml(comment.parentId || '') : '';
+    const replyClass = isReply ? ' is-reply' : '';
+    const meta = `${escapeCommentHtml(formatCommentTime(comment.createdAt))}${editedMarkHtml(comment)}`;
+    if (editingCommentId && comment.id === editingCommentId) {
+      return `
+      <div class="drawer-comment-bubble jc-bubble-c${replyClass}" data-comment-id="${id}" data-parent-id="${parentAttr}">
+        <div class="jc-bubble-meta-c">${meta}</div>
+        <textarea id="drawer-comment-edit-text" class="drawer-comment-edit-text" rows="3">${escapeCommentHtml(comment.body || '')}</textarea>
+        <div class="jc-actions-a jc-comment-actions">
+          <button type="button" class="btn btn-secondary" data-cancel-edit onclick="cancelEditJobComment()">Cancel</button>
+          <button type="button" class="btn btn-primary" data-post-edit onclick="void postEditJobComment(${job.id}, '${id}')">Post</button>
+        </div>
+      </div>`;
+    }
+    return `
+      <div class="drawer-comment-bubble jc-bubble-c${replyClass}" data-comment-id="${id}" data-parent-id="${parentAttr}">
+        <div class="jc-bubble-meta-c">${meta}</div>
+        <div class="jc-bubble-body-c">${escapeCommentHtml(comment.body || '')}</div>
+        <div class="jc-actions-a jc-comment-actions">
+          <button type="button" class="btn btn-secondary" data-edit-comment="${id}" onclick="startEditJobComment('${id}')">Edit</button>
+        </div>
+      </div>`;
+  }
+
   for (const root of visible) {
-    bubbles.push(`
-      <div class="drawer-comment-bubble jc-bubble-c" data-comment-id="${escapeCommentHtml(root.id)}" data-parent-id="">
-        <div class="jc-bubble-meta-c">${escapeCommentHtml(formatCommentTime(root.createdAt))}</div>
-        <div class="jc-bubble-body-c">${escapeCommentHtml(root.body || '')}</div>
-      </div>`);
+    bubbles.push(renderBubble(root));
     for (const reply of commentThreadReplies(comments, root.id)) {
-      bubbles.push(`
-        <div class="drawer-comment-bubble jc-bubble-c is-reply" data-comment-id="${escapeCommentHtml(reply.id)}" data-parent-id="${escapeCommentHtml(reply.parentId)}">
-          <div class="jc-bubble-meta-c">${escapeCommentHtml(formatCommentTime(reply.createdAt))}</div>
-          <div class="jc-bubble-body-c">${escapeCommentHtml(reply.body || '')}</div>
-        </div>`);
+      bubbles.push(renderBubble(reply, { isReply: true }));
     }
   }
   let controls = '';
@@ -231,9 +256,13 @@ export function createDrawerController({
   let postedRecruiterTemplate = '';
   let postedRussianSpeakerTemplate = '';
   let showAllCommentRoots = false;
+  let editingCommentId = null;
 
   function renderCommentsListHtml(job) {
-    return renderCommentThreadHtml(job, { showAllRoots: showAllCommentRoots });
+    return renderCommentThreadHtml(job, {
+      showAllRoots: showAllCommentRoots,
+      editingCommentId,
+    });
   }
 
   function refreshCommentsListInDrawer() {
@@ -254,6 +283,57 @@ export function createDrawerController({
   function showFewerCommentRoots() {
     showAllCommentRoots = false;
     refreshCommentsListInDrawer();
+  }
+
+  function startEditJobComment(commentId) {
+    editingCommentId = commentId || null;
+    refreshCommentsListInDrawer();
+    const el = document.getElementById('drawer-comment-edit-text');
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }
+
+  function cancelEditJobComment() {
+    editingCommentId = null;
+    refreshCommentsListInDrawer();
+  }
+
+  async function postEditJobComment(jobId, commentId) {
+    const el = document.getElementById('drawer-comment-edit-text');
+    if (!el || !commentId) return;
+    const job = findJob(jobId);
+    const value = el.value;
+    if (!value.trim()) {
+      addLogLine('Comment cannot be blank', 'warning');
+      return;
+    }
+    if (value.trim().length > 2000) {
+      addLogLine('Comment is too long (max 2,000 characters)', 'warning');
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/comments/${commentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: value }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      if (job) {
+        job.comments = updatedJob.comments || job.comments;
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
+      }
+      editingCommentId = null;
+      addLogLine(`Edited comment for [${job ? job.title : jobId}]`, 'success');
+      onJobMutated();
+      refreshCommentsListInDrawer();
+    } catch (err) {
+      addLogLine(`Failed to save comment: ${err.message}`, 'warning');
+      await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
+    }
   }
 
   function initPostedBaselines(job) {
@@ -546,6 +626,7 @@ export function createDrawerController({
 
     drawerJobId = id;
     showAllCommentRoots = false;
+    editingCommentId = null;
     initPostedBaselines(job);
 
     const body = document.getElementById('drawer-body');
@@ -964,6 +1045,7 @@ export function createDrawerController({
   }
 
   return {
+    cancelEditJobComment,
     cancelJobComment,
     cancelOutreachTemplate,
     closeDrawer,
@@ -977,6 +1059,7 @@ export function createDrawerController({
     onOutreachDraftInput,
     openContactedElsewhereJob,
     openJobDetailsDrawer,
+    postEditJobComment,
     postJobComment,
     postOutreachTemplate,
     refreshDrawerIfOpen,
@@ -985,6 +1068,7 @@ export function createDrawerController({
     selectActiveContact,
     showFewerCommentRoots,
     showMoreCommentRoots,
+    startEditJobComment,
     toggleActivityLog,
     toggleContacted,
     toggleJobFavorite,
