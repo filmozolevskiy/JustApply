@@ -228,6 +228,7 @@ export function bootstrapDashboard() {
     closeDrawer: board.closeDrawer,
     closeProfileManager: profileManager.closeProfileManager,
     copyDrawerOutreach: board.copyDrawerOutreach,
+    deleteJobComment: board.deleteJobComment,
     deleteProfileManagerProfile: profileManager.deleteProfileManagerProfile,
     dismissSpendModalFromOverlay,
     enrichJob: board.enrichJob,

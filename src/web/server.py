@@ -22,6 +22,7 @@ from ..db import (
     add_job_comment,
     archive_job,
     archive_stale_rejected_jobs,
+    delete_job_comment,
     get_job,
     get_jobs,
     get_outreach_settings,
@@ -367,6 +368,16 @@ async def update_comment(job_id: int, comment_id: str, payload: CommentUpdate):
         updated = update_job_comment(job_id, comment_id, payload.body)
     except ValueError as e:
         return JSONResponse(status_code=422, content={"message": str(e)})
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Comment not found"})
+    return updated
+
+
+@app.delete("/api/jobs/{job_id}/comments/{comment_id}", response_model=Job)
+async def delete_comment(job_id: int, comment_id: str):
+    if not get_job(job_id):
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    updated = delete_job_comment(job_id, comment_id)
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Comment not found"})
     return updated

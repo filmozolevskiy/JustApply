@@ -1453,3 +1453,57 @@ def test_comment_reply_handlers_wired_to_window():
     post_body = drawer[post_start : post_start + 1800]
     assert "onJobMutated()" in post_body
     assert "parentId" in post_body
+
+
+def test_comment_thread_delete_control_and_confirm_copy():
+    """Delete on roots and replies; confirm message distinguishes cascade."""
+    result = _run_node(
+        """
+        import {
+          buildDeleteCommentConfirmMessage,
+          renderCommentThreadHtml,
+        } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          id: 9,
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root note', createdAt: '2026-07-26T09:00:00Z' },
+            { id: 'r1a', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-26T10:00:00Z' },
+          ],
+        };
+        const html = renderCommentThreadHtml(job);
+        if (!html.includes('data-delete-comment="r1"') && !html.includes("deleteJobComment(9, 'r1')")) {
+          process.exit(1);
+        }
+        if (!html.includes('data-delete-comment="r1a"') && !html.includes("deleteJobComment(9, 'r1a')")) {
+          process.exit(2);
+        }
+        const cascade = buildDeleteCommentConfirmMessage(job.comments[0], job.comments);
+        if (cascade !== 'Delete this note and its 1 replies?') process.exit(3);
+        const replyMsg = buildDeleteCommentConfirmMessage(job.comments[1], job.comments);
+        if (replyMsg !== 'Delete this note?') process.exit(4);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_delete_handler_wired_to_window():
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    assert "deleteJobComment" in drawer
+    assert "buildDeleteCommentConfirmMessage" in drawer
+    assert "window.confirm" in drawer or "confirm(" in drawer
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "deleteJobComment," in window_block or "deleteJobComment:" in window_block
+
+    start = drawer.find("function deleteJobComment(")
+    assert start != -1
+    body = drawer[start : start + 2200]
+    assert "onJobMutated()" in body
+    assert "DELETE" in body

@@ -2,6 +2,8 @@
 
 import json
 import sqlite3
+import subprocess
+from pathlib import Path
 
 import pytest
 import src.db.connection as _db_connection
@@ -13,6 +15,18 @@ from src.db.migrations import CURRENT_SCHEMA_VERSION, get_schema_version
 from src.web.server import app
 
 from kanban_js import read_drawer_controller
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_node(script: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
 
 
 def _fresh_db(tmp_path):
@@ -558,3 +572,206 @@ def test_drawer_reply_posts_via_comments_endpoint_with_parent_id():
     assert "isReply" in render_body and (
         "!isReply" in render_body or "isReply ?" in render_body or "if (!isReply" in render_body
     )
+
+
+# ---------------------------------------------------------------------------
+# Slice 8: Delete with confirm + cascade (#192)
+# ---------------------------------------------------------------------------
+
+
+def test_delete_job_comment_root_cascades_replies_and_logs_once(tmp_path):
+    from src.db import add_job_comment, delete_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    root = add_job_comment(job_id, "Root note", db_path=db_str).comments[0]
+    add_job_comment(job_id, "Reply one", parent_id=root.id, db_path=db_str)
+    add_job_comment(job_id, "Reply two", parent_id=root.id, db_path=db_str)
+    other = add_job_comment(job_id, "Other root", db_path=db_str).comments[-1]
+    before_logs = len(get_job(job_id, db_str).activityLog)
+
+    updated = delete_job_comment(job_id, root.id, db_path=db_str)
+
+    assert updated is not None
+    assert len(updated.comments) == 1
+    assert updated.comments[0].id == other.id
+    assert updated.comments[0].body == "Other root"
+    assert sum(1 for e in updated.activityLog if e.message == "Comment deleted") == 1
+    assert len(updated.activityLog) == before_logs + 1
+    assert not any("Root note" in e.message for e in updated.activityLog)
+    assert not any("Reply" in e.message for e in updated.activityLog)
+
+    reloaded = get_job(job_id, db_str)
+    assert len(reloaded.comments) == 1
+    assert reloaded.comments[0].id == other.id
+
+
+def test_delete_job_comment_solo_root_removes_only_that_comment(tmp_path):
+    from src.db import add_job_comment, delete_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    root = add_job_comment(job_id, "Solo root", db_path=db_str).comments[0]
+    other = add_job_comment(job_id, "Keep me", db_path=db_str).comments[-1]
+
+    updated = delete_job_comment(job_id, root.id, db_path=db_str)
+
+    assert updated is not None
+    assert [c.id for c in updated.comments] == [other.id]
+    assert "Comment deleted" in [e.message for e in updated.activityLog]
+
+
+def test_delete_job_comment_reply_leaves_root_and_logs_once(tmp_path):
+    from src.db import add_job_comment, delete_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    root = add_job_comment(job_id, "Root stays", db_path=db_str).comments[0]
+    reply = add_job_comment(
+        job_id, "Drop reply", parent_id=root.id, db_path=db_str
+    ).comments[-1]
+    sibling = add_job_comment(
+        job_id, "Sibling reply", parent_id=root.id, db_path=db_str
+    ).comments[-1]
+
+    updated = delete_job_comment(job_id, reply.id, db_path=db_str)
+
+    assert updated is not None
+    ids = {c.id for c in updated.comments}
+    assert root.id in ids
+    assert sibling.id in ids
+    assert reply.id not in ids
+    assert sum(1 for e in updated.activityLog if e.message == "Comment deleted") == 1
+
+
+def test_delete_job_comment_missing_returns_none(tmp_path):
+    from src.db import add_job_comment, delete_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    add_job_comment(job_id, "Exists", db_path=db_str)
+
+    assert delete_job_comment(99999, "cdoesnotexist", db_path=db_str) is None
+    assert delete_job_comment(job_id, "cdoesnotexist", db_path=db_str) is None
+    assert get_job(job_id, db_str).comments[0].body == "Exists"
+
+
+def test_delete_job_comment_endpoint_cascades_root(api_client):
+    client, _ = api_client
+    root_id = client.post("/api/jobs/1/comments", json={"body": "API root"}).json()[
+        "comments"
+    ][-1]["id"]
+    client.post(
+        "/api/jobs/1/comments",
+        json={"body": "API reply", "parentId": root_id},
+    )
+    before = client.get("/api/jobs").json()
+    job1 = next(j for j in before if j["id"] == 1)
+    roots_before = sum(
+        1 for c in job1["comments"] if c.get("parentId") in (None, "")
+    )
+
+    deleted = client.delete(f"/api/jobs/1/comments/{root_id}")
+    assert deleted.status_code == 200
+    updated = deleted.json()
+    assert not any(c["id"] == root_id for c in updated["comments"])
+    assert not any(c.get("parentId") == root_id for c in updated["comments"])
+    roots_after = sum(
+        1 for c in updated["comments"] if c.get("parentId") in (None, "")
+    )
+    assert roots_after == roots_before - 1
+    assert "Comment deleted" in [e["message"] for e in updated["activityLog"]]
+    assert not any("API root" in e["message"] for e in updated["activityLog"])
+
+
+def test_delete_job_comment_endpoint_reply_only(api_client):
+    client, _ = api_client
+    root_id = client.post("/api/jobs/1/comments", json={"body": "Keep root"}).json()[
+        "comments"
+    ][-1]["id"]
+    reply_id = client.post(
+        "/api/jobs/1/comments",
+        json={"body": "Gone reply", "parentId": root_id},
+    ).json()["comments"][-1]["id"]
+
+    deleted = client.delete(f"/api/jobs/1/comments/{reply_id}")
+    assert deleted.status_code == 200
+    updated = deleted.json()
+    assert any(c["id"] == root_id for c in updated["comments"])
+    assert not any(c["id"] == reply_id for c in updated["comments"])
+    assert "Comment deleted" in [e["message"] for e in updated["activityLog"]]
+
+
+def test_delete_job_comment_endpoint_missing_job_or_comment(api_client):
+    client, _ = api_client
+    post = client.post("/api/jobs/1/comments", json={"body": "Keep"})
+    comment_id = post.json()["comments"][-1]["id"]
+
+    missing_job = client.delete(f"/api/jobs/999/comments/{comment_id}")
+    assert missing_job.status_code == 404
+    assert missing_job.json() == {"message": "Job not found"}
+
+    missing_comment = client.delete("/api/jobs/1/comments/cdoesnotexist")
+    assert missing_comment.status_code == 404
+    assert missing_comment.json() == {"message": "Comment not found"}
+
+    still = client.get("/api/jobs").json()
+    job1 = next(j for j in still if j["id"] == 1)
+    assert any(c["id"] == comment_id for c in job1["comments"])
+
+
+def test_build_delete_comment_confirm_message_copy():
+    """Confirm copy: cascade warns N replies; solo root/reply uses Delete this note?"""
+    result = _run_node(
+        """
+        import { buildDeleteCommentConfirmMessage } from './src/web/static/js/drawerController.js';
+
+        const comments = [
+          { id: 'r1', parentId: null, body: 'Root' },
+          { id: 'r1a', parentId: 'r1', body: 'A' },
+          { id: 'r1b', parentId: 'r1', body: 'B' },
+          { id: 'r2', parentId: null, body: 'Solo' },
+        ];
+        const cascade = buildDeleteCommentConfirmMessage(
+          { id: 'r1', parentId: null },
+          comments,
+        );
+        if (cascade !== 'Delete this note and its 2 replies?') process.exit(1);
+
+        const solo = buildDeleteCommentConfirmMessage(
+          { id: 'r2', parentId: null },
+          comments,
+        );
+        if (solo !== 'Delete this note?') process.exit(2);
+
+        const reply = buildDeleteCommentConfirmMessage(
+          { id: 'r1a', parentId: 'r1' },
+          comments,
+        );
+        if (reply !== 'Delete this note?') process.exit(3);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_drawer_delete_posts_via_delete_comments_endpoint():
+    drawer = read_drawer_controller()
+    assert "deleteJobComment" in drawer
+    assert "buildDeleteCommentConfirmMessage" in drawer
+    start = drawer.find("function deleteJobComment(")
+    assert start != -1
+    body = drawer[start : start + 2200]
+    assert "confirm(" in body or "window.confirm" in body
+    assert "buildDeleteCommentConfirmMessage" in body
+    assert "/comments/" in body
+    assert "method: 'DELETE'" in body or 'method: "DELETE"' in body
+    assert "onJobMutated()" in body
+    assert "Comment delete failed" in body or "Comment save failed" in body
+    # Delete control on bubbles
+    assert "data-delete-comment" in drawer or "deleteJobComment(" in drawer
+    render_start = drawer.find("function renderBubble(")
+    assert render_start != -1
+    render_body = drawer[render_start : render_start + 2500]
+    assert "Delete" in render_body
+    assert "deleteJobComment" in render_body or "data-delete-comment" in render_body

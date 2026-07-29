@@ -42,3 +42,11 @@
 - Root Post/Cancel buttons stay tied to root compose only; exported `isCommentDraftDirty` / `buildDiscardDraftMessage` for behavior tests.
 - Tests: `tests/test_drawer_drafts.py` dirty detection + discard/nav wiring; ruff/mypy/pytest coverage gate green.
 - Commit includes this progress file. Closed #191.
+
+## 2026-07-29 00:19 UTC — #192 Job Comments: delete with confirm + cascade
+- DB `delete_job_comment` removes a reply alone, or a root plus all its replies; one `Comment deleted` activity entry (no body text).
+- DELETE `/api/jobs/{id}/comments/{commentId}` with 404 for missing job/comment.
+- Drawer Delete on every bubble; `window.confirm` with cascade copy `Delete this note and its N replies?` or solo/reply `Delete this note?`.
+- Card root-count chip refreshes via `onJobMutated` after delete.
+- Tests: cascade/API in `test_job_comments.py`; confirm copy + Delete UI/window wiring in `test_dashboard_modules.py`; ruff/mypy/pytest coverage gate green.
+- Commit includes this progress file. Closed #192.

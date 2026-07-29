@@ -237,6 +237,47 @@ def update_job_comment(job_id, comment_id, body, db_path=None):
     return parse_job_row_enriched(updated, db_path=db_path)
 
 
+def delete_job_comment(job_id, comment_id, db_path=None):
+    """Delete a Job Comment. Root delete cascades to replies. Returns Job or None."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+
+    conn = connection.get_db_connection(db_path)
+    from .migrations import apply_legacy_comment_blob_migration
+
+    apply_legacy_comment_blob_migration(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT comments FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    comments = _parse_job_comments(row[0])
+    target = next((c for c in comments if c.id == comment_id), None)
+    if target is None:
+        conn.close()
+        return None
+
+    if target.parentId is None:
+        remaining = [c for c in comments if c.id != comment_id and c.parentId != comment_id]
+    else:
+        remaining = [c for c in comments if c.id != comment_id]
+
+    cursor.execute(
+        "UPDATE jobs SET comments = ?, comment = '' WHERE id = ?",
+        (json.dumps([c.model_dump() for c in remaining]), job_id),
+    )
+    _append_activity_log(cursor, job_id, "Comment deleted")
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    if not updated:
+        return None
+    return parse_job_row_enriched(updated, db_path=db_path)
+
+
 def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     if db_path is None:
         db_path = connection.DB_PATH

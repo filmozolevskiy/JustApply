@@ -124,6 +124,18 @@ export function commentThreadReplies(comments, rootId) {
     .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
 }
 
+/** Confirm copy before deleting a Job Comment (root cascade vs solo/reply). */
+export function buildDeleteCommentConfirmMessage(comment, comments) {
+  if (!comment) return 'Delete this note?';
+  const isRoot = comment.parentId == null || comment.parentId === '';
+  if (!isRoot) return 'Delete this note?';
+  const replyCount = commentThreadReplies(comments, comment.id).length;
+  if (replyCount > 0) {
+    return `Delete this note and its ${replyCount} replies?`;
+  }
+  return 'Delete this note?';
+}
+
 /**
  * Bubble Comment Thread HTML for Notes / Comments.
  * Default: three newest roots; replies under each visible root always included.
@@ -173,6 +185,7 @@ export function renderCommentThreadHtml(
         <div class="jc-actions-a jc-comment-actions">
           <button type="button" class="btn btn-secondary" data-edit-comment="${id}" onclick="startEditJobComment('${id}')">Edit</button>
           ${replyBtn}
+          <button type="button" class="btn btn-secondary" data-delete-comment="${id}" onclick="void deleteJobComment(${job.id}, '${id}')">Delete</button>
         </div>
       </div>`;
   }
@@ -436,6 +449,36 @@ export function createDrawerController({
     } catch (err) {
       addLogLine(`Failed to save comment: ${err.message}`, 'warning');
       await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
+    }
+  }
+
+  async function deleteJobComment(jobId, commentId) {
+    if (!commentId) return;
+    const job = findJob(jobId);
+    const comments = Array.isArray(job?.comments) ? job.comments : [];
+    const comment = comments.find((c) => c.id === commentId);
+    if (!comment) return;
+    const message = buildDeleteCommentConfirmMessage(comment, comments);
+    if (!window.confirm(message)) return;
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/comments/${commentId}`, {
+        method: 'DELETE',
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      if (job) {
+        job.comments = updatedJob.comments || [];
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
+      }
+      if (editingCommentId === commentId) editingCommentId = null;
+      if (replyingToCommentId === commentId) replyingToCommentId = null;
+      addLogLine(`Deleted comment for [${job ? job.title : jobId}]`, 'success');
+      onJobMutated();
+      refreshCommentsListInDrawer();
+    } catch (err) {
+      addLogLine(`Failed to delete comment: ${err.message}`, 'warning');
+      await appendActivityLogFailure(jobId, `Comment delete failed · ${err.message}`, job);
     }
   }
 
@@ -1171,6 +1214,7 @@ export function createDrawerController({
     closeDrawerImmediate,
     confirmDiscardIfNeeded,
     copyDrawerOutreach,
+    deleteJobComment,
     enrichJobFromDrawer,
     markAppliedFromDrawer,
     navigateDrawerJob,

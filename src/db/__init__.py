@@ -23,6 +23,7 @@ from .jobs import (
     add_job_comment,
     archive_job,
     archive_stale_rejected_jobs,
+    delete_job_comment,
     enrich_job,
     get_job,
     get_jobs,
