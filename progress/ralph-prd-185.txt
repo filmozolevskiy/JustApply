@@ -28,3 +28,10 @@
 - Drawer bubbles: Edit opens inline textarea with Post/Cancel; Cancel restores posted body; quiet `(edited)` marker with edited time on hover.
 - Tests: DB/API in test_job_comments.py; render + window wiring in test_dashboard_modules.py; ruff/mypy/pytest coverage gate green.
 - Commit includes this progress file. Closed #189.
+
+## 2026-07-29 00:07 UTC — #190 Job Comments: two-layer replies
+- DB `add_job_comment` accepts `parent_id` under a root only; rejects missing parent and reply-to-reply.
+- Drawer: Reply on roots opens nested compose; Post sends `parentId`; replies never get Reply.
+- Activity log appends `Comment added` for replies; root-count chip stays root-only (unchanged by replies).
+- Tests: reply persistence / two-layer / validation / API in `test_job_comments.py`; Reply UI + window wiring in `test_dashboard_modules.py`.
+- Finished from prior WIP; ruff/mypy/pytest coverage gate green. Commit includes this progress file. Closed #190.

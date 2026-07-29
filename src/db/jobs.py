@@ -149,9 +149,7 @@ def add_job_comment(job_id, body, parent_id=None, db_path=None):
         raise ValueError("Comment body cannot be blank or whitespace-only")
     if len(text) > COMMENT_BODY_MAX:
         raise ValueError(f"Comment body exceeds {COMMENT_BODY_MAX} characters")
-    if parent_id is not None:
-        # Reply support lands in a later slice; roots only for #186.
-        raise ValueError("Replies are not supported yet")
+    resolved_parent = (parent_id or "").strip() or None
 
     conn = connection.get_db_connection(db_path)
     from .migrations import apply_legacy_comment_blob_migration
@@ -165,9 +163,18 @@ def add_job_comment(job_id, body, parent_id=None, db_path=None):
         return None
 
     comments = _parse_job_comments(row[0])
+    if resolved_parent is not None:
+        parent = next((c for c in comments if c.id == resolved_parent), None)
+        if parent is None:
+            conn.close()
+            raise ValueError("Parent comment not found")
+        if parent.parentId is not None:
+            conn.close()
+            raise ValueError("Cannot reply to a reply")
+
     comment = JobComment(
         id=f"c{uuid.uuid4().hex[:12]}",
-        parentId=None,
+        parentId=resolved_parent,
         body=text,
         createdAt=datetime.now(UTC).isoformat(),
         editedAt=None,

@@ -1386,3 +1386,70 @@ def test_comment_inline_edit_handlers_wired_to_window():
     assert "startEditJobComment," in window_block
     assert "cancelEditJobComment," in window_block
     assert "postEditJobComment," in window_block
+
+
+def test_comment_thread_reply_control_on_roots_only():
+    """Reply opens compose under root; reply bubbles never get a Reply control."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          id: 7,
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root note', createdAt: '2026-07-26T09:00:00Z' },
+            { id: 'r1a', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-26T10:00:00Z' },
+          ],
+        };
+        const viewed = renderCommentThreadHtml(job);
+        if (!viewed.includes('data-start-reply="r1"') && !viewed.includes("startReplyJobComment('r1')")) {
+          process.exit(1);
+        }
+        // Reply bubbles must not offer Reply (no third layer).
+        const replyBubbleIdx = viewed.indexOf('Nested reply');
+        const afterReply = viewed.slice(replyBubbleIdx, replyBubbleIdx + 500);
+        if (afterReply.includes('data-start-reply="r1a"') || afterReply.includes("startReplyJobComment('r1a')")) {
+          process.exit(2);
+        }
+        if (viewed.includes('drawer-comment-reply-text')) process.exit(3);
+
+        const composing = renderCommentThreadHtml(job, { replyingToCommentId: 'r1' });
+        if (!composing.includes('drawer-comment-reply-text') && !composing.includes('data-reply-parent')) {
+          process.exit(4);
+        }
+        if (!composing.includes('postReplyJobComment') && !composing.includes('data-post-reply')) {
+          process.exit(5);
+        }
+        if (!composing.includes('cancelReplyJobComment') && !composing.includes('data-cancel-reply')) {
+          process.exit(6);
+        }
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_reply_handlers_wired_to_window():
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    css = read_dashboard_css()
+    assert "startReplyJobComment" in drawer
+    assert "cancelReplyJobComment" in drawer
+    assert "postReplyJobComment" in drawer
+    assert "parentId" in drawer
+    assert ".drawer-comment-reply" in css or "jc-compose-a" in css
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "startReplyJobComment," in window_block
+    assert "cancelReplyJobComment," in window_block
+    assert "postReplyJobComment," in window_block
+
+    post_start = drawer.find("function postReplyJobComment(")
+    assert post_start != -1
+    post_body = drawer[post_start : post_start + 1800]
+    assert "onJobMutated()" in post_body
+    assert "parentId" in post_body

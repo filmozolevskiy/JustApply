@@ -406,3 +406,155 @@ def test_update_job_comment_missing_returns_none(tmp_path):
     assert update_job_comment(99999, "cdoesnotexist", "Nope", db_path=db_str) is None
     assert update_job_comment(job_id, "cdoesnotexist", "Nope", db_path=db_str) is None
     assert get_job(job_id, db_str).comments[0].body == "Exists"
+
+
+# ---------------------------------------------------------------------------
+# Slice 7: Two-layer replies (#190)
+# ---------------------------------------------------------------------------
+
+
+def test_add_job_comment_reply_under_root_persists_and_logs(tmp_path):
+    from src.db import add_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    root = add_job_comment(job_id, "Root note", db_path=db_str).comments[0]
+
+    updated = add_job_comment(
+        job_id, "Follow-up reply", parent_id=root.id, db_path=db_str
+    )
+
+    assert updated is not None
+    assert len(updated.comments) == 2
+    reply = next(c for c in updated.comments if c.parentId == root.id)
+    assert reply.body == "Follow-up reply"
+    assert reply.editedAt is None
+    assert reply.createdAt
+    assert reply.parentId == root.id
+    assert "Comment added" in [e.message for e in updated.activityLog]
+    assert sum(1 for e in updated.activityLog if e.message == "Comment added") == 2
+
+    reloaded = get_job(job_id, db_str)
+    assert len(reloaded.comments) == 2
+    assert any(c.parentId == root.id and c.body == "Follow-up reply" for c in reloaded.comments)
+    roots = [c for c in reloaded.comments if c.parentId is None]
+    assert len(roots) == 1
+
+
+def test_add_job_comment_rejects_reply_to_reply(tmp_path):
+    from src.db import add_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    root = add_job_comment(job_id, "Root", db_path=db_str).comments[0]
+    reply = add_job_comment(
+        job_id, "First reply", parent_id=root.id, db_path=db_str
+    ).comments[-1]
+    before = get_job(job_id, db_str)
+
+    with pytest.raises(ValueError, match="reply|two.?layer|nested|depth"):
+        add_job_comment(job_id, "Third layer", parent_id=reply.id, db_path=db_str)
+
+    after = get_job(job_id, db_str)
+    assert len(after.comments) == len(before.comments)
+    assert len(after.activityLog) == len(before.activityLog)
+
+
+def test_add_job_comment_rejects_missing_parent(tmp_path):
+    from src.db import add_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    add_job_comment(job_id, "Root", db_path=db_str)
+    before = get_job(job_id, db_str)
+
+    with pytest.raises(ValueError, match="parent|not found"):
+        add_job_comment(job_id, "Orphan", parent_id="cdoesnotexist", db_path=db_str)
+
+    after = get_job(job_id, db_str)
+    assert len(after.comments) == len(before.comments)
+    assert len(after.activityLog) == len(before.activityLog)
+
+
+def test_add_job_comment_reply_rejects_whitespace_and_over_length(tmp_path):
+    from src.db import add_job_comment
+
+    db_str = _fresh_db(tmp_path)
+    job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
+    root = add_job_comment(job_id, "Root", db_path=db_str).comments[0]
+    before = get_job(job_id, db_str)
+
+    with pytest.raises(ValueError, match="empty|whitespace|blank"):
+        add_job_comment(job_id, "   ", parent_id=root.id, db_path=db_str)
+    with pytest.raises(ValueError, match="2,?000|too long|max"):
+        add_job_comment(job_id, "x" * 2001, parent_id=root.id, db_path=db_str)
+
+    after = get_job(job_id, db_str)
+    assert len(after.comments) == len(before.comments)
+    assert len(after.activityLog) == len(before.activityLog)
+
+
+def test_post_job_comment_reply_endpoint(api_client):
+    client, _ = api_client
+    root_post = client.post("/api/jobs/1/comments", json={"body": "API root"})
+    assert root_post.status_code == 200
+    root_id = root_post.json()["comments"][-1]["id"]
+    roots_before = sum(
+        1 for c in root_post.json()["comments"] if c.get("parentId") in (None, "")
+    )
+
+    reply_post = client.post(
+        "/api/jobs/1/comments",
+        json={"body": "API reply", "parentId": root_id},
+    )
+    assert reply_post.status_code == 200
+    updated = reply_post.json()
+    reply = updated["comments"][-1]
+    assert reply["body"] == "API reply"
+    assert reply["parentId"] == root_id
+    assert "Comment added" in [e["message"] for e in updated["activityLog"]]
+    roots_after = sum(
+        1 for c in updated["comments"] if c.get("parentId") in (None, "")
+    )
+    assert roots_after == roots_before
+
+
+def test_post_job_comment_rejects_reply_to_reply(api_client):
+    client, _ = api_client
+    root_id = client.post("/api/jobs/1/comments", json={"body": "Root"}).json()[
+        "comments"
+    ][-1]["id"]
+    reply_id = client.post(
+        "/api/jobs/1/comments",
+        json={"body": "Reply", "parentId": root_id},
+    ).json()["comments"][-1]["id"]
+
+    nested = client.post(
+        "/api/jobs/1/comments",
+        json={"body": "Too deep", "parentId": reply_id},
+    )
+    assert nested.status_code == 422
+
+
+def test_drawer_reply_posts_via_comments_endpoint_with_parent_id():
+    drawer = read_drawer_controller()
+    assert "startReplyJobComment" in drawer
+    assert "cancelReplyJobComment" in drawer
+    assert "postReplyJobComment" in drawer
+    start = drawer.find("function postReplyJobComment(")
+    assert start != -1
+    body = drawer[start : start + 1800]
+    assert "/comments" in body
+    assert "parentId" in body
+    assert "Comment save failed" in body
+    # Reply control only on roots — replies must not offer Reply.
+    assert "data-start-reply" in drawer or "startReplyJobComment(" in drawer
+    render_start = drawer.find("function renderBubble(")
+    assert render_start != -1
+    render_body = drawer[render_start : render_start + 2200]
+    assert "isReply" in render_body
+    assert "Reply" in render_body
+    # Reply button gated so nested bubbles do not get it
+    assert "isReply" in render_body and (
+        "!isReply" in render_body or "isReply ?" in render_body or "if (!isReply" in render_body
+    )
