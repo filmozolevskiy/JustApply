@@ -1,3 +1,28 @@
+# Job Comments — prototype notes
+
+**Question:** How should Job Comments appear on the Kanban card (and how should the two-layer Comment Thread read in the drawer)?
+
+**Status:** Production (PRD #185 / #193). Runnable `/prototype/job-comments` pages removed.
+
+## Variants
+
+| Key | Name | Card signal | Drawer |
+|-----|------|-------------|--------|
+| A | Mix: chip + bubbles *(chosen)* | Header pill with root count (from B) | Comments hero + bubbles (from C) |
+| B | Count chip only (ref) | Header pill with root count | Accordion roots |
+| C | Drawer-first (ref) | No comment chrome | Comments hero + bubbles |
+
+## Verdict — job comments
+
+**Mix: B card + C drawer** (2026-07-26 / grilled through 2026-07-27).
+
+- Card: count chip of root **Job Comments** in the header (no text preview).
+- Drawer: C’s bubble thread styling in the existing **Notes / Comments** slot (after Strengths/Gaps).
+- Show-more: reveal all older roots at once; show-fewer collapses to the newest three.
+- Always confirm deletes; empty/whitespace Post rejected; 2,000 character cap; inline bubble edit.
+
+---
+
 # Favorite Kanban Card — prototype notes
 
 **Question:** How should a favorited Kanban card look (badge + styling) beside normal cards?

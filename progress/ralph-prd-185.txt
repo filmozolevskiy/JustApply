@@ -50,3 +50,10 @@
 - Card root-count chip refreshes via `onJobMutated` after delete.
 - Tests: cascade/API in `test_job_comments.py`; confirm copy + Delete UI/window wiring in `test_dashboard_modules.py`; ruff/mypy/pytest coverage gate green.
 - Commit includes this progress file. Closed #192.
+
+## 2026-07-29 00:50 UTC — #193 Job Comments: prototype cleanup (+ HITL QA pending)
+- Removed throwaway Job Comments prototype assets: `job-comments.html`, `prototype-job-comments.css`, `jobCommentsUiPrototype.js` (no server route had been registered).
+- NOTES.md keeps locked Mix B+C verdict; status set to Production (PRD #185 / #193), route marked removed.
+- Added `tests/test_job_comments_prototype_removed.py` (404 route, assets gone, no server path, verdict retained).
+- Agent-doable acceptance criteria done; Manual QA checklist from PRD #185 left for human — issue stays open with HITL comment.
+- ruff/mypy/pytest coverage gate green. Commit includes this progress file.
