@@ -214,6 +214,32 @@ function contactedElsewhereBadgeHtml(contact) {
   return `<button type="button" class="contacted-elsewhere-badge" onclick="openContactedElsewhereJob(${jobId}, event)" title="Already contacted for another role — click to review">${label}</button>`;
 }
 
+/**
+ * Pure dirty check for Job Comment Drawer Drafts (root compose, reply, inline edit).
+ * replyComposeValue / editValue are null when that UI is not open.
+ */
+export function isCommentDraftDirty({
+  rootComposeValue = '',
+  replyComposeValue = null,
+  editValue = null,
+  editOriginalBody = '',
+} = {}) {
+  if (String(rootComposeValue ?? '').trim().length > 0) return true;
+  if (replyComposeValue != null && String(replyComposeValue).trim().length > 0) return true;
+  if (editValue != null && String(editValue) !== String(editOriginalBody ?? '')) return true;
+  return false;
+}
+
+/** Unsaved Draft Warning body copy for dirty Job Comment and/or outreach drafts. */
+export function buildDiscardDraftMessage({ commentDirty = false, outreachDirty = false } = {}) {
+  if (commentDirty && outreachDirty) {
+    return 'Discard unsaved notes and outreach draft?';
+  }
+  if (commentDirty) return 'Discard unsaved notes?';
+  if (outreachDirty) return 'Discard unsaved outreach draft?';
+  return '';
+}
+
 export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
   if (contacts.length === 0) {
     return '<p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">No contacts listed.</p>';
@@ -437,8 +463,21 @@ export function createDrawerController({
   }
 
   function isCommentDirty() {
-    const el = document.getElementById('drawer-comment-text');
-    return Boolean(el && el.value.trim().length > 0);
+    const rootEl = document.getElementById('drawer-comment-text');
+    const replyEl = document.getElementById('drawer-comment-reply-text');
+    const editEl = document.getElementById('drawer-comment-edit-text');
+    let editOriginalBody = '';
+    if (editEl && editingCommentId && drawerJobId != null) {
+      const job = findJob(drawerJobId);
+      const comment = (job?.comments || []).find((c) => c.id === editingCommentId);
+      editOriginalBody = comment?.body || '';
+    }
+    return isCommentDraftDirty({
+      rootComposeValue: rootEl ? rootEl.value : '',
+      replyComposeValue: replyEl ? replyEl.value : null,
+      editValue: editEl ? editEl.value : null,
+      editOriginalBody,
+    });
   }
 
   function isOutreachDirty() {
@@ -453,19 +492,19 @@ export function createDrawerController({
   }
 
   function getDiscardMessage() {
-    const commentDirty = isCommentDirty();
-    const outreachDirty = isOutreachDirty();
-    if (commentDirty && outreachDirty) {
-      return 'Discard unsaved notes and outreach draft?';
-    }
-    if (commentDirty) return 'Discard unsaved notes?';
-    if (outreachDirty) return 'Discard unsaved outreach draft?';
-    return '';
+    return buildDiscardDraftMessage({
+      commentDirty: isCommentDirty(),
+      outreachDirty: isOutreachDirty(),
+    });
   }
 
   function revertDraftFields() {
     const commentEl = document.getElementById('drawer-comment-text');
     if (commentEl) commentEl.value = '';
+    const hadCommentUiDraft = editingCommentId != null || replyingToCommentId != null;
+    editingCommentId = null;
+    replyingToCommentId = null;
+    if (hadCommentUiDraft) refreshCommentsListInDrawer();
     const job = drawerJobId != null ? findJob(drawerJobId) : null;
     const outreachEl = document.getElementById('drawer-outreach-text');
     if (outreachEl && job) {
@@ -489,14 +528,15 @@ export function createDrawerController({
   }
 
   function updateDraftButtonStates() {
-    const commentDirty = isCommentDirty();
+    const rootEl = document.getElementById('drawer-comment-text');
+    const rootComposeDirty = Boolean(rootEl && rootEl.value.trim().length > 0);
     const outreachDirty = isOutreachDirty();
     const commentPost = document.getElementById('drawer-comment-post');
     const commentCancel = document.getElementById('drawer-comment-cancel');
     const outreachPost = document.getElementById('drawer-outreach-post');
     const outreachCancel = document.getElementById('drawer-outreach-cancel');
-    if (commentPost) commentPost.disabled = !commentDirty;
-    if (commentCancel) commentCancel.disabled = !commentDirty;
+    if (commentPost) commentPost.disabled = !rootComposeDirty;
+    if (commentCancel) commentCancel.disabled = !rootComposeDirty;
     if (outreachPost) outreachPost.disabled = !outreachDirty;
     if (outreachCancel) outreachCancel.disabled = !outreachDirty;
   }
@@ -529,7 +569,7 @@ export function createDrawerController({
 
   async function postJobComment(jobId) {
     const el = document.getElementById('drawer-comment-text');
-    if (!el || !isCommentDirty()) return;
+    if (!el || !el.value.trim()) return;
     const job = findJob(jobId);
     const value = el.value;
     if (!value.trim()) return;

@@ -35,3 +35,10 @@
 - Activity log appends `Comment added` for replies; root-count chip stays root-only (unchanged by replies).
 - Tests: reply persistence / two-layer / validation / API in `test_job_comments.py`; Reply UI + window wiring in `test_dashboard_modules.py`.
 - Finished from prior WIP; ruff/mypy/pytest coverage gate green. Commit includes this progress file. Closed #190.
+
+## 2026-07-29 00:15 UTC — #191 Job Comments: unsaved draft warning
+- Extended Unsaved Draft Warning so dirty root compose, reply compose, or inline edit (changed vs posted body) trigger discard confirm on close/nav/job switch.
+- Warning copy still names notes alone or with outreach; Discard clears root compose and closes reply/edit UI; modal Cancel keeps drafts.
+- Root Post/Cancel buttons stay tied to root compose only; exported `isCommentDraftDirty` / `buildDiscardDraftMessage` for behavior tests.
+- Tests: `tests/test_drawer_drafts.py` dirty detection + discard/nav wiring; ruff/mypy/pytest coverage gate green.
+- Commit includes this progress file. Closed #191.
