@@ -2,6 +2,7 @@ import inspect
 
 from . import db as database
 from .core.annual_posted_salary import annualize_posted_salary
+from .core.apify_linkedin_scraper import scrape_apify_linkedin_jobs
 from .core.attribute_gating import (
     format_attribute_mismatch,
     merge_job_attributes,
@@ -35,6 +36,7 @@ from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
 from .core.scraper import scrape_linkedin_jobs
 from .core.source_platform import (
+    APIFY_LINKEDIN,
     BRIGHTDATA_LINKEDIN,
     validate_source_platform,
 )
@@ -70,8 +72,8 @@ async def run_search_pipeline(
     values raise before any vendor call — never fall through to Bright Data.
 
     ``mock_scraper`` forces the LinkedIn scraper into mock mode (no Bright Data
-    call). Callers should resolve it via ``service.scraper_will_mock`` so a
-    mock-evaluation run never triggers a real, billable scrape.
+    or Apify Actor call). Callers should resolve it via ``service.scraper_will_mock``
+    so a mock-evaluation run never triggers a real, billable scrape.
     """
     resolved_platform = validate_source_platform(platform)
 
@@ -98,6 +100,20 @@ async def run_search_pipeline(
             log_func=log_func,
             force_mock=mock_scraper,
         )
+    elif resolved_platform == APIFY_LINKEDIN:
+        await log("Source Platform: Apify LinkedIn scrape starting.", "info")
+        jobs = await scrape_apify_linkedin_jobs(
+            query=query,
+            location=location,
+            search_regions=search_regions,
+            per_region_limit=per_region_limit,
+            company_sizes=company_sizes,
+            employment_types=employment_types,
+            countries=countries,
+            log_func=log_func,
+            force_mock=mock_scraper,
+        )
+        await log("Source Platform: Apify LinkedIn scrape finished.", "info")
     else:
         # validate_source_platform only returns supported values; keep exhaustiveness.
         raise RuntimeError(f"No scrape dispatcher for platform {resolved_platform!r}")

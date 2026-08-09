@@ -38,13 +38,13 @@ def parse_remote_types(remote_type) -> list[str]:
 
 
 def scraper_will_mock(mock_eval: bool, mock_scraper: bool | None = None) -> bool:
-    """Decide whether the LinkedIn scraper runs in mock mode (no Bright Data call).
+    """Decide whether listing scrape runs in mock mode (no Bright Data / Apify call).
 
     Resolution order:
     1. ``MOCK_SCRAPER=true`` env forces mock regardless of the request.
     2. An explicit ``mock_scraper`` flag wins when provided.
     3. Otherwise a mock-evaluation run defaults to a mock scrape too — so a
-       "test" run never spends real Bright Data credits. Pass
+       "test" run never spends real scrape credits. Pass
        ``mock_scraper=False`` to force a real scrape with a mock evaluation.
     """
     if os.getenv("MOCK_SCRAPER", "false").lower() == "true":
@@ -55,7 +55,7 @@ def scraper_will_mock(mock_eval: bool, mock_scraper: bool | None = None) -> bool
 
 
 def acquire_scrape_slot(mock_eval: bool, mock_scraper: bool | None = None) -> None:
-    """Acquire the scrape rate limiter when a real Bright Data run is expected."""
+    """Acquire the scrape rate limiter when a real billable scrape is expected."""
     if not scraper_will_mock(mock_eval, mock_scraper):
         scrape_limiter.acquire()
 

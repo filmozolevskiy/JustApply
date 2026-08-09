@@ -82,9 +82,13 @@ def test_validate_accepts_brightdata_linkedin():
     assert validate_source_platform("") == DEFAULT_SOURCE_PLATFORM
 
 
+def test_validate_accepts_apify_linkedin():
+    assert validate_source_platform("apify_linkedin") == "apify_linkedin"
+
+
 @pytest.mark.parametrize(
     "platform",
-    ["apify_indeed", "apify_glassdoor", "apify_linkedin", "unknown_vendor", "linkedin"],
+    ["apify_indeed", "apify_glassdoor", "unknown_vendor", "linkedin"],
 )
 def test_validate_rejects_unsupported_platforms(platform):
     with pytest.raises(UnsupportedSourcePlatformError, match="unsupported|not supported"):
@@ -97,7 +101,10 @@ async def test_pipeline_brightdata_routes_to_linkedin_scraper():
     with patch(
         "src.pipelines.scrape_linkedin_jobs",
         new=AsyncMock(return_value=[_make_job()]),
-    ) as mock_scrape, patch("src.pipelines.database.init_db"), patch(
+    ) as mock_scrape, patch(
+        "src.pipelines.scrape_apify_linkedin_jobs",
+        new=AsyncMock(return_value=[_make_job()]),
+    ) as mock_apify, patch("src.pipelines.database.init_db"), patch(
         "src.pipelines.database.job_exists", return_value=False
     ), patch("src.pipelines.database.add_job", return_value=1), patch(
         "src.pipelines.submit_batch_evaluation", new=AsyncMock()
@@ -109,7 +116,65 @@ async def test_pipeline_brightdata_routes_to_linkedin_scraper():
         )
 
         mock_scrape.assert_awaited_once()
+        mock_apify.assert_not_called()
         assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_apify_linkedin_routes_to_apify_scraper():
+    """apify_linkedin scrapes via Apify path and saves Scraped jobs."""
+    with patch(
+        "src.pipelines.scrape_linkedin_jobs",
+        new=AsyncMock(return_value=[_make_job()]),
+    ) as mock_bd, patch(
+        "src.pipelines.scrape_apify_linkedin_jobs",
+        new=AsyncMock(return_value=[_make_job()]),
+    ) as mock_apify, patch("src.pipelines.database.init_db"), patch(
+        "src.pipelines.database.job_exists", return_value=False
+    ), patch("src.pipelines.database.add_job", return_value=42) as mock_add, patch(
+        "src.pipelines.submit_batch_evaluation", new=AsyncMock()
+    ) as mock_batch:
+        results = await run_search_pipeline(
+            "QA",
+            platform="apify_linkedin",
+            mock_eval=True,
+            mock_scraper=True,
+        )
+
+        mock_apify.assert_awaited_once()
+        assert mock_apify.await_args.kwargs.get("force_mock") is True
+        mock_bd.assert_not_called()
+        mock_add.assert_called_once()
+        # mock_eval skips batch submit — path still saves Scraped jobs.
+        mock_batch.assert_not_awaited()
+        assert len(results) == 1
+        assert results[0]["status"] == "scraped"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_apify_linkedin_submits_batch_when_not_mock_eval():
+    """Non-mock eval still uses the shared batch evaluation path after Apify scrape."""
+    with patch(
+        "src.pipelines.scrape_apify_linkedin_jobs",
+        new=AsyncMock(return_value=[_make_job()]),
+    ), patch("src.pipelines.database.init_db"), patch(
+        "src.pipelines.database.job_exists", return_value=False
+    ), patch("src.pipelines.database.add_job", return_value=7), patch(
+        "src.pipelines.load_resume", return_value="resume text"
+    ), patch(
+        "src.pipelines.submit_batch_evaluation",
+        new=AsyncMock(return_value=[]),
+    ) as mock_batch:
+        results = await run_search_pipeline(
+            "QA",
+            platform="apify_linkedin",
+            mock_eval=False,
+            mock_scraper=True,
+        )
+
+        mock_batch.assert_awaited_once()
+        assert len(results) == 1
+        assert results[0]["status"] == "scraped"
 
 
 @pytest.mark.asyncio
@@ -117,26 +182,34 @@ async def test_pipeline_default_platform_is_brightdata():
     with patch(
         "src.pipelines.scrape_linkedin_jobs",
         new=AsyncMock(return_value=[]),
-    ) as mock_scrape, patch("src.pipelines.database.init_db"):
+    ) as mock_scrape, patch(
+        "src.pipelines.scrape_apify_linkedin_jobs",
+        new=AsyncMock(return_value=[]),
+    ) as mock_apify, patch("src.pipelines.database.init_db"):
         await run_search_pipeline("QA", mock_eval=True)
 
         mock_scrape.assert_awaited_once()
+        mock_apify.assert_not_called()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "platform",
-    ["apify_indeed", "apify_glassdoor", "apify_linkedin", "totally_fake"],
+    ["apify_indeed", "apify_glassdoor", "totally_fake"],
 )
 async def test_pipeline_rejects_unsupported_without_calling_scraper(platform):
     with patch(
         "src.pipelines.scrape_linkedin_jobs",
         new=AsyncMock(return_value=[_make_job()]),
-    ) as mock_scrape:
+    ) as mock_scrape, patch(
+        "src.pipelines.scrape_apify_linkedin_jobs",
+        new=AsyncMock(return_value=[_make_job()]),
+    ) as mock_apify:
         with pytest.raises(UnsupportedSourcePlatformError, match=platform):
             await run_search_pipeline("QA", platform=platform, mock_eval=True)
 
         mock_scrape.assert_not_called()
+        mock_apify.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -152,6 +225,13 @@ async def test_search_jobs_forwards_platform_and_rejects_unsupported():
         "src.service.just_apply.run_search_pipeline",
         new=AsyncMock(return_value=[]),
     ) as mock_pipeline:
+        await search_jobs(query="QA", platform="apify_linkedin", rate_limit=False)
+        assert mock_pipeline.await_args.kwargs["platform"] == "apify_linkedin"
+
+    with patch(
+        "src.service.just_apply.run_search_pipeline",
+        new=AsyncMock(return_value=[]),
+    ) as mock_pipeline:
         with pytest.raises(UnsupportedSourcePlatformError):
             await search_jobs(query="QA", platform="apify_indeed", rate_limit=False)
         mock_pipeline.assert_not_called()
@@ -160,7 +240,7 @@ async def test_search_jobs_forwards_platform_and_rejects_unsupported():
 def test_api_search_rejects_reserved_and_unknown_platforms(client):
     import src.web.server as server_mod
 
-    for platform in ("apify_indeed", "apify_glassdoor", "apify_linkedin", "unknown_x"):
+    for platform in ("apify_indeed", "apify_glassdoor", "unknown_x"):
         with patch.object(server_mod, "run_scraping_task"):
             response = client.post("/api/search", json=_valid_payload(platform=platform))
         assert response.status_code == 422, platform
@@ -176,6 +256,20 @@ def test_api_search_accepts_brightdata_linkedin(client):
         response = client.post("/api/search", json=_valid_payload())
     assert response.status_code == 200
     assert response.json()["status"] == "triggered"
+
+
+def test_api_search_accepts_apify_linkedin(client):
+    import src.web.server as server_mod
+
+    with patch.object(server_mod, "run_scraping_task"):
+        response = client.post(
+            "/api/search",
+            json=_valid_payload(platform="apify_linkedin"),
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "triggered"
+    task_id = response.json()["task_id"]
+    assert server_mod.active_tasks[task_id].params["platform"] == "apify_linkedin"
 
 
 def test_api_search_forwards_platform_into_task_params(client):

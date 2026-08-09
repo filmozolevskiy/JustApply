@@ -1,8 +1,8 @@
 """Source Platform values for the Search & Evaluation Pipeline scrape phase.
 
-v1 ships Bright Data LinkedIn only. Reserved Apify boards (and Apify LinkedIn
-until its scrape path lands) are rejected with a clear unsupported error — never
-silently fall through to Bright Data.
+v1 ships Bright Data LinkedIn and Apify LinkedIn. Reserved boards (Indeed /
+Glassdoor) are rejected with a clear unsupported error — never silently fall
+through to Bright Data.
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ APIFY_GLASSDOOR = "apify_glassdoor"
 DEFAULT_SOURCE_PLATFORM = BRIGHTDATA_LINKEDIN
 
 # Platforms the scrape dispatcher can run today.
-SUPPORTED_SOURCE_PLATFORMS = frozenset({BRIGHTDATA_LINKEDIN})
+SUPPORTED_SOURCE_PLATFORMS = frozenset({BRIGHTDATA_LINKEDIN, APIFY_LINKEDIN})
 
 # Known future options — named in errors so callers know they are reserved, not typos.
-RESERVED_SOURCE_PLATFORMS = frozenset({APIFY_LINKEDIN, APIFY_INDEED, APIFY_GLASSDOOR})
+RESERVED_SOURCE_PLATFORMS = frozenset({APIFY_INDEED, APIFY_GLASSDOOR})
 
 
 class UnsupportedSourcePlatformError(ValueError):
