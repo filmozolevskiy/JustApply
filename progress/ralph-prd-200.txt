@@ -18,7 +18,7 @@
 
 ## Iteration — #203 Apify LinkedIn scrape → Scraped (API + mock)
 - Date: 2026-08-09
-- Commit: (pending)
+- Commit: 11dece1
 - What shipped:
   - Added `src/core/apify_linkedin_scraper.py`: Actor `curious_coder/linkedin-jobs-scraper`, normalize (`companyLinkedinUrl` → `companyUrl`, poster contacts), one run per Search Region, mock mode, injectable runner.
   - `apify_linkedin` is now a supported Source Platform; reserved Indeed/Glassdoor still rejected.
