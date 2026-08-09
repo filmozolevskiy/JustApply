@@ -34,7 +34,7 @@
 
 ## Iteration — #202 Board Source Platform + Apify Spend Confirmation
 - Date: 2026-08-09
-- Commit: pending
+- Commit: fe4a30c
 - What shipped:
   - Dashboard Source Platform select: LinkedIn (Bright Data) + LinkedIn (Apify) only (no Indeed/Glassdoor).
   - Spend Confirmation accepts `platform`; Apify LinkedIn uses named PPE `APIFY_LINKEDIN_SCRAPE_COST_PER_RESULT = 0.001` (regions × limit × rate) with Apify-labeled title/subtitle/warn/line items.
