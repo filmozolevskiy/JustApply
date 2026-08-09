@@ -1,0 +1,16 @@
+# Ralph Loop Progress — PRD #200
+
+
+## Iteration — #201 Prefactor: wire Source Platform through search
+- Date: 2026-08-09
+- Commit: (pending)
+- What shipped:
+  - Added `src/core/source_platform.py` with validate/reject for Source Platform values.
+  - Wired `platform` through API → `search_jobs` → `run_search_pipeline`.
+  - `brightdata_linkedin` keeps Bright Data scrape path; reserved/unknown (incl. `apify_linkedin` until #203) return clear unsupported errors (422 / UnsupportedSourcePlatformError) — never fall through to Bright Data.
+  - Tests at search-orchestration seam (`tests/test_source_platform_routing.py`), mocked providers only.
+- Quality gate: ruff + mypy + pytest --cov (1115 passed, 86.18% cov).
+- Code review (vs HEAD / merge-base main; spec #201):
+  - Standards: 0 hard violations. Judgement: defensive RuntimeError else-branch + multi-layer validate (API/service/pipeline) is intentional defense-in-depth, not speculative Apify code.
+  - Spec: all acceptance criteria met; no Apify scrape path invented (correct for this prefactor).
+- Next unblocked: #203 (blocked by #201 until this closes).

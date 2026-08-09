@@ -34,6 +34,10 @@ from .core.enrichment.contact_sample import (
 from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
 from .core.scraper import scrape_linkedin_jobs
+from .core.source_platform import (
+    BRIGHTDATA_LINKEDIN,
+    validate_source_platform,
+)
 from .db.job_model import coerce_job
 from .schemas import Job, OutreachSettings
 
@@ -56,15 +60,20 @@ async def run_search_pipeline(
     salary_min: int | None = None,
     countries: str = "us",
     time_range: str = "any",
+    platform: str | None = None,
     log_func=None,
     job_saved_func=None,
 ) -> list:
     """Scrape, deduplicate, evaluate, attribute-gate, and save jobs. Returns list of saved job dicts.
 
+    ``platform`` selects the scrape provider (Source Platform). Unsupported
+    values raise before any vendor call — never fall through to Bright Data.
+
     ``mock_scraper`` forces the LinkedIn scraper into mock mode (no Bright Data
     call). Callers should resolve it via ``service.scraper_will_mock`` so a
     mock-evaluation run never triggers a real, billable scrape.
     """
+    resolved_platform = validate_source_platform(platform)
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -74,20 +83,24 @@ async def run_search_pipeline(
         else:
             log_func(msg, level)
 
-    jobs = await scrape_linkedin_jobs(
-        query=query,
-        location=location,
-        search_regions=search_regions,
-        per_region_limit=per_region_limit,
-        remote_types=allowed_remote_types,
-        seniorities=seniorities,
-        company_sizes=company_sizes,
-        employment_types=employment_types,
-        countries=countries,
-        time_range=time_range,
-        log_func=log_func,
-        force_mock=mock_scraper,
-    )
+    if resolved_platform == BRIGHTDATA_LINKEDIN:
+        jobs = await scrape_linkedin_jobs(
+            query=query,
+            location=location,
+            search_regions=search_regions,
+            per_region_limit=per_region_limit,
+            remote_types=allowed_remote_types,
+            seniorities=seniorities,
+            company_sizes=company_sizes,
+            employment_types=employment_types,
+            countries=countries,
+            time_range=time_range,
+            log_func=log_func,
+            force_mock=mock_scraper,
+        )
+    else:
+        # validate_source_platform only returns supported values; keep exhaustiveness.
+        raise RuntimeError(f"No scrape dispatcher for platform {resolved_platform!r}")
 
     scraped_count = len(jobs)
     await log(f"Found {scraped_count} matching jobs.")

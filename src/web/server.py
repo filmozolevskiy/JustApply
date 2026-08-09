@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 from ..core.batch_poller import poll_in_flight_batches
 from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
 from ..core.gemini_client import generate_text_from_pdf, get_api_key
+from ..core.source_platform import UnsupportedSourcePlatformError, validate_source_platform
 from ..db import (
     add_job_comment,
     archive_job,
@@ -988,6 +989,7 @@ async def run_scraping_task(task_id: str):
             salary=params.get("salary", ""),
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
+            platform=params.get("platform"),
             log_func=log_callback,
             job_saved_func=job_saved_callback,
             rate_limit=False,
@@ -1049,6 +1051,11 @@ def _trigger_scrape_task(
 async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
     from ..core.regions import clamp_per_region_limit, validate_search_regions
 
+    try:
+        request.platform = validate_source_platform(request.platform)
+    except UnsupportedSourcePlatformError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+
     country_list = [c.strip() for c in request.countries.split(",") if c.strip()]
     region_pairs = [(item.country, item.region) for item in request.search_regions]
     try:
@@ -1088,6 +1095,11 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
+    try:
+        platform = validate_source_platform(platform)
+    except UnsupportedSourcePlatformError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+
     params = {
         "query": query,
         "location": location,

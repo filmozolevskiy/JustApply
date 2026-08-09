@@ -10,6 +10,11 @@ from ..core.annual_posted_salary import parse_salary_min
 from ..core.batch_poller import run_batch_collection
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..core.evaluation_lock import assert_evaluation_lock_clear
+from ..core.source_platform import (
+    DEFAULT_SOURCE_PLATFORM,
+    UnsupportedSourcePlatformError,
+    validate_source_platform,
+)
 from ..db import get_job, get_jobs, init_db
 from ..pipelines import (
     run_backfill_pipeline,
@@ -71,12 +76,14 @@ async def search_jobs(
     salary: str = "",
     countries: str = "us",
     time_range: str = "any",
+    platform: str | None = None,
     log_func=None,
     job_saved_func=None,
     rate_limit: bool = True,
 ) -> list:
     """Run Search & Evaluation Pipeline; new listings save to Scraped before batch evaluation."""
     assert_evaluation_lock_clear()
+    resolved_platform = validate_source_platform(platform)
     if rate_limit:
         acquire_scrape_slot(mock_eval, mock_scraper)
     remote_types = allowed_remote_types if allowed_remote_types is not None else ["any"]
@@ -95,6 +102,7 @@ async def search_jobs(
         salary_min=parse_salary_min(salary),
         countries=countries,
         time_range=time_range,
+        platform=resolved_platform,
         log_func=log_func,
         job_saved_func=job_saved_func,
     )
@@ -249,7 +257,9 @@ async def promote_sourced_jobs(log_func=None) -> list:
 
 
 __all__ = [
+    "DEFAULT_SOURCE_PLATFORM",
     "RateLimitError",
+    "UnsupportedSourcePlatformError",
     "acquire_scrape_slot",
     "backfill_unevaluated_jobs",
     "collect_batch_evaluation_results",
@@ -261,4 +271,5 @@ __all__ = [
     "reassess_job",
     "scraper_will_mock",
     "search_jobs",
+    "validate_source_platform",
 ]
