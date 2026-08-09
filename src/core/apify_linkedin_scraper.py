@@ -74,7 +74,7 @@ def _format_salary(row: dict[str, Any]) -> str:
     salary = row.get("salary")
     if isinstance(salary, str) and salary.strip():
         return salary.strip()
-    if isinstance(salary, (int, float)):
+    if isinstance(salary, int | float):
         return str(salary)
 
     info = row.get("salaryInfo")

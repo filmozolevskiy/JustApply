@@ -157,8 +157,10 @@ function confirmDiscardUnsavedEdits(message) {
 // Spend Confirmation — Bright Data per-record cost basis (ADR 0012).
 // Pay-as-you-go Web Scraper API: $1.50 / 1,000 successful records (~$0.0015/record).
 // Scrape checkout receipt ceiling: searchRegions × Per-Region Limit × this rate.
-// Apify-paid actions use COST_PER_APIFY_RUN in server.py preflight endpoints (ADR 0007).
+// Apify LinkedIn listing scrape PPE (curious_coder): $1.00 / 1,000 results (~$0.001/result).
+// Enrichment / Company Research Apify runs use COST_PER_APIFY_RUN in server.py (ADR 0007).
 const SCRAPE_COST_PER_RECORD = 0.0015;
+const APIFY_LINKEDIN_SCRAPE_COST_PER_RESULT = 0.001;
 
 const COUNTRY_DISPLAY_NAMES = {
   US: 'United States',
@@ -195,16 +197,43 @@ function formatTimeRangeLabel(timeRange) {
   return TIME_RANGE_LABELS[timeRange] || timeRange;
 }
 
-function recomputeScrapeSpendEstimate(regionCount, perRegionLimit) {
+function recomputeScrapeSpendEstimate(regionCount, perRegionLimit, platform = 'brightdata_linkedin') {
   const limit = clampPerRegionLimit(perRegionLimit);
   const maxPostings = regionCount * limit;
-  const maxSpend = maxPostings * SCRAPE_COST_PER_RECORD;
-  return { limit, maxPostings, maxSpend };
+  const rate =
+    platform === 'apify_linkedin'
+      ? APIFY_LINKEDIN_SCRAPE_COST_PER_RESULT
+      : SCRAPE_COST_PER_RECORD;
+  const maxSpend = maxPostings * rate;
+  return { limit, maxPostings, maxSpend, rate };
 }
 
-function buildScrapeSpendReceiptBodyHtml({ query, groupedRegions, timeRangeLabel, regionCount, perRegionLimit }) {
-  const { maxPostings, maxSpend } = recomputeScrapeSpendEstimate(regionCount, perRegionLimit);
+function buildScrapeSpendReceiptBodyHtml({
+  query,
+  groupedRegions,
+  timeRangeLabel,
+  regionCount,
+  perRegionLimit,
+  platform = 'brightdata_linkedin',
+}) {
+  const { maxPostings, maxSpend, rate } = recomputeScrapeSpendEstimate(
+    regionCount,
+    perRegionLimit,
+    platform,
+  );
   const limit = clampPerRegionLimit(perRegionLimit);
+  const isApifyLinkedIn = platform === 'apify_linkedin';
+  const vendorWarn = isApifyLinkedIn
+    ? 'Spends real Apify LinkedIn scrape credits'
+    : 'Spends real Bright Data credits';
+  const costPerRecordLabel = `× $${rate}`;
+  const costLineLabel = isApifyLinkedIn ? 'Apify LinkedIn PPE' : 'Cost per record';
+  const receiptTitle = isApifyLinkedIn
+    ? 'Run live Apify LinkedIn scrape?'
+    : 'Run live LinkedIn scrape?';
+  const receiptSub = isApifyLinkedIn
+    ? `Apify LinkedIn scrape · Searching <span class="spend-kw">${escapeSpendHtml(query)}</span> in title / description · posted in the <b>${escapeSpendHtml(timeRangeLabel)}</b>.`
+    : `Searching <span class="spend-kw">${escapeSpendHtml(query)}</span> in title / description · posted in the <b>${escapeSpendHtml(timeRangeLabel)}</b>.`;
 
   let regionsHtml = '';
   for (const [country, regions] of groupedRegions) {
@@ -221,13 +250,13 @@ function buildScrapeSpendReceiptBodyHtml({ query, groupedRegions, timeRangeLabel
   return `
     <div class="spend-receipt-grid">
       <div class="spend-receipt-left">
-        <h3 class="spend-receipt-title">Run live LinkedIn scrape?</h3>
-        <div class="spend-receipt-sub">Searching <span class="spend-kw">${escapeSpendHtml(query)}</span> in title / description · posted in the <b>${escapeSpendHtml(timeRangeLabel)}</b>.</div>
+        <h3 class="spend-receipt-title">${escapeSpendHtml(receiptTitle)}</h3>
+        <div class="spend-receipt-sub">${receiptSub}</div>
         ${regionsHtml}
       </div>
       <div class="spend-receipt-right">
         <div class="spend-receipt-warn">
-          <i class="fa-solid fa-triangle-exclamation"></i> Spends real Bright Data credits
+          <i class="fa-solid fa-triangle-exclamation"></i> ${escapeSpendHtml(vendorWarn)}
         </div>
         <div class="spend-receipt-line"><span>Search regions</span><span class="spend-receipt-val" id="scrape-spend-region-count">${regionCount}</span></div>
         <div class="spend-receipt-line">
@@ -239,7 +268,7 @@ function buildScrapeSpendReceiptBodyHtml({ query, groupedRegions, timeRangeLabel
           </span>
         </div>
         <div class="spend-receipt-line"><span>Max postings</span><span class="spend-receipt-val" id="scrape-spend-max-postings">${maxPostings.toLocaleString()}</span></div>
-        <div class="spend-receipt-line"><span>Cost per record</span><span class="spend-receipt-val">× $0.0015</span></div>
+        <div class="spend-receipt-line"><span>${escapeSpendHtml(costLineLabel)}</span><span class="spend-receipt-val">${costPerRecordLabel}</span></div>
         <div class="spend-receipt-divider"></div>
         <div class="spend-receipt-total"><span class="spend-receipt-sub">Max spend</span><span class="spend-receipt-amt" id="scrape-spend-max-spend">~$${maxSpend.toFixed(2)}</span></div>
         <div class="spend-receipt-note">Actual cost depends on how many postings match — this is the ceiling.</div>
@@ -248,7 +277,13 @@ function buildScrapeSpendReceiptBodyHtml({ query, groupedRegions, timeRangeLabel
   `;
 }
 
-function showScrapeSpendConfirmModal({ query, searchRegions, timeRange, perRegionLimit }) {
+function showScrapeSpendConfirmModal({
+  query,
+  searchRegions,
+  timeRange,
+  perRegionLimit,
+  platform = 'brightdata_linkedin',
+}) {
   const regionCount = searchRegions.length;
   const groupedRegions = groupSearchRegionsByCountry(searchRegions);
   const timeRangeLabel = formatTimeRangeLabel(timeRange);
@@ -258,6 +293,7 @@ function showScrapeSpendConfirmModal({ query, searchRegions, timeRange, perRegio
     timeRangeLabel,
     regionCount,
     perRegionLimit,
+    platform,
   });
 
   return new Promise((resolve) => {
@@ -287,7 +323,11 @@ function showScrapeSpendConfirmModal({ query, searchRegions, timeRange, perRegio
 
     const updateEstimate = () => {
       if (!limitInput || !maxPostingsEl || !maxSpendEl) return;
-      const { limit, maxPostings, maxSpend } = recomputeScrapeSpendEstimate(regionCount, limitInput.value);
+      const { limit, maxPostings, maxSpend } = recomputeScrapeSpendEstimate(
+        regionCount,
+        limitInput.value,
+        platform,
+      );
       limitInput.value = limit;
       maxPostingsEl.textContent = maxPostings.toLocaleString();
       maxSpendEl.textContent = '~$' + maxSpend.toFixed(2);

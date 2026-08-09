@@ -30,3 +30,19 @@
   - Standards: 0 hard violations. Judgement: Apify poll loop mirrors existing glassdoor/contact_sample pattern (intentional, not new abstraction).
   - Spec: all acceptance criteria met; dashboard Source Platform UI / Spend Confirmation left for #202.
 - Next unblocked: #202 (blocked by #203 until this closes).
+
+
+## Iteration — #202 Board Source Platform + Apify Spend Confirmation
+- Date: 2026-08-09
+- Commit: pending
+- What shipped:
+  - Dashboard Source Platform select: LinkedIn (Bright Data) + LinkedIn (Apify) only (no Indeed/Glassdoor).
+  - Spend Confirmation accepts `platform`; Apify LinkedIn uses named PPE `APIFY_LINKEDIN_SCRAPE_COST_PER_RESULT = 0.001` (regions × limit × rate) with Apify-labeled title/subtitle/warn/line items.
+  - Bright Data keeps `$0.0015` per-record math and labeling; `triggerScrapeRun` passes platform into the modal (search POST already forwarded platform).
+  - Static tests in `tests/test_source_platform_dashboard.py` (option set + Apify estimate wiring; no live Actor).
+  - Tiny ruff UP038 fix in `apify_linkedin_scraper.py` so quality gate stays green.
+- Quality gate: ruff + mypy + pytest --cov (1139 passed, 85.36% cov).
+- Code review (vs HEAD e11c90e; spec #202):
+  - Standards: no hard blockers after fixing receipt rate display to use `rate` from the named constant (static tests remain identifier+copy assertions per existing dashboard seam pattern).
+  - Spec: options, PPE math, Bright Data path, platform pass-through, and Apify-labeled copy met; left out-of-slice confirmDeleteComment / other dirty WIP uncommitted.
+- Next: no further unblocked ready-for-agent child slices for PRD #200 (parent PRD may still carry the label).

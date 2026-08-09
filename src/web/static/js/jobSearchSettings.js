@@ -224,6 +224,7 @@ export function createJobSearchSettingsController({
       searchRegions: search_regions,
       timeRange: time_range,
       perRegionLimit: per_region_limit,
+      platform,
     });
     if (!spendResult.confirmed) return;
 
