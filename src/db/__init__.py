@@ -27,6 +27,7 @@ from .jobs import (
     enrich_job,
     get_job,
     get_jobs,
+    get_retryable_scraped_jobs,
     get_unevaluated_jobs,
     increment_batch_attempts,
     job_exists,

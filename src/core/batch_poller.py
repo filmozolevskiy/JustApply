@@ -16,8 +16,9 @@ from .attribute_gating import (
     merge_job_attributes,
     passes_attribute_gate,
 )
+from .batch_evaluation import submit_batch_evaluation
 from .gemini_client import get_client
-from .matcher import check_recruiter_by_name
+from .matcher import check_recruiter_by_name, load_resume
 
 TERMINAL_FAILURE_STATES = frozenset({
     "JOB_STATE_FAILED",
@@ -229,8 +230,21 @@ class _RoundAccumulator:
     unclassified: int = 0
     kind: str = "search"
     chunk_count: int = 0
+    gate_remote_types: list[str] | None = None
+    gate_seniorities: str = "any"
+    gate_employment_types: str = "any"
+    gate_salary_min: int | None = None
 
-    def add(self, result: CollectResult, kind: str) -> None:
+    def add(
+        self,
+        result: CollectResult,
+        kind: str,
+        *,
+        gate_remote_types: list[str] | None = None,
+        gate_seniorities: str = "any",
+        gate_employment_types: str = "any",
+        gate_salary_min: int | None = None,
+    ) -> None:
         if not result.terminal:
             return
         self.matched += result.matched
@@ -241,6 +255,10 @@ class _RoundAccumulator:
         if kind:
             self.kind = kind
         self.chunk_count += 1
+        self.gate_remote_types = gate_remote_types
+        self.gate_seniorities = gate_seniorities or "any"
+        self.gate_employment_types = gate_employment_types or "any"
+        self.gate_salary_min = gate_salary_min
 
     def clear(self) -> None:
         self.matched = 0
@@ -250,6 +268,18 @@ class _RoundAccumulator:
         self.unclassified = 0
         self.kind = "search"
         self.chunk_count = 0
+        self.gate_remote_types = None
+        self.gate_seniorities = "any"
+        self.gate_employment_types = "any"
+        self.gate_salary_min = None
+
+    def gate_prefs(self) -> dict:
+        return {
+            "allowed_remote_types": self.gate_remote_types,
+            "seniorities": self.gate_seniorities,
+            "employment_types": self.gate_employment_types,
+            "salary_min": self.gate_salary_min,
+        }
 
 
 _round_accumulator = _RoundAccumulator()
@@ -260,14 +290,27 @@ def reset_round_accumulator() -> None:
     _round_accumulator.clear()
 
 
-def _accumulate_terminal_result(result: CollectResult, kind: str) -> None:
-    _round_accumulator.add(result, kind or "search")
+def _accumulate_terminal_result(result: CollectResult, batch_row: dict) -> None:
+    remote_types, seniorities, employment_types, salary_min = _search_preferences(
+        batch_row
+    )
+    _round_accumulator.add(
+        result,
+        batch_row.get("kind") or "search",
+        gate_remote_types=remote_types,
+        gate_seniorities=seniorities,
+        gate_employment_types=employment_types,
+        gate_salary_min=salary_min,
+    )
 
 
-async def _emit_round_summary_if_ready(*, log_func=None) -> bool:
-    """Emit Evaluation Round Summary when the lock is clear and chunks were tallied."""
+async def _emit_round_summary_if_ready(*, log_func=None) -> dict | None:
+    """Emit Evaluation Round Summary when the lock is clear and chunks were tallied.
+
+    Returns gate prefs from the round when a summary was emitted, else None.
+    """
     if _round_accumulator.chunk_count == 0:
-        return False
+        return None
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -288,8 +331,59 @@ async def _emit_round_summary_if_ready(*, log_func=None) -> bool:
         ),
         "summary",
     )
+    prefs = _round_accumulator.gate_prefs()
     _round_accumulator.clear()
-    return True
+    return prefs
+
+
+async def _auto_retry_failed_scraped_jobs(
+    *,
+    gate_prefs: dict,
+    client=None,
+    db_path=None,
+    log_func=None,
+) -> list[dict]:
+    """Submit a retry Batch Evaluation Job for poison-failed Scraped jobs."""
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    jobs = database.get_retryable_scraped_jobs(
+        db_path=db_path,
+        max_attempts=POISON_MAX_ATTEMPTS,
+    )
+    if not jobs:
+        return []
+
+    await log(f"Auto-retrying {len(jobs)} failed Scraped job(s)…", "summary")
+
+    try:
+        resume_content = load_resume("general_cv.md")
+    except FileNotFoundError:
+        await log("No resume found — cannot auto-retry failed Scraped jobs.", "error")
+        return []
+
+    job_dicts = [job.model_dump() if hasattr(job, "model_dump") else dict(job) for job in jobs]
+    remote_types = gate_prefs.get("allowed_remote_types")
+    if remote_types is None:
+        remote_types = ["any"]
+    return await submit_batch_evaluation(
+        job_dicts,
+        resume_content,
+        kind="retry",
+        client=client,
+        log_func=log_func,
+        db_path=db_path,
+        allowed_remote_types=remote_types,
+        seniorities=gate_prefs.get("seniorities") or "any",
+        employment_types=gate_prefs.get("employment_types") or "any",
+        salary_min=gate_prefs.get("salary_min"),
+    )
 
 
 def apply_unclassified_fallback(
@@ -683,7 +777,7 @@ async def poll_in_flight_batches(
     log_func=None,
     now: datetime | None = None,
 ) -> list[CollectResult]:
-    """Poll every in-flight batch that is due; never submits new batches."""
+    """Poll every in-flight batch that is due; may auto-submit poison retries."""
     now = now or datetime.now(UTC)
     in_flight = batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path)
     if not in_flight:
@@ -703,10 +797,17 @@ async def poll_in_flight_batches(
         )
         results.append(result)
         if result.terminal:
-            _accumulate_terminal_result(result, batch_row.get("kind") or "search")
+            _accumulate_terminal_result(result, batch_row)
 
     if not batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
-        await _emit_round_summary_if_ready(log_func=log_func)
+        gate_prefs = await _emit_round_summary_if_ready(log_func=log_func)
+        if gate_prefs is not None:
+            await _auto_retry_failed_scraped_jobs(
+                gate_prefs=gate_prefs,
+                client=client,
+                db_path=db_path,
+                log_func=log_func,
+            )
     return results
 
 
@@ -781,10 +882,17 @@ async def collect_in_flight_batches_once(
         )
         results.append(result)
         if result.terminal:
-            _accumulate_terminal_result(result, batch_row.get("kind") or "search")
+            _accumulate_terminal_result(result, batch_row)
 
     if not batch_jobs_db.list_in_flight_batch_jobs(db_path=db_path):
-        await _emit_round_summary_if_ready(log_func=log_func)
+        gate_prefs = await _emit_round_summary_if_ready(log_func=log_func)
+        if gate_prefs is not None:
+            await _auto_retry_failed_scraped_jobs(
+                gate_prefs=gate_prefs,
+                client=client,
+                db_path=db_path,
+                log_func=log_func,
+            )
     return _summarize_collect_results(results, db_path=db_path)
 
 
@@ -818,7 +926,7 @@ async def run_batch_collection(
     db_path=None,
     log_func=None,
 ) -> dict:
-    """Headless batch result collection; never submits new batches."""
+    """Headless batch result collection; may auto-submit poison retries when a round clears."""
     if wait:
         return await wait_for_in_flight_collection(
             client=client,

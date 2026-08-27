@@ -931,3 +931,162 @@ async def test_wait_collect_emits_round_summary_after_chunks(tmp_db, monkeypatch
         "Evaluation round complete (search): 1 matched, 0 attribute-filtered, "
         "0 fallback-rejected, 0 failed, 0 unclassified"
     )
+
+
+@pytest.mark.asyncio
+async def test_round_clear_auto_retries_poison_failed_jobs(tmp_db, tmp_path, monkeypatch):
+    """After Evaluation Round Summary, poison-failed Scraped jobs get a retry batch."""
+    job_id = _seed_scraped_job(tmp_db)
+    batch_jobs.create_batch_job(
+        batch_name="batches/search-poison",
+        display_name="search-poison",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[job_id],
+        search_remote_types=["remote"],
+        search_seniorities="mid",
+        search_employment_types="Full-time",
+        search_salary_min=100000,
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+
+    poll_client = _build_fake_client(_malformed_result_line(job_id))
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: poll_client)
+    monkeypatch.setattr(
+        "src.core.batch_poller.is_due_for_poll", lambda *_a, **_k: True
+    )
+
+    resume_dir = tmp_path / "resumes"
+    resume_dir.mkdir()
+    (resume_dir / "general_cv.md").write_text("# General CV\nQA experience.")
+    import src.core.matcher as matcher_module
+
+    monkeypatch.setattr(matcher_module, "RESUMES_DIR", str(resume_dir))
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr(
+        "src.core.batch_evaluation._submit_jsonl_batch",
+        lambda *_args, **_kwargs: ("batches/retry-1", "JOB_STATE_PENDING"),
+    )
+
+    logs: list[tuple[str, str]] = []
+    await poll_in_flight_batches(
+        db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append((level, msg)),
+    )
+
+    job = database.get_job(job_id, db_path=str(tmp_db))
+    assert job.status == "scraped"
+    assert job.batchAttempts == 1
+
+    round_logs = [msg for _level, msg in logs if "Evaluation round complete" in msg]
+    assert len(round_logs) == 1
+    assert "1 failed" in round_logs[0]
+
+    retry_logs = [msg for _level, msg in logs if "Auto-retrying" in msg]
+    assert len(retry_logs) == 1
+    assert "1" in retry_logs[0]
+
+    batches = database.list_batch_jobs(db_path=str(tmp_db))
+    retry_batches = [b for b in batches if b["kind"] == "retry"]
+    assert len(retry_batches) == 1
+    assert retry_batches[0]["jobIds"] == [job_id]
+    assert json.loads(retry_batches[0]["searchRemoteTypes"]) == ["remote"]
+    assert retry_batches[0]["searchSeniorities"] == "mid"
+    assert retry_batches[0]["searchEmploymentTypes"] == "Full-time"
+    assert retry_batches[0]["searchSalaryMin"] == 100000
+
+
+@pytest.mark.asyncio
+async def test_cancel_path_does_not_auto_retry(tmp_db, tmp_path, monkeypatch):
+    """Cancel clears the round without a summary, so poison jobs are not auto-retried."""
+    job_id = _seed_scraped_job(tmp_db)
+    database.increment_batch_attempts(job_id, db_path=str(tmp_db))
+
+    resume_dir = tmp_path / "resumes"
+    resume_dir.mkdir()
+    (resume_dir / "general_cv.md").write_text("# General CV\nQA experience.")
+    import src.core.matcher as matcher_module
+
+    monkeypatch.setattr(matcher_module, "RESUMES_DIR", str(resume_dir))
+
+    submit_calls = []
+
+    async def fake_submit(*_args, **_kwargs):
+        submit_calls.append(True)
+        return []
+
+    monkeypatch.setattr(
+        "src.core.batch_poller.submit_batch_evaluation",
+        fake_submit,
+    )
+
+    logs: list[str] = []
+    # Empty in-flight after cancel: poller resets accumulator, no summary, no retry.
+    await poll_in_flight_batches(
+        db_path=str(tmp_db),
+        log_func=lambda msg, level="info": logs.append(msg),
+    )
+
+    assert submit_calls == []
+    assert not any("Auto-retrying" in msg for msg in logs)
+    assert not any("Evaluation round complete" in msg for msg in logs)
+    batches = database.list_batch_jobs(db_path=str(tmp_db))
+    assert batches == []
+
+
+@pytest.mark.asyncio
+async def test_auto_retry_skips_zero_and_exhausted_attempts(
+    tmp_db, tmp_path, monkeypatch
+):
+    """Auto-retry only covers Scraped jobs with 0 < batchAttempts < poison max."""
+    failed_id = _seed_scraped_job(tmp_db, title="Failed QA", company="FailCo")
+    never_id = _seed_scraped_job(tmp_db, title="Never QA", company="NeverCo")
+    exhausted_id = _seed_scraped_job(tmp_db, title="Exhausted QA", company="MaxCo")
+    for _ in range(POISON_MAX_ATTEMPTS):
+        database.increment_batch_attempts(exhausted_id, db_path=str(tmp_db))
+
+    batch_jobs.create_batch_job(
+        batch_name="batches/search-mixed",
+        display_name="search-mixed",
+        state="JOB_STATE_RUNNING",
+        kind="search",
+        job_ids=[failed_id],
+        search_remote_types=["remote"],
+        search_seniorities="any",
+        submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
+        db_path=str(tmp_db),
+    )
+
+    poll_client = _build_fake_client(_malformed_result_line(failed_id))
+    monkeypatch.setattr("src.core.batch_poller.get_client", lambda: poll_client)
+    monkeypatch.setattr(
+        "src.core.batch_poller.is_due_for_poll", lambda *_a, **_k: True
+    )
+
+    resume_dir = tmp_path / "resumes"
+    resume_dir.mkdir()
+    (resume_dir / "general_cv.md").write_text("# General CV\nQA experience.")
+    import src.core.matcher as matcher_module
+
+    monkeypatch.setattr(matcher_module, "RESUMES_DIR", str(resume_dir))
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr(
+        "src.core.batch_evaluation._submit_jsonl_batch",
+        lambda *_args, **_kwargs: ("batches/retry-mixed", "JOB_STATE_PENDING"),
+    )
+
+    await poll_in_flight_batches(db_path=str(tmp_db))
+
+    assert database.get_job(failed_id, db_path=str(tmp_db)).batchAttempts == 1
+    assert database.get_job(never_id, db_path=str(tmp_db)).batchAttempts == 0
+    assert (
+        database.get_job(exhausted_id, db_path=str(tmp_db)).batchAttempts
+        == POISON_MAX_ATTEMPTS
+    )
+
+    retry_batches = [
+        b for b in database.list_batch_jobs(db_path=str(tmp_db)) if b["kind"] == "retry"
+    ]
+    assert len(retry_batches) == 1
+    assert retry_batches[0]["jobIds"] == [failed_id]

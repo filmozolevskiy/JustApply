@@ -566,6 +566,28 @@ def get_unevaluated_jobs(db_path=None):
     return [parse_job_row(r) for r in rows]
 
 
+def get_retryable_scraped_jobs(db_path=None, *, max_attempts: int = 3):
+    """Scraped jobs with empty matchType and poison attempts still under the cap."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT * FROM jobs
+        WHERE status = 'scraped'
+          AND (matchType = '' OR matchType IS NULL)
+          AND COALESCE(batchAttempts, 0) > 0
+          AND COALESCE(batchAttempts, 0) < ?
+        ORDER BY id ASC
+        """,
+        (max_attempts,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [parse_job_row(r) for r in rows]
+
+
 def job_exists(title, company, link=None, db_path=None):
     if db_path is None:
         db_path = connection.DB_PATH
