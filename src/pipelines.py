@@ -107,9 +107,12 @@ async def run_search_pipeline(
             location=location,
             search_regions=search_regions,
             per_region_limit=per_region_limit,
+            remote_types=allowed_remote_types,
+            seniorities=seniorities,
             company_sizes=company_sizes,
             employment_types=employment_types,
             countries=countries,
+            time_range=time_range,
             log_func=log_func,
             force_mock=mock_scraper,
         )

@@ -1,54 +1,83 @@
 # [PRD] Apify Job-Scrape Sources (LinkedIn first)
 
-> **GitHub Issue:** [#198](https://github.com/filmozolevskiy/JustApply/issues/198)  
+> **GitHub Issue:** [#200](https://github.com/filmozolevskiy/JustApply/issues/200)  
 > **Wayfinder map:** [#194](https://github.com/filmozolevskiy/JustApply/issues/194)  
-> **Actor pick:** [#199](https://github.com/filmozolevskiy/JustApply/issues/199)
+> **Actor pick:** [#199](https://github.com/filmozolevskiy/JustApply/issues/199)  
+> **Prior draft ticket:** [#198](https://github.com/filmozolevskiy/JustApply/issues/198)
 
 ## Problem Statement
 
-Job listing scrape today is **Bright Data–only** (`brightdata_linkedin` on the **Source Platform** switcher). The product already pays for **Apify** for **Enrichment** (**Contact Sample**) and **Company Research**, so LinkedIn listing scrape cannot share that bill. We also want a path to Indeed and Glassdoor listings later, without inventing a second vendor stack.
-
-Research and grilling locked dedicated Apify Actors per board and switcher values. This PRD specifies how to plug Apify into the existing **Search & Evaluation Pipeline** scrape path — **v1 builds LinkedIn (Apify) only**. Indeed and Glassdoor are named and contracted here so a later PRD/slice can add them without re-deciding Actors.
+Job listing scrape today is Bright Data–only via the **Source Platform** switcher (`brightdata_linkedin`). The product already pays for **Apify** for **Enrichment** (**Contact Sample**) and **Company Research**, so LinkedIn listing scrape cannot share that bill. We want a second LinkedIn scrape option on Apify, and a documented path to Indeed and Glassdoor listings later, without inventing a second vendor stack or removing Bright Data.
 
 ## Solution
 
-Add **`apify_linkedin`** to the **Source Platform** switcher beside **`brightdata_linkedin`**. When selected, the scrape phase calls [`curious_coder/linkedin-jobs-scraper`](https://apify.com/curious_coder/linkedin-jobs-scraper) (public guest LinkedIn jobs search, no cookies), normalizes rows into the same Job shape as Bright Data (`normalize_brightdata_job` contract), dedupes, saves into **Scraped**, then continues batch evaluation unchanged.
+Add **`apify_linkedin`** to the **Source Platform** switcher beside **`brightdata_linkedin`**. When selected, the scrape phase of the **Search & Evaluation Pipeline** calls Apify Actor `curious_coder/linkedin-jobs-scraper` (public guest LinkedIn jobs search, no cookies), normalizes rows into the same Job shape used after Bright Data, dedupes, saves into **Scraped**, then continues **Batch Evaluation** unchanged.
 
 **Spend Confirmation** estimates Apify PPE for that Actor (`Search Regions × Per-Region Limit × $0.001`). Bright Data remains available and is not removed.
 
-Indeed (`misceres/indeed-scraper`) and Glassdoor (`valig/glassdoor-jobs-scraper`) are **documented for a follow-on** — option values and Actors are reserved; **v1 must not expose or wire them**.
+Indeed (`misceres/indeed-scraper` → `apify_indeed`) and Glassdoor listings (`valig/glassdoor-jobs-scraper` → `apify_glassdoor`) are **reserved and documented only** — v1 must not expose or wire them.
 
 ## User Stories
 
-### v1 — LinkedIn (Apify)
-
 1. As a job seeker, I want a **Source Platform** option **LinkedIn (Apify)** next to **LinkedIn (Bright Data)**, so that I can scrape listings on the Apify bill I already pay.
 
-2. As a job seeker, I want choosing **LinkedIn (Apify)** to run the same **Search Regions**, **Per-Region Limit**, query, and refine preferences as today, so that I do not learn a second search UX.
+2. As a job seeker, I want **LinkedIn (Bright Data)** to remain the default **Source Platform**, so that existing workflows do not change until I opt in.
 
-3. As a job seeker, I want **Spend Confirmation** before an Apify LinkedIn scrape to show volume ceiling and estimated USD from that Actor’s PPE rate, so that I am not shown a fake Bright Data $/record number.
+3. As a job seeker, I want choosing **LinkedIn (Apify)** to use the same **Search Regions**, **Per-Region Limit**, query, and refine preferences as today, so that I do not learn a second search UX.
 
-4. As a job seeker, I want Apify LinkedIn listings to land in **Scraped** like Bright Data listings, so that **Batch Evaluation** and the Kanban lanes work unchanged.
+4. As a job seeker, I want **Spend Confirmation** before an Apify LinkedIn scrape to show volume ceiling and estimated USD from that Actor’s PPE rate, so that I am not shown a fake Bright Data $/record number.
 
-5. As a job seeker, I want Apify LinkedIn rows to carry LinkedIn **`companyUrl`** when the Actor returns `companyLinkedinUrl`, so that **Enrichment** / **Contact Sample** still works on Accepted cards.
+5. As a job seeker, I want the Apify spend modal subtitle and line items to name Apify LinkedIn scrape explicitly, so that I know which vendor I am about to pay.
 
-6. As a job seeker, I want Apify LinkedIn rows missing `companyUrl` to still save and evaluate, with Enrichment skipping Apify contact fetch (today’s miss path), so that scrape success is not blocked on Enrichment.
+6. As a job seeker, I want Bright Data scrapes to keep their existing per-record spend estimate, so that switching platforms does not break Bright Data cost UX.
 
-7. As a job seeker, I want job-poster fields from the Actor mapped into preliminary contacts when present (same idea as Bright Data `job_poster`), so that Poster badges still appear when available.
+7. As a job seeker, I want Apify LinkedIn listings to land in **Scraped** like Bright Data listings, so that **Batch Evaluation Jobs** and the Kanban lanes work unchanged.
 
-8. As a job seeker, I want mock scrape mode to cover the Apify LinkedIn path (no live Actor call), so that local/dev and CI stay free.
+8. As a job seeker, I want Apify LinkedIn rows to carry LinkedIn **`companyUrl`** when the Actor returns `companyLinkedinUrl`, so that **Enrichment** / **Contact Sample** still works on **Accepted** cards.
 
-9. As a job seeker, I want fail-fast behavior and scrape rate limiting to apply to Apify LinkedIn scrapes like Bright Data, so that runaway loops cannot burn credits.
+9. As a job seeker, I want Apify LinkedIn rows missing `companyUrl` to still save and evaluate, with Enrichment skipping Apify contact fetch (today’s miss path), so that scrape success is not blocked on Enrichment.
 
-10. As a job seeker, I want Indeed / Glassdoor **not** listed in the Source Platform switcher in v1, so that I cannot accidentally start boards we have not wired yet.
+10. As a job seeker, I want job-poster fields from the Actor mapped into preliminary contacts when present (same idea as Bright Data job poster), so that Poster badges still appear when available.
 
-### Deferred (document only — not v1)
+11. As a job seeker, I want title, company, link, location, date, description, employment type, salary, seniority, remote type, and company size mapped from the Actor when available, so that the drawer and **Resume Matcher** see complete enough jobs.
 
-11. As a future job seeker, I want **Indeed (Apify)** (`apify_indeed` → `misceres/indeed-scraper`) as a Source Platform option, so that I can scrape Indeed on the same Apify subscription.
+12. As a job seeker, I want existing URL / stable listing-id dedup to apply to Apify LinkedIn scrapes, so that re-running search does not flood **Scraped** with duplicates.
 
-12. As a future job seeker, I want **Glassdoor (Apify)** (`apify_glassdoor` → `valig/glassdoor-jobs-scraper`) as a Source Platform option for **job listings**, so that Glassdoor openings enter **Scraped** without using the **Company Research** Actor.
+13. As a job seeker, I want company-size and **Employment Type** post-normalize filters already used after Bright Data to apply after Apify normalize, so that refine preferences stay consistent across vendors.
 
-13. As a future job seeker on Indeed/Glassdoor cards, I accept that Enrichment Contact Sample may skip when LinkedIn `companyUrl` is absent, so that multi-board scrape does not invent LinkedIn company resolution in this effort.
+14. As a job seeker, I want mock scrape mode to cover the Apify LinkedIn path (no live Actor call), so that local/dev and CI stay free.
+
+15. As a job seeker, I want a mock-evaluation run to still avoid billable Apify LinkedIn scrape when mock scrape rules say so, so that I cannot accidentally burn credits during mock eval.
+
+16. As a job seeker, I want fail-fast credit-protection behavior to apply to Apify LinkedIn scrapes like Bright Data, so that runaway loops cannot burn credits.
+
+17. As a job seeker, I want scrape-slot / rate-limit acquisition to apply when the chosen platform will spend real credits, so that rapid re-triggers are throttled.
+
+18. As a job seeker, I want Indeed / Glassdoor **not** listed in the **Source Platform** switcher in v1, so that I cannot accidentally start boards we have not wired yet.
+
+19. As a job seeker (or API client), I want `apify_indeed` or `apify_glassdoor` rejected with a clear unsupported error in v1, so that reserved values do not silently fall back to Bright Data.
+
+20. As a job seeker, I want search API / settings to accept `apify_linkedin` alongside `brightdata_linkedin`, so that the dashboard switcher and backend agree.
+
+21. As a job seeker using CLI search, I want the default platform to remain Bright Data, with Apify LinkedIn documented when wired, so that CLI does not surprise me with a vendor change.
+
+22. As a job seeker, I want Apify LinkedIn scrape to use the existing `APIFY_API_TOKEN`, so that I do not manage a second Apify credential.
+
+23. As a job seeker, I want one Actor run per **Search Region** (or equivalent batched input that preserves per-region limits), so that **Per-Region Limit** still caps each region.
+
+24. As a job seeker, I want free-text **Search Region** labels passed as Actor `location` in v1, so that geography works without a blocking `geoId` table first.
+
+25. As a job seeker, I accept that LinkedIn free-text / optional `geoId` may not match Bright Data geo 1:1, so that MVP is not blocked on perfect geo parity.
+
+26. As a job seeker, I want Task Logs to show that an Apify LinkedIn scrape started and finished (or failed), so that I can audit vendor activity.
+
+27. As a job seeker on an Apify-scraped **Accepted** job with `companyUrl`, I want **Enrich Job** to call **Contact Sample** the same as Bright Data path, so that Enrichment is vendor-agnostic downstream.
+
+28. As a future job seeker, I want **Indeed (Apify)** (`apify_indeed` → `misceres/indeed-scraper`) documented as a reserved Source Platform option, so that a later slice can add it without re-picking the Actor.
+
+29. As a future job seeker, I want **Glassdoor (Apify)** (`apify_glassdoor` → `valig/glassdoor-jobs-scraper`) documented for **job listings**, so that Glassdoor openings can enter **Scraped** later without using the **Company Research** Actor.
+
+30. As a future job seeker on Indeed/Glassdoor cards, I accept that Enrichment Contact Sample may skip when LinkedIn `companyUrl` is absent, so that multi-board scrape does not invent LinkedIn company resolution in this effort.
 
 ## Implementation Decisions
 
@@ -61,7 +90,7 @@ Indeed (`misceres/indeed-scraper`) and Glassdoor (`valig/glassdoor-jobs-scraper`
 | `apify_indeed` | Indeed (Apify) | `misceres/indeed-scraper` | **Reserved — do not add to UI or pipeline** |
 | `apify_glassdoor` | Glassdoor (Apify) | `valig/glassdoor-jobs-scraper` | **Reserved — do not add to UI or pipeline** |
 
-Locked in [Grill: Pick Apify scrape Actors and Source Platform split](https://github.com/filmozolevskiy/JustApply/issues/199). Dedicated Actors → separate option values; do not fake-split a multi-board Actor.
+Dedicated Actors → separate option values. Do not fake-split a multi-board Actor. Locked in [#199](https://github.com/filmozolevskiy/JustApply/issues/199).
 
 ### Apify LinkedIn scrape (v1)
 
@@ -71,15 +100,15 @@ Locked in [Grill: Pick Apify scrape Actors and Source Platform split](https://gi
   - `keywords` ← search position query
   - `location` ← Search Region display string (free-text LinkedIn resolve)
   - `limitPerSource` ← **Per-Region Limit**
-- **Documented geo gap:** Search Regions are admin divisions; LinkedIn free-text / optional `geoId` may not match Bright Data geo 1:1. v1 accepts free-text region labels; optional `geoId` table is a later hardening, not blocking MVP.
-- **Normalize:** add an Apify LinkedIn → Job normalizer that targets the same fields as `normalize_brightdata_job` (`src/core/scraper.py`). Prefer shared post-normalize filters (company size, Employment Type) already used after Bright Data.
+- **Documented geo gap:** Search Regions are admin divisions; LinkedIn free-text / optional `geoId` may not match Bright Data geo 1:1. v1 accepts free-text region labels; optional `geoId` table is later hardening, not blocking MVP.
+- **Normalize:** add an Apify LinkedIn → Job normalizer that targets the same fields as the existing Bright Data normalizer. Prefer shared post-normalize filters (company size, Employment Type) already used after Bright Data.
 
 | Job field | Actor field (curious_coder) |
 | --- | --- |
 | `title` | `title` |
 | `company` | `companyName` |
 | `companyUrl` | `companyLinkedinUrl` |
-| `size` | `companyEmployeesCount` (when company scrape enabled / available) |
+| `size` | `companyEmployeesCount` (when available) |
 | `link` | `link` |
 | `date` | `postedAt` / `postedAtTimestamp` |
 | `location` | `location` |
@@ -92,6 +121,7 @@ Locked in [Grill: Pick Apify scrape Actors and Source Platform split](https://gi
 
 - **Dedup:** existing URL / stable listing-id rules only (no cross-board merge — N/A in v1).
 - **Downstream:** unchanged — save **Scraped** → submit **Batch Evaluation Jobs** → **Batch Poller** → **Matched** / attribute gate / Enrichment.
+- **Platform plumbing:** today the dashboard and search request already carry `platform`, but the search pipeline always scrapes via the Bright Data LinkedIn path. Wire `platform` through so `apify_linkedin` selects the Apify scrape path.
 
 ### Spend Confirmation (v1 LinkedIn Apify)
 
@@ -104,32 +134,29 @@ estimate_usd ≈ Search_Regions × Per-Region_Limit × 0.001
 - Reuse the shared **Spend Confirmation** modal (ADR 0012).
 - Subtitle / line items must say Apify LinkedIn scrape, not Bright Data.
 - Bright Data path keeps its existing per-record estimate.
+- Keep the PPE rate as a single named constant / config value so Store price updates are one edit.
 
 ### Pipeline / API wiring
 
 - Extend `platform` on search endpoints / settings from only `brightdata_linkedin` to also accept `apify_linkedin`.
-- Reject or ignore `apify_indeed` / `apify_glassdoor` in v1 if somehow sent (404/400 or treat as unsupported) — do not silently no-op into Bright Data.
-- Dashboard `<select id="kb-filter-platform">`: add one option for Apify LinkedIn only.
+- Reject `apify_indeed` / `apify_glassdoor` in v1 with a clear unsupported error (400/422) — do not silently no-op into Bright Data.
+- Dashboard Source Platform select: add one option for Apify LinkedIn only.
 - CLI search: if platform is exposed, default remains Bright Data; document Apify LinkedIn when wired.
 
 ### Fail-fast, mocks, rate limit
 
 - Follow ADR 0003 credit-protection patterns for Apify listing runs.
-- `MOCK_SCRAPER` / `mock_scraper` forces mock listings for Apify LinkedIn as for Bright Data.
+- Mock scraper mode forces mock listings for Apify LinkedIn as for Bright Data.
 - Reuse scrape-slot / rate-limit acquisition when the chosen platform will spend real credits.
 
 ### Deferred boards (contract only)
 
-Research notes (do not implement in this PRD’s delivery slices):
+| Board | Actor | PPE (research snapshot) | Enrichment note |
+| --- | --- | --- | --- |
+| Indeed | `misceres/indeed-scraper` | ~$0.005 / job | No LinkedIn `companyUrl` → Contact Sample skip |
+| Glassdoor jobs | `valig/glassdoor-jobs-scraper` | ~$0.00036 / job (Bronze) | No LinkedIn `companyUrl` → Contact Sample skip |
 
-| Board | Actor | PPE (research snapshot) | Enrichment note | Research |
-| --- | --- | --- | --- | --- |
-| Indeed | `misceres/indeed-scraper` | ~$0.005 / job | No LinkedIn `companyUrl` → Contact Sample skip | [docs/research/apify-indeed-job-listing-actors.md](../research/apify-indeed-job-listing-actors.md) / [#196](https://github.com/filmozolevskiy/JustApply/issues/196) |
-| Glassdoor jobs | `valig/glassdoor-jobs-scraper` | ~$0.00036 / job (Bronze) | No LinkedIn `companyUrl` → Contact Sample skip | [docs/research/apify-glassdoor-job-listing-actors.md](../research/apify-glassdoor-job-listing-actors.md) / [#197](https://github.com/filmozolevskiy/JustApply/issues/197) |
-
-**Glassdoor collision:** listing scrape must **not** reuse `sian.agency/glassdoor-data-scraper` (**Company Research**). Keep Actors separate.
-
-A follow-on PRD/issues may add switcher options + normalizers for Indeed/Glassdoor without re-picking Actors.
+**Glassdoor collision:** listing scrape must **not** reuse the **Company Research** Actor (`sian.agency/glassdoor-data-scraper`). Keep Actors separate.
 
 ### Relationship to existing ADRs
 
@@ -137,7 +164,7 @@ A follow-on PRD/issues may add switcher options + normalizers for Indeed/Glassdo
 - Spend UX follows ADR 0007 / 0012 (**Spend Confirmation** only when billable).
 - Does not change Gemini batch evaluation (ADR 0010 / 0011) or region-scoped search product rules (ADR 0012) beyond provider-specific estimate math.
 
-### Suggested delivery slices (implementation — after this PRD)
+### Suggested delivery slices
 
 1. Apify LinkedIn client + normalizer + unit tests (mocked Actor dataset fixtures).
 2. Pipeline / service / API `platform=apify_linkedin` branch + Spend Confirmation estimate + rate limit / mock.
@@ -146,25 +173,25 @@ A follow-on PRD/issues may add switcher options + normalizers for Indeed/Glassdo
 
 ## Testing Decisions
 
-**Good test rule:** Assert platform routing, normalize field mapping, spend estimate math, and “unsupported platform” rejection — not live Apify HTTP details.
+**Good test rule:** Assert external behavior only — platform routing, normalize field mapping, spend estimate math, unsupported-platform rejection, and Source Platform options. Do not assert live Apify HTTP details or Actor internals.
 
-**Preferred seams:**
+**Primary seam (approved):** Search orchestration (search pipeline / search trigger path) with mocked scrape providers.
 
-1. Normalizer pure function — fixture rows from Store/output schema → Job dict matching Bright Data normalize contract (`companyUrl` from `companyLinkedinUrl`).
-2. Spend estimate helper — regions × limit × 0.001.
-3. Search orchestration with mocked Apify runner — `apify_linkedin` calls Apify path; `brightdata_linkedin` unchanged; `apify_indeed` / `apify_glassdoor` rejected in v1.
-4. Dashboard/static — Source Platform options include Bright Data + Apify LinkedIn only.
+Assert:
+- `apify_linkedin` → Apify LinkedIn path → jobs land in **Scraped** with the Bright Data–equivalent Job shape
+- `brightdata_linkedin` → existing path unchanged
+- `apify_indeed` / `apify_glassdoor` → clear unsupported error (no Bright Data fallback)
+- `mock_scraper` on Apify LinkedIn → no live Actor call
+- Apify spend estimate ≈ regions × limit × `$0.001`
 
-**Not tested at browser level:** Live `curious_coder/linkedin-jobs-scraper` (manual smoke with `APIFY_API_TOKEN`).
+**Thin supporting seams (approved):**
 
-## QA Validation
+1. Pure Apify LinkedIn normalizer — fixture Actor rows → Job fields (`companyUrl` from `companyLinkedinUrl`, poster contacts). Prior art: Bright Data normalize tests in the scraper test module.
+2. Dashboard Source Platform options — Bright Data + Apify LinkedIn only. Prior art: scrape spend confirmation / dashboard static tests.
 
-- [ ] Source Platform shows **LinkedIn (Bright Data)** and **LinkedIn (Apify)** only — no Indeed/Glassdoor options.
-- [ ] Select Apify LinkedIn → set regions + limit → Spend Confirmation shows Apify estimate ≈ regions × limit × $0.001 → Proceed → jobs appear in **Scraped** → evaluation proceeds as today.
-- [ ] Open an Apify-scraped **Accepted** job with `companyUrl` → **Enrich Job** can call Contact Sample (same as Bright Data path).
-- [ ] Mock scraper + Apify LinkedIn → no live Apify listing call; listings still evaluate under mock_eval rules.
-- [ ] Bright Data path still works with prior estimate math.
-- [ ] API/platform `apify_indeed` or `apify_glassdoor` in v1 → clear unsupported error (not a Bright Data fallback).
+**Not a seam:** live `curious_coder/linkedin-jobs-scraper` (manual QA with `APIFY_API_TOKEN`).
+
+**Modules under test:** search orchestration / pipeline routing, Apify LinkedIn normalizer, Spend Confirmation estimate for Apify PPE, dashboard Source Platform select.
 
 ## Out of Scope
 
@@ -176,10 +203,11 @@ A follow-on PRD/issues may add switcher options + normalizers for Indeed/Glassdo
 - Changing Enrichment Contact Sample Actor (`harvestapi/linkedin-company-employees`).
 - Multi-board single Actor (`openclawai/job-board-scraper`) as the v1 design.
 - Logged-in / cookie-based LinkedIn Actors.
+- Perfect Bright Data ↔ LinkedIn free-text geo parity / `geoId` table (later hardening).
 - ADR authorship (optional follow-up after LinkedIn Apify ships).
 
 ## Further Notes
 
-- Actor research: [docs/research/apify-linkedin-job-listing-actors.md](../research/apify-linkedin-job-listing-actors.md), Indeed/Glassdoor siblings under `docs/research/`.
-- Map destination for [#194](https://github.com/filmozolevskiy/JustApply/issues/194): Actor picks + this PRD — **not** the implementation itself.
-- Pricing figures are Store snapshots from research (2026-08-08); implementation should read current PPE from config/constants with a single named constant for the LinkedIn Apify estimate.
+- Actor research: `docs/research/apify-linkedin-job-listing-actors.md`, Indeed/Glassdoor siblings under `docs/research/`.
+- Map destination for [#194](https://github.com/filmozolevskiy/JustApply/issues/194): Actor picks + PRD — **not** the implementation itself. This issue is the implementation-ready spec from `/to-spec`.
+- Pricing figures are Store snapshots from research (2026-08-08); implementation should read current PPE from a single named constant for the LinkedIn Apify estimate.
