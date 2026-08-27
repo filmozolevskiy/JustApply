@@ -32,6 +32,7 @@ export function createBoardOrchestrator({
   addLogLine,
   clearLogs,
   closeTaskLogStreamQuietly,
+  confirmDeleteComment,
   confirmDiscardUnsavedEdits,
   connectTaskLogStream,
   createDrawerController,
@@ -249,6 +250,7 @@ export function createBoardOrchestrator({
   const drawer = createDrawerController({
     onJobMutated: renderActiveVariant,
     addLogLine,
+    confirmDeleteComment,
     confirmDiscardUnsavedEdits,
     getActiveReclassifyJobIds: () => activeReclassifyJobIds,
     getActiveLoadMoreJobId: () => activeLoadMoreJobId,
@@ -947,7 +949,7 @@ export function createBoardOrchestrator({
     moveJobStage(id, newStatus);
   }
 
-  function loadJobs() {
+  function loadJobs({ quiet = false } = {}) {
     const archivedFilter = getJobsFetchArchivedParam();
     lastJobsFetchArchivedParam = archivedFilter;
     return fetch(`/api/jobs?archived=${archivedFilter}`)
@@ -958,18 +960,31 @@ export function createBoardOrchestrator({
       .then(data => {
         if (data && data.length > 0) {
           setJobs(data);
-          addLogLine(`Loaded ${data.length} jobs dynamically from /api/jobs`, 'success');
+          if (!quiet) {
+            addLogLine(`Loaded ${data.length} jobs dynamically from /api/jobs`, 'success');
+          }
         } else {
           setJobs([]);
-          addLogLine("Backend returned empty job list. Board is empty.", 'info');
+          if (!quiet) {
+            addLogLine("Backend returned empty job list. Board is empty.", 'info');
+          }
         }
         renderActiveVariant();
+        updateDrawerNav();
       })
       .catch(err => {
         setJobs([]);
-        addLogLine("Could not fetch jobs from backend. Board is empty.", 'warning');
+        if (!quiet) {
+          addLogLine("Could not fetch jobs from backend. Board is empty.", 'warning');
+        }
         renderActiveVariant();
+        updateDrawerNav();
       });
+  }
+
+  /** Reload board from API without spamming Task Logs (search/eval live updates). */
+  function refreshBoardQuietly() {
+    return loadJobs({ quiet: true });
   }
 
   function restoreActiveScrapeTask() {
@@ -994,12 +1009,14 @@ export function createBoardOrchestrator({
       skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
       taskKey: ACTIVE_SCRAPE_TASK_KEY,
       existingSource: taskLog.getLogEventSource(),
+      clearStorageOnError: true,
       onResult(logData) {
         integrateSearchResultFromStream(logData);
       },
       onDone() {
         addLogLine('Scraper process complete.', 'success');
         resetScrapeButtons();
+        refreshBoardQuietly();
       },
       onError() {
         addLogLine(
@@ -1007,6 +1024,7 @@ export function createBoardOrchestrator({
           'info'
         );
         resetScrapeButtons();
+        refreshBoardQuietly();
       },
     }));
   }
@@ -1085,6 +1103,7 @@ export function createBoardOrchestrator({
     postOutreachTemplate,
     postReplyJobComment,
     reclassifyJob,
+    refreshBoardQuietly,
     rejectJobFromDrawer,
     repickCompany,
     researchCompany,

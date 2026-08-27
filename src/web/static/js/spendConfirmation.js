@@ -154,6 +154,15 @@ function confirmDiscardUnsavedEdits(message) {
   });
 }
 
+function confirmDeleteComment(message) {
+  return showSpendConfirmModal({
+    title: 'Delete note',
+    subtitle: 'This cannot be undone.',
+    bodyHtml: `<div class="spend-modal-message">${escapeSpendHtml(message)}</div>`,
+    confirmLabel: 'Delete',
+  });
+}
+
 // Spend Confirmation — Bright Data per-record cost basis (ADR 0012).
 // Pay-as-you-go Web Scraper API: $1.50 / 1,000 successful records (~$0.0015/record).
 // Scrape checkout receipt ceiling: searchRegions × Per-Region Limit × this rate.
@@ -425,6 +434,7 @@ export {
   showSpendAckModal,
   showCompanyPickerModal,
   confirmDiscardUnsavedEdits,
+  confirmDeleteComment,
   showScrapeSpendConfirmModal,
   buildApifySpendBodyHtml,
   buildGlassdoorSpendBodyHtml,

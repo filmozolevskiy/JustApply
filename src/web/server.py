@@ -69,16 +69,17 @@ active_tasks = {}
 TASK_PRUNE_TTL_SECONDS = float(os.environ.get("TASK_PRUNE_TTL_SECONDS", "60"))
 
 batch_poller_logs: list[dict] = []
-batch_poller_queue: asyncio.Queue | None = None
+batch_poller_subscribers: set[asyncio.Queue] = set()
 _batch_poller_task: asyncio.Task | None = None
 
 
 async def _emit_batch_poller_log(message: str, level: str = "info"):
-    global batch_poller_queue
     event = {"type": "log", "level": level, "message": message}
     batch_poller_logs.append({"level": level, "message": message})
-    if batch_poller_queue is not None:
-        await batch_poller_queue.put(event)
+    # Fan-out to every open SSE subscriber. A single shared queue only delivers
+    # each event to one consumer, so reconnects/extra tabs stole live lines.
+    for queue in list(batch_poller_subscribers):
+        await queue.put(event)
 
 
 async def run_batch_poller_loop():
@@ -99,17 +100,16 @@ async def run_batch_poller_loop():
 
 @app.on_event("startup")
 async def start_application():
-    global batch_poller_queue, _batch_poller_task
+    global _batch_poller_task
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
     init_db()
-    batch_poller_queue = asyncio.Queue()
     _batch_poller_task = asyncio.create_task(run_batch_poller_loop())
 
 
 @app.on_event("shutdown")
 async def stop_batch_poller():
-    global batch_poller_queue, _batch_poller_task
+    global _batch_poller_task
     if _batch_poller_task is not None:
         _batch_poller_task.cancel()
         try:
@@ -117,7 +117,9 @@ async def stop_batch_poller():
         except asyncio.CancelledError:
             pass
         _batch_poller_task = None
-    batch_poller_queue = None
+    for queue in list(batch_poller_subscribers):
+        await queue.put(None)
+    batch_poller_subscribers.clear()
 
 
 @app.get("/api/health")
@@ -1202,7 +1204,8 @@ async def logs_stream(task_id: str, skip: int = 0):
             if state.status in ("completed", "failed"):
                 asyncio.create_task(_schedule_active_task_prune(task_id))
 
-    return EventSourceResponse(event_generator())
+    # Built-in ping keeps proxies/EventSource alive during long Apify Actor waits.
+    return EventSourceResponse(event_generator(), ping=15)
 
 
 @app.get("/api/batch-poller/logs")
@@ -1212,9 +1215,19 @@ async def batch_poller_logs_stream(skip: int = 0):
 
     async def event_generator():
         # Slice copies the buffer so later appends are not double-delivered via
-        # replay; those arrive only through the live queue below.
-        buffered = batch_poller_logs[skip:]
-        buffered_count = len(batch_poller_logs)
+        # replay; those arrive only through this connection's subscriber queue.
+        buffer_len = len(batch_poller_logs)
+        # localStorage skip can outlive an in-memory buffer reset (uvicorn
+        # reload). A skip past the current buffer would replay nothing.
+        effective_skip = 0 if skip > buffer_len else skip
+        buffered = batch_poller_logs[effective_skip:]
+        yield {
+            "data": json.dumps({
+                "type": "hello",
+                "bufferLength": buffer_len,
+                "effectiveSkip": effective_skip,
+            })
+        }
         for log in buffered:
             yield {
                 "data": json.dumps({
@@ -1224,27 +1237,18 @@ async def batch_poller_logs_stream(skip: int = 0):
                 })
             }
 
-        queue = batch_poller_queue
-        if queue is None:
-            return
+        queue: asyncio.Queue = asyncio.Queue()
+        batch_poller_subscribers.add(queue)
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield {"data": json.dumps(item)}
+        except asyncio.CancelledError:
+            raise
+        finally:
+            batch_poller_subscribers.discard(queue)
 
-        # Drop queue items already covered by the buffer (same pattern as
-        # /api/logs/{task_id}) so reconnects do not duplicate history.
-        dropped = 0
-        while dropped < buffered_count:
-            try:
-                queued = queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            if queued is None:
-                await queue.put(None)
-                return
-            dropped += 1
-
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            yield {"data": json.dumps(item)}
-
-    return EventSourceResponse(event_generator())
+    # Built-in ping keeps proxies/EventSource alive and cancels on disconnect.
+    return EventSourceResponse(event_generator(), ping=15)

@@ -45,6 +45,20 @@ def _collect_messages(task_id, skip=0):
 
 # --- 404 on unknown task ---
 
+def test_scrape_log_sse_enables_keepalive_ping_like_batch_poller():
+    """Long Apify scrapes idle between Actor polls; without ping, EventSource drops."""
+    from pathlib import Path
+
+    text = Path(__file__).resolve().parents[1].joinpath("src/web/server.py").read_text()
+    logs_idx = text.find('@app.get("/api/logs/{task_id}")')
+    poller_idx = text.find('@app.get("/api/batch-poller/logs")')
+    assert logs_idx != -1 and poller_idx != -1
+    logs_block = text[logs_idx:poller_idx]
+    poller_block = text[poller_idx : poller_idx + 2500]
+    assert "ping=15" in poller_block
+    assert "ping=15" in logs_block
+
+
 def test_unknown_task_returns_404():
     resp = client.get("/api/logs/nonexistent-id")
     assert resp.status_code == 404
@@ -216,14 +230,28 @@ def reset_batch_poller_logs():
     import src.web.server as server
 
     server.batch_poller_logs.clear()
-    previous_queue = server.batch_poller_queue
-    server.batch_poller_queue = None
+    server.batch_poller_subscribers.clear()
     yield server
     server.batch_poller_logs.clear()
-    server.batch_poller_queue = previous_queue
+    server.batch_poller_subscribers.clear()
 
 
 def _collect_batch_poller_messages(skip=0):
+    """Read SSE until the live tail is stopped (TestClient cannot leave SSE open)."""
+    import threading
+    import time
+
+    import src.web.server as server
+
+    def _stop_live_tail():
+        for _ in range(200):
+            if server.batch_poller_subscribers:
+                break
+            time.sleep(0.01)
+        for queue in list(server.batch_poller_subscribers):
+            queue.put_nowait(None)
+
+    threading.Thread(target=_stop_live_tail, daemon=True).start()
     messages = []
     with client.stream("GET", f"/api/batch-poller/logs?skip={skip}") as resp:
         assert resp.status_code == 200
@@ -255,11 +283,15 @@ def test_batch_poller_logs_replay_buffered_entries(reset_batch_poller_logs):
     )
 
     msgs = _collect_batch_poller_messages(skip=0)
-    assert [m["type"] for m in msgs] == ["log", "log"]
-    assert msgs[0]["level"] == "summary"
-    assert "Batch chunk completed" in msgs[0]["message"]
-    assert "attribute-filtered" in msgs[0]["message"]
-    assert "Evaluation round complete (search)" in msgs[1]["message"]
+    assert msgs[0]["type"] == "hello"
+    assert msgs[0]["bufferLength"] == 2
+    assert msgs[0]["effectiveSkip"] == 0
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["type"] for m in logs] == ["log", "log"]
+    assert logs[0]["level"] == "summary"
+    assert "Batch chunk completed" in logs[0]["message"]
+    assert "attribute-filtered" in logs[0]["message"]
+    assert "Evaluation round complete (search)" in logs[1]["message"]
 
 
 def test_batch_poller_logs_skip_replays_from_offset(reset_batch_poller_logs):
@@ -273,32 +305,92 @@ def test_batch_poller_logs_skip_replays_from_offset(reset_batch_poller_logs):
     )
 
     msgs = _collect_batch_poller_messages(skip=2)
+    assert msgs[0]["type"] == "hello"
+    assert msgs[0]["effectiveSkip"] == 2
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["chunk-c"]
+
+
+def test_batch_poller_logs_stale_skip_after_buffer_reset_replays_current(reset_batch_poller_logs):
+    """After server reload the in-memory buffer resets but localStorage skip stays high.
+
+    A skip past the current buffer must not drop Evaluation Round summaries.
+    """
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.extend(
+        [
+            {
+                "level": "summary",
+                "message": (
+                    "Batch chunk completed: 0 matched, 12 attribute-filtered, "
+                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                ),
+            },
+            {
+                "level": "summary",
+                "message": (
+                    "Evaluation round complete (search): 0 matched, 12 attribute-filtered, "
+                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                ),
+            },
+        ]
+    )
+
+    msgs = _collect_batch_poller_messages(skip=20)
+    hello = next(m for m in msgs if m.get("type") == "hello")
+    assert hello["bufferLength"] == 2
+    assert hello["effectiveSkip"] == 0
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert len(logs) == 2
+    assert "Batch chunk completed" in logs[0]["message"]
+    assert "Evaluation round complete (search)" in logs[1]["message"]
 
 
 def test_batch_poller_logs_negative_skip_treated_as_zero(reset_batch_poller_logs):
     server = reset_batch_poller_logs
     server.batch_poller_logs.append({"level": "info", "message": "only"})
     msgs = _collect_batch_poller_messages(skip=-3)
+    assert msgs[0]["type"] == "hello"
+    assert msgs[0]["effectiveSkip"] == 0
     assert [m["message"] for m in msgs if m.get("type") == "log"] == ["only"]
 
 
 @pytest.mark.asyncio
-async def test_batch_poller_logs_do_not_duplicate_queued_history(reset_batch_poller_logs):
-    """Buffered replay plus drained queue must not double-deliver history."""
+async def test_batch_poller_emit_fans_out_to_all_subscribers(reset_batch_poller_logs):
+    """Live evaluation lines must reach every open Task Logs SSE, not only one queue consumer."""
     import asyncio
 
     server = reset_batch_poller_logs
-    server.batch_poller_queue = asyncio.Queue()
-    for message in ("hist-1", "hist-2"):
-        event = {"type": "log", "level": "summary", "message": message}
-        server.batch_poller_logs.append({"level": "summary", "message": message})
-        await server.batch_poller_queue.put(event)
+    first = asyncio.Queue()
+    second = asyncio.Queue()
+    server.batch_poller_subscribers.add(first)
+    server.batch_poller_subscribers.add(second)
 
-    # End the live loop after drain so the TestClient stream can finish.
-    await server.batch_poller_queue.put(None)
+    await server._emit_batch_poller_log(
+        "Evaluation round complete (search): 0 matched, 12 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified",
+        "summary",
+    )
+
+    assert len(server.batch_poller_logs) == 1
+    for queue in (first, second):
+        event = queue.get_nowait()
+        assert event["type"] == "log"
+        assert event["level"] == "summary"
+        assert "Evaluation round complete" in event["message"]
+
+
+def test_batch_poller_logs_replay_history_without_live_duplicate(reset_batch_poller_logs):
+    """History comes from the buffer only; live events are separate fan-out messages."""
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.extend(
+        [
+            {"level": "summary", "message": "hist-1"},
+            {"level": "summary", "message": "hist-2"},
+        ]
+    )
 
     msgs = _collect_batch_poller_messages(skip=0)
+    assert msgs[0]["type"] == "hello"
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["hist-1", "hist-2"]

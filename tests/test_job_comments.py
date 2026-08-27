@@ -759,10 +759,12 @@ def test_drawer_delete_posts_via_delete_comments_endpoint():
     drawer = read_drawer_controller()
     assert "deleteJobComment" in drawer
     assert "buildDeleteCommentConfirmMessage" in drawer
+    assert "confirmDeleteComment" in drawer
+    assert "window.confirm" not in drawer
     start = drawer.find("function deleteJobComment(")
     assert start != -1
     body = drawer[start : start + 2200]
-    assert "confirm(" in body or "window.confirm" in body
+    assert "await confirmDeleteComment" in body
     assert "buildDeleteCommentConfirmMessage" in body
     assert "/comments/" in body
     assert "method: 'DELETE'" in body or 'method: "DELETE"' in body

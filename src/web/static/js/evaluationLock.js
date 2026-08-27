@@ -1,10 +1,37 @@
 /** Evaluation Lock UI — batch-evaluation assessing indicator and cancel control. */
 
-export function createEvaluationLockController({ addLogLine, onLockStateChange }) {
+export const EVALUATION_LOCK_POLL_MS = 5000;
+export const BOARD_REFRESH_WHILE_ASSESSING_MS = 5000;
+
+export function createEvaluationLockController({
+  addLogLine,
+  onLockStateChange,
+  onEvaluationSettled = null,
+  onBoardNeedsRefresh = null,
+}) {
   let evaluationLockActive = false;
   let evaluationLockPollTimer = null;
+  let boardRefreshWhileAssessingTimer = null;
+
+  function stopBoardRefreshWhileAssessing() {
+    if (boardRefreshWhileAssessingTimer != null) {
+      clearInterval(boardRefreshWhileAssessingTimer);
+      boardRefreshWhileAssessingTimer = null;
+    }
+  }
+
+  function startBoardRefreshWhileAssessing() {
+    if (boardRefreshWhileAssessingTimer != null) return;
+    if (typeof onBoardNeedsRefresh !== 'function') return;
+    boardRefreshWhileAssessingTimer = setInterval(() => {
+      if (evaluationLockActive) {
+        onBoardNeedsRefresh();
+      }
+    }, BOARD_REFRESH_WHILE_ASSESSING_MS);
+  }
 
   function applyEvaluationLockUI(status) {
+    const wasActive = evaluationLockActive;
     evaluationLockActive = Boolean(status && status.active);
     const indicator = document.getElementById('evaluation-lock-indicator');
     const textEl = document.getElementById('evaluation-lock-text');
@@ -28,6 +55,17 @@ export function createEvaluationLockController({ addLogLine, onLockStateChange }
     } else if (btnPanel && !btnPanel.innerHTML.includes('Running')) {
       onLockStateChange();
     }
+
+    if (evaluationLockActive) {
+      startBoardRefreshWhileAssessing();
+    } else {
+      stopBoardRefreshWhileAssessing();
+    }
+
+    // When assessment finishes, reload the board so Matched/Rejected moves appear.
+    if (wasActive && !evaluationLockActive && typeof onEvaluationSettled === 'function') {
+      onEvaluationSettled();
+    }
   }
 
   async function refreshEvaluationLockStatus() {
@@ -46,7 +84,8 @@ export function createEvaluationLockController({ addLogLine, onLockStateChange }
     if (evaluationLockPollTimer) {
       clearInterval(evaluationLockPollTimer);
     }
-    evaluationLockPollTimer = setInterval(refreshEvaluationLockStatus, 15000);
+    // Poll often enough that Matched/Rejected lane moves appear without a page refresh.
+    evaluationLockPollTimer = setInterval(refreshEvaluationLockStatus, EVALUATION_LOCK_POLL_MS);
   }
 
   async function cancelEvaluation() {

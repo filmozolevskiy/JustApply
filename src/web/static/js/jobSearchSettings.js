@@ -309,28 +309,48 @@ export function createJobSearchSettingsController({
       localStorage.setItem(ACTIVE_SCRAPE_LOG_SKIP_KEY, '0');
       addLogLine(`FastAPI background task created: ${taskId}`, 'info');
 
-      taskLog.setLogEventSource(connectTaskLogStream(taskId, {
-        skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
-        taskKey: ACTIVE_SCRAPE_TASK_KEY,
-        existingSource: taskLog.getLogEventSource(),
-        onResult(logData) {
-          integrateSearchResultFromStream(logData);
-        },
-        onDone() {
-          addLogLine('Scraper process complete.', 'success');
-          resetScrapeButtons();
-          if (typeof refreshBoardQuietly === 'function') {
-            refreshBoardQuietly();
-          }
-        },
-        onError() {
-          addLogLine('Scraper SSE stream closed unexpectedly.', 'warning');
-          resetScrapeButtons();
-          if (typeof refreshBoardQuietly === 'function') {
-            refreshBoardQuietly();
-          }
-        },
-      }));
+      const maxReconnectAttempts = 5;
+      const reconnectDelayMs = 2000;
+
+      function attachScrapeLogStream(attempt) {
+        taskLog.setLogEventSource(connectTaskLogStream(taskId, {
+          skipKey: ACTIVE_SCRAPE_LOG_SKIP_KEY,
+          taskKey: ACTIVE_SCRAPE_TASK_KEY,
+          existingSource: taskLog.getLogEventSource(),
+          clearStorageOnError: false,
+          onResult(logData) {
+            integrateSearchResultFromStream(logData);
+          },
+          onDone() {
+            addLogLine('Scraper process complete.', 'success');
+            resetScrapeButtons();
+            if (typeof refreshBoardQuietly === 'function') {
+              refreshBoardQuietly();
+            }
+          },
+          onError() {
+            if (attempt >= maxReconnectAttempts) {
+              localStorage.removeItem(ACTIVE_SCRAPE_TASK_KEY);
+              localStorage.removeItem(ACTIVE_SCRAPE_LOG_SKIP_KEY);
+              addLogLine('Scraper SSE stream closed unexpectedly.', 'warning');
+              resetScrapeButtons();
+              if (typeof refreshBoardQuietly === 'function') {
+                refreshBoardQuietly();
+              }
+              return;
+            }
+            addLogLine(
+              `Scraper SSE stream interrupted — reconnecting (${attempt + 1}/${maxReconnectAttempts})…`,
+              'warning'
+            );
+            window.setTimeout(() => {
+              attachScrapeLogStream(attempt + 1);
+            }, reconnectDelayMs);
+          },
+        }));
+      }
+
+      attachScrapeLogStream(0);
     })
     .catch(err => {
       if (err && err.handled) {

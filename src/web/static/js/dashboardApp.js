@@ -5,6 +5,7 @@ import { createEvaluationLockController } from './evaluationLock.js';
 import { createJobSearchSettingsController } from './jobSearchSettings.js';
 import { createProfileManagerController } from './profileManager.js';
 import {
+  confirmDeleteComment,
   confirmDiscardUnsavedEdits,
   dismissSpendModalFromOverlay,
 } from './spendConfirmation.js';
@@ -31,12 +32,15 @@ export function bootstrapDashboard() {
   evaluationLock = createEvaluationLockController({
     addLogLine,
     onLockStateChange: () => jobSearchSettings?.updateScrapeRunButtonState(),
+    onEvaluationSettled: () => board?.refreshBoardQuietly(),
+    onBoardNeedsRefresh: () => board?.refreshBoardQuietly(),
   });
 
   board = createBoardOrchestrator({
     addLogLine,
     clearLogs,
     closeTaskLogStreamQuietly,
+    confirmDeleteComment,
     confirmDiscardUnsavedEdits,
     connectTaskLogStream,
     createDrawerController,
@@ -58,6 +62,7 @@ export function bootstrapDashboard() {
     getActiveResume: () => profileManager.getActiveResume(),
     integrateSearchResultFromStream: board.integrateSearchResultFromStream,
     isEvaluationLockActive: () => evaluationLock.isEvaluationLockActive(),
+    refreshBoardQuietly: () => board.refreshBoardQuietly(),
     taskLog,
   });
 
@@ -290,7 +295,9 @@ export function bootstrapDashboard() {
   initOutreachToggleHandlers();
   evaluationLock.initEvaluationLockPolling();
   restoreSessionLogs();
-  taskLog.connectBatchPollerLogStream();
+  taskLog.connectBatchPollerLogStream({
+    onBoardNeedsRefresh: () => board.refreshBoardQuietly(),
+  });
   profileManager.initProfileManagerImportInput();
   profileManager.loadResumes();
   loadOutreachSettings();

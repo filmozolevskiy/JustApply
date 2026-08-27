@@ -306,6 +306,7 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
 export function createDrawerController({
   onJobMutated,
   addLogLine,
+  confirmDeleteComment = async () => true,
   confirmDiscardUnsavedEdits = async () => true,
   getActiveReclassifyJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
@@ -459,7 +460,7 @@ export function createDrawerController({
     const comment = comments.find((c) => c.id === commentId);
     if (!comment) return;
     const message = buildDeleteCommentConfirmMessage(comment, comments);
-    if (!window.confirm(message)) return;
+    if (!(await confirmDeleteComment(message))) return;
     try {
       const resp = await fetch(`/api/jobs/${jobId}/comments/${commentId}`, {
         method: 'DELETE',

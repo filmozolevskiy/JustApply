@@ -180,6 +180,8 @@ export function createTaskLogClient() {
       onDone,
       onError,
       existingSource = null,
+      // When false, keep active-task keys so the caller can reconnect (scrape).
+      clearStorageOnError = true,
     } = options;
 
     if (existingSource) {
@@ -210,15 +212,18 @@ export function createTaskLogClient() {
       if (intentional) {
         return;
       }
-      localStorage.removeItem(taskKey);
-      localStorage.removeItem(skipKey);
+      if (clearStorageOnError) {
+        localStorage.removeItem(taskKey);
+        localStorage.removeItem(skipKey);
+      }
       if (onError) onError(err);
     };
 
     return es;
   }
 
-  function connectBatchPollerLogStream() {
+  function connectBatchPollerLogStream(options = {}) {
+    const { onBoardNeedsRefresh = null } = options;
     if (batchPollerReconnectTimer != null) {
       window.clearTimeout(batchPollerReconnectTimer);
       batchPollerReconnectTimer = null;
@@ -231,13 +236,31 @@ export function createTaskLogClient() {
     const skip = parseInt(localStorage.getItem(BATCH_POLLER_LOG_SKIP_KEY) || '0', 10);
     const es = new EventSource(`/api/batch-poller/logs?skip=${skip}`);
     batchPollerEventSource = es;
+    // Preserve refresh callback across reconnects from onerror.
+    es._onBoardNeedsRefresh = onBoardNeedsRefresh;
 
     es.onmessage = function (event) {
       const logData = JSON.parse(event.data);
+      if (logData.type === 'hello') {
+        // Align localStorage skip with the server buffer generation. A stale
+        // skip after uvicorn reload would otherwise miss replayed summaries.
+        const effectiveSkip = Number(logData.effectiveSkip);
+        if (Number.isFinite(effectiveSkip) && effectiveSkip >= 0) {
+          localStorage.setItem(BATCH_POLLER_LOG_SKIP_KEY, String(effectiveSkip));
+        }
+        return;
+      }
       handleTaskLogMessage(logData, {
         addLogLine: (msg, level) => {
           addLogLine(msg, level);
           bumpTaskLogSkip(BATCH_POLLER_LOG_SKIP_KEY);
+          // Summary lines mean the poller wrote evaluation outcomes to the DB.
+          if (level === 'summary') {
+            expandLogsConsole();
+            if (typeof es._onBoardNeedsRefresh === 'function') {
+              es._onBoardNeedsRefresh();
+            }
+          }
         },
       });
     };
@@ -254,7 +277,9 @@ export function createTaskLogClient() {
       batchPollerReconnectTimer = window.setTimeout(() => {
         batchPollerReconnectTimer = null;
         if (!pageUnloading) {
-          connectBatchPollerLogStream();
+          connectBatchPollerLogStream({
+            onBoardNeedsRefresh: es._onBoardNeedsRefresh,
+          });
         }
       }, BATCH_POLLER_RECONNECT_MS);
     };

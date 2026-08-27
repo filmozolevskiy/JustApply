@@ -1494,7 +1494,8 @@ def test_comment_delete_handler_wired_to_window():
     drawer = read_drawer_controller()
     assert "deleteJobComment" in drawer
     assert "buildDeleteCommentConfirmMessage" in drawer
-    assert "window.confirm" in drawer or "confirm(" in drawer
+    assert "confirmDeleteComment" in drawer
+    assert "window.confirm" not in drawer
 
     content = load_dashboard_js()
     window_block = content[
@@ -1507,3 +1508,22 @@ def test_comment_delete_handler_wired_to_window():
     body = drawer[start : start + 2200]
     assert "onJobMutated()" in body
     assert "DELETE" in body
+    assert "confirmDeleteComment" in body
+    assert "buildDeleteCommentConfirmMessage" in body
+    assert "await confirmDeleteComment" in body
+
+    spend = open(
+        os.path.join(REPO_ROOT, "src/web/static/js/spendConfirmation.js"), encoding="utf-8"
+    ).read()
+    assert "function confirmDeleteComment" in spend
+    assert "Delete note" in spend
+    assert "This cannot be undone." in spend
+
+    app = open(
+        os.path.join(REPO_ROOT, "src/web/static/js/dashboardApp.js"), encoding="utf-8"
+    ).read()
+    assert "confirmDeleteComment" in app
+    board = open(
+        os.path.join(REPO_ROOT, "src/web/static/js/boardOrchestration.js"), encoding="utf-8"
+    ).read()
+    assert "confirmDeleteComment" in board
