@@ -1,11 +1,6 @@
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.core.enrichment.coordinator import begin_enrichment
 from src.db import enrich_job, get_job, init_db
 
@@ -13,7 +8,6 @@ from src.db import enrich_job, get_job, init_db
 def _enriching_job(db, job_id=1):
     begin_enrichment(job_id, db)
     return get_job(job_id, db_path=db)
-
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
@@ -23,13 +17,11 @@ def db(tmp_path, monkeypatch):
     init_db(db_path)
     return db_path
 
-
 _EMPTY_TEMPLATES = {"recruiter": "", "russian_speaker": ""}
 _BOTH_TEMPLATES = {
     "recruiter": "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI would be grateful to connect and share my CV.",
     "russian_speaker": "Hello ______,\n\nAcme is looking for a QA. My experience align well with the requirements.\n\nI'd be grateful if you could refer me for the role.",
 }
-
 
 @pytest.mark.asyncio
 async def test_enrichment_no_employees_sets_specific_note(db):
@@ -52,7 +44,6 @@ async def test_enrichment_no_employees_sets_specific_note(db):
 
     assert result.enrichmentNote == "No LinkedIn employees found for this company."
 
-
 @pytest.mark.asyncio
 async def test_enrichment_no_company_url_sets_specific_note(db):
     """Missing companyUrl sets a specific enrichmentNote even when contacts are present."""
@@ -69,7 +60,6 @@ async def test_enrichment_no_company_url_sets_specific_note(db):
 
     assert result.enrichmentNote == "No LinkedIn company URL — cannot fetch employees."
 
-
 @pytest.mark.asyncio
 async def test_enrichment_failure_zero_contacts_sets_note(db):
     """Zero contacts sets a non-empty enrichmentNote on the job."""
@@ -82,7 +72,6 @@ async def test_enrichment_failure_zero_contacts_sets_note(db):
     assert result is not None
     assert result.enrichmentNote != ""
     assert result.status == "accepted"
-
 
 @pytest.mark.asyncio
 async def test_enrichment_infrastructure_error_sets_note(db):
@@ -99,7 +88,6 @@ async def test_enrichment_infrastructure_error_sets_note(db):
     assert result.status == "accepted"
     assert result.recruiterOutreachTemplate == _EMPTY_TEMPLATES["recruiter"]
     assert result.russianSpeakerOutreachTemplate == _EMPTY_TEMPLATES["russian_speaker"]
-
 
 @pytest.mark.asyncio
 async def test_enrichment_settings_read_failure_completes_with_note_and_templates(db):
@@ -124,7 +112,6 @@ async def test_enrichment_settings_read_failure_completes_with_note_and_template
     assert result.russianSpeakerOutreachTemplate == _BOTH_TEMPLATES["russian_speaker"]
     assert any(level == "error" for _, level in log_records)
 
-
 @pytest.mark.asyncio
 async def test_enrichment_success_clears_note(db):
     """Successful enrichment clears a pre-existing enrichmentNote."""
@@ -148,7 +135,6 @@ async def test_enrichment_success_clears_note(db):
     assert result.enrichmentNote == ""
     assert result.status == "accepted"
 
-
 @pytest.mark.asyncio
 async def test_enrichment_zero_contacts_logs_final_error(db):
     """Pipeline logs final line as 'error' level when no contacts found."""
@@ -166,7 +152,6 @@ async def test_enrichment_zero_contacts_logs_final_error(db):
     assert log_records, "No log lines emitted"
     final_level = log_records[-1][1]
     assert final_level == "error", f"Expected final log level 'error', got {final_level!r}"
-
 
 @pytest.mark.asyncio
 async def test_enrichment_success_logs_final_success(db):
@@ -190,7 +175,6 @@ async def test_enrichment_success_logs_final_success(db):
     assert any("Found 1 contact(s)" in msg for msg in messages)
     final_level = log_records[-1][1]
     assert final_level == "success", f"Expected final log level 'success', got {final_level!r}"
-
 
 @pytest.mark.asyncio
 async def test_enrichment_pipeline_persists_both_outreach_templates(db):

@@ -1,0 +1,30 @@
+# Ralph Loop Progress — PRD #165
+
+## 2026-07-12 — Favorite Job — persist, toggle, and card cue (#166)
+
+- Migration 010 adds `favorited` INTEGER DEFAULT 0; Job schema / parse_job_row expose `favorited: bool`.
+- DB helper `set_job_favorited` persists flag and appends `Marked favorite` / `Unmarked favorite` to Job Activity Log.
+- `POST /api/jobs/{id}/favorite` returns updated Job or 404; GET jobs expose `favorited`.
+- Drawer header star toggles via API; favorited cards show read-only Favorite chip + amber top-bar styling (variant C).
+- Lane move, archive/un-archive, and auto-archive preserve `favorited` (regression tests).
+- Quality: ruff, mypy, pytest (938 passed, cov ≥84%).
+- Closed #166.
+
+## 2026-07-12 — Favorites Filter — board watchlist view (#167)
+
+- Board Controls star button between search and sort (prototype variant A); `aria-pressed`, amber active styling, `boardFilterFavorites` localStorage.
+- `filterJobs` gains `favoritesOnly`; ANDs with search/remote/size/recruiter; Active visibility surfaces favorited archived jobs.
+- `resolveJobsArchivedFetchParam` fetches `all` when favorites-only so archived favorites are available client-side.
+- Reset filters clears favorites UI + localStorage; empty hint uses generic “No jobs match your filters.”
+- Drawer prev/next follows filtered set via `getBoardFiltersFromDom().favoritesOnly`.
+- Quality: ruff, mypy, pytest (942 passed, cov ≥84%).
+- Closed #167.
+
+## 2026-07-12 — Remove favorite UI prototypes (#168)
+
+- Deleted throwaway `/prototype/favorite-card` and `/prototype/favorites-filter` HTML shells plus prototype CSS/JS assets (routes were never registered; both paths 404).
+- Kept `src/web/prototype/NOTES.md` verdicts (card variant C, filter variant A) marked as shipped to production.
+- Added `tests/test_favorite_prototypes_removed.py` (404 routes, assets gone, no server route strings, NOTES retained).
+- Production Favorites Filter / Favorite Job board chrome unchanged (`test_dashboard_panel_chrome` still green).
+- Quality: ruff, mypy, pytest (947 passed, cov ≥84%).
+- Closed #168.

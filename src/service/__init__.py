@@ -1,5 +1,7 @@
 from .just_apply import (
+    DEFAULT_SOURCE_PLATFORM,
     RateLimitError,
+    UnsupportedSourcePlatformError,
     acquire_scrape_slot,
     backfill_unevaluated_jobs,
     begin_enrichment,
@@ -11,10 +13,13 @@ from .just_apply import (
     reassess_job,
     scraper_will_mock,
     search_jobs,
+    validate_source_platform,
 )
 
 __all__ = [
+    "DEFAULT_SOURCE_PLATFORM",
     "RateLimitError",
+    "UnsupportedSourcePlatformError",
     "acquire_scrape_slot",
     "backfill_unevaluated_jobs",
     "collect_batch_evaluation_results",
@@ -26,4 +31,5 @@ __all__ = [
     "reassess_job",
     "scraper_will_mock",
     "search_jobs",
+    "validate_source_platform",
 ]

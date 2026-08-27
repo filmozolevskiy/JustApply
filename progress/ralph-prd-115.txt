@@ -1,0 +1,90 @@
+# Ralph Loop Progress — PRD #115
+
+Started: 2026-07-07
+Parent PRD: #115 (Internal Code Consistency Cleanup)
+Queue: 10 ready-for-agent issues (#151–#160)
+
+Note: User invoked `/ralph-loop 159` — #159 is slice issue under this PRD.
+
+## #159 — Remove ephemeral agent progress files and obsolete prototypes from repo (2026-07-07)
+
+- Removed 11 tracked `progress/ralph-prd-*.txt` files; added `progress/ralph-prd-*.txt` to `.gitignore`
+- Deleted obsolete `dashboard_profile_manager.prototype.*` files (Profile Manager lives in static modules)
+- Removed one-off `scripts/probe_brightdata_fields.py` and `scripts/probe_brightdata_company.py`
+- Removed legacy `_load_all_jobs` from `contacted_elsewhere.py`; regression tests now spy on `load_contacted_index_for_slugs`
+- Quality gates: ruff, mypy, pytest (898 passed, 84.88% coverage)
+
+## #151 — Remove unused CLI resume helper and unused --sites flag (2026-07-07)
+
+- Removed dead `_resume_name_for_position` helper from `src/cli/cli.py` (resume selection is Profile Manager + `general_cv.md`)
+- Removed unused `--sites` argparse flag and unused `sites` parameter on `run_search`
+- Search pipeline unchanged: still uses `general_cv.md` via `search_jobs`
+- Quality gates: ruff, mypy, pytest (898 passed, 84.98% coverage)
+
+## #152 — Remove commented scraper filters and align log callback inspect usage (2026-07-09)
+
+- Deleted commented-out title/keyword and timezone post-filter blocks from `scrape_linkedin_jobs`
+- Removed dead `get_keywords_for_position(query)` call left over from disabled filters
+- Replaced `asyncio.iscoroutinefunction` with `inspect.iscoroutinefunction` for scraper log callbacks
+- Updated scraper docstring to reflect company-size-only post-filtering
+- Quality gates: ruff, mypy, pytest (898 passed, 84.84% coverage)
+
+## #153 — Unify activity log parsing in Job Tracker Database layer (2026-07-09)
+
+- Removed duplicate `_parse_activity_log` from `src/db/jobs.py`; CRUD now imports shared parser from `job_model`
+- Added `activity_log_as_dicts` helper for contacted-index sync callers that need plain dicts
+- `_append_activity_log` appends typed `ActivityLogEntry` objects and serializes via `model_dump()`
+- Added parse edge-case tests in `test_job_model.py` (empty, invalid JSON, legacy rows, corrupt rows)
+- Quality gates: ruff, mypy, pytest (904 passed, 84.92% coverage)
+
+## #154 — Retire outreach facade and point callers at enrichment modules (2026-07-09)
+
+- Removed legacy `src/core/outreach.py` re-export facade; production already imported `core.enrichment` directly
+- Updated five test modules to import from `src.core.enrichment` instead of `src.core.outreach`
+- Updated classifier comment to drop outreach-facade reference
+- Quality gates: ruff, mypy, pytest (904 passed, 84.91% coverage)
+
+## #155 — Centralize environment loading at CLI and dashboard entrypoints (2026-07-09)
+
+- Added `load_dotenv()` to `src/web/server.py` (module import) and `src/web/run_dashboard.py` (dashboard startup); CLI already loaded `.env` in `src/cli/cli.py`
+- Removed `load_dotenv()` from core library modules: matcher, scraper, gemini_client, classifier, contact_sample, connection_note
+- Kept explicit loading in standalone scripts: `src/cli/gemini_agent.py`, `scripts/glassdoor_company_intel.py`
+- Updated `test_connection_note.py` to drop obsolete `load_dotenv` patches; added `src/web/server.py` to ruff E402 per-file ignore
+
+## #156 — Document Apify per-run cost constant beside Spend Confirmation logic (2026-07-09)
+
+- Added inline documentation for `COST_PER_APIFY_RUN` in `server.py` with ADR 0007 pointer and cross-reference to Bright Data constant
+- Added inline documentation for `SCRAPE_COST_PER_RECORD` in `spendConfirmation.js` with ADR 0012 pointer and cross-reference to Apify constant
+- No change to estimated costs returned by preflight endpoints or scrape modal
+- Quality gates: ruff, mypy, pytest (904 passed, 84.86% coverage)
+
+## #157 — Document Contact forward-compat extras with regression fixture (2026-07-09)
+
+- Documented `extra="allow"` decision on `Contact` in `src/schemas.py` for Apify and runtime metadata fields
+- Added `apify_employee_item` and `apify_normalized_contact` fixtures in `tests/conftest.py`
+- Added six regression tests in `tests/test_contact_schema.py` (JSON round-trip, DB persist, toggle, Contacted Elsewhere)
+- Quality gates: ruff, mypy, pytest (910 passed, 84.81% coverage)
+
+## #158 — Align service adapter docstrings with Scraped Matched Accepted vocabulary (2026-07-09)
+
+- Updated `src/service/just_apply.py` docstrings to use CONTEXT.md lane terms (Scraped, Matched, Accepted)
+- Replaced legacy "Found" and "enriching lane" wording in `promote_sourced_jobs` and `complete_enrichment`
+- Added lane vocabulary to `search_jobs`, `backfill_unevaluated_jobs`, and `collect_batch_evaluation_results` docstrings
+- Documentation-only — no API or behavior changes
+- Quality gates: ruff, mypy, pytest (910 passed, 84.81% coverage)
+
+## #160 — Remove sys.path bootstrap from pytest modules (2026-07-09)
+
+- Removed per-module `sys.path.insert`/`append` bootstraps from 61 test files
+- Added centralized `pythonpath = ["."]` to `[tool.pytest.ini_options]` in `pyproject.toml` so `tests.kanban_js` and `src` imports work via editable install + repo root
+- Ruff auto-fixed 160 unused `os`/`sys` imports left behind after bootstrap removal
+- `test_server_lifecycle.py` still asserts web modules do not mutate `sys.path` at import time
+- Quality gates: ruff, mypy, pytest (910 passed, 84.86% coverage)
+
+---
+
+<promise>COMPLETE</promise> — 2026-07-09. All 10 slices (#151–#160) closed. Final commit: `9dfbfeb`.
+
+---
+
+<promise>COMPLETE</promise> — 2026-07-09. All 10 slices (#151–#160) closed. Final commit: `9dfbfeb`.

@@ -1,0 +1,48 @@
+# Ralph Loop Progress — PRD #200
+
+
+## Iteration — #201 Prefactor: wire Source Platform through search
+- Date: 2026-08-09
+- Commit: 04baf9a
+- What shipped:
+  - Added `src/core/source_platform.py` with validate/reject for Source Platform values.
+  - Wired `platform` through API → `search_jobs` → `run_search_pipeline`.
+  - `brightdata_linkedin` keeps Bright Data scrape path; reserved/unknown (incl. `apify_linkedin` until #203) return clear unsupported errors (422 / UnsupportedSourcePlatformError) — never fall through to Bright Data.
+  - Tests at search-orchestration seam (`tests/test_source_platform_routing.py`), mocked providers only.
+- Quality gate: ruff + mypy + pytest --cov (1115 passed, 86.18% cov).
+- Code review (vs HEAD / merge-base main; spec #201):
+  - Standards: 0 hard violations. Judgement: defensive RuntimeError else-branch + multi-layer validate (API/service/pipeline) is intentional defense-in-depth, not speculative Apify code.
+  - Spec: all acceptance criteria met; no Apify scrape path invented (correct for this prefactor).
+- Next unblocked: #203 (blocked by #201 until this closes).
+
+
+## Iteration — #203 Apify LinkedIn scrape → Scraped (API + mock)
+- Date: 2026-08-09
+- Commit: 11dece1
+- What shipped:
+  - Added `src/core/apify_linkedin_scraper.py`: Actor `curious_coder/linkedin-jobs-scraper`, normalize (`companyLinkedinUrl` → `companyUrl`, poster contacts), one run per Search Region, mock mode, injectable runner.
+  - `apify_linkedin` is now a supported Source Platform; reserved Indeed/Glassdoor still rejected.
+  - Pipeline routes `apify_linkedin` → Apify scrape → shared Scraped save + batch evaluation path.
+  - Rate-limit / mock resolution apply to billable Apify scrapes (same `acquire_scrape_slot` / `scraper_will_mock`).
+  - Tests: normalizer fixtures + search-orchestration with mocked runner (no live Actor HTTP).
+- Quality gate: ruff + mypy + pytest --cov (1131 passed, 85.36% cov).
+- Code review (vs 04baf9a / #201; spec #203):
+  - Standards: 0 hard violations. Judgement: Apify poll loop mirrors existing glassdoor/contact_sample pattern (intentional, not new abstraction).
+  - Spec: all acceptance criteria met; dashboard Source Platform UI / Spend Confirmation left for #202.
+- Next unblocked: #202 (blocked by #203 until this closes).
+
+
+## Iteration — #202 Board Source Platform + Apify Spend Confirmation
+- Date: 2026-08-09
+- Commit: fe4a30c
+- What shipped:
+  - Dashboard Source Platform select: LinkedIn (Bright Data) + LinkedIn (Apify) only (no Indeed/Glassdoor).
+  - Spend Confirmation accepts `platform`; Apify LinkedIn uses named PPE `APIFY_LINKEDIN_SCRAPE_COST_PER_RESULT = 0.001` (regions × limit × rate) with Apify-labeled title/subtitle/warn/line items.
+  - Bright Data keeps `$0.0015` per-record math and labeling; `triggerScrapeRun` passes platform into the modal (search POST already forwarded platform).
+  - Static tests in `tests/test_source_platform_dashboard.py` (option set + Apify estimate wiring; no live Actor).
+  - Tiny ruff UP038 fix in `apify_linkedin_scraper.py` so quality gate stays green.
+- Quality gate: ruff + mypy + pytest --cov (1139 passed, 85.36% cov).
+- Code review (vs HEAD e11c90e; spec #202):
+  - Standards: no hard blockers after fixing receipt rate display to use `rate` from the named constant (static tests remain identifier+copy assertions per existing dashboard seam pattern).
+  - Spec: options, PPE math, Bright Data path, platform pass-through, and Apify-labeled copy met; left out-of-slice confirmDeleteComment / other dirty WIP uncommitted.
+- Next: no further unblocked ready-for-agent child slices for PRD #200 (parent PRD may still carry the label).

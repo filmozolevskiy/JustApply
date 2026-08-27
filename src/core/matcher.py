@@ -4,11 +4,7 @@ import json
 import os
 import re
 
-from dotenv import load_dotenv
-
 from .gemini_client import generate_text as gemini_generate_text
-
-load_dotenv()
 
 RESUMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "resumes")
 
@@ -58,9 +54,11 @@ Respond with a JSON object (no markdown, no extra text) in this exact format:
   "shouldProceed": <true|false>,
   "remoteType": "<remote|hybrid|in_office>",
   "seniority": "<junior|mid|senior>",
+  "employmentType": "<Full-time|Contract|Part-time|Temporary|Volunteer>",
   "summary": "<concise 2-3 sentence summary of the job listing, including key tech stack/responsibilities>",
   "isRecruiter": <true|false>,
-  "salary": "<extracted salary string or empty string>"
+  "salary": "<human-readable Posted Salary string or empty string>",
+  "postedSalary": <null or object — structured Posted Salary facts; see rules>
 }}
 
 Rules:
@@ -74,10 +72,26 @@ Rules:
   * "junior" means entry-level, intern, associate, or explicitly junior roles.
   * "mid" means standard individual contributor roles without explicit senior/junior markers.
   * "senior" means senior, lead, principal, staff, manager, director, or equivalent seniority signals.
+- Analyze the Job Title and Description to determine Employment Type ("employmentType"). It must be exactly one of: "Full-time", "Contract", "Part-time", "Temporary", "Volunteer".
+  * "Full-time" means permanent or ongoing full-time employment.
+  * "Contract" means contractor, freelance, or fixed-term contract roles.
+  * "Part-time" means part-time hours (not full-time).
+  * "Temporary" means temp / temporary placement.
+  * "Volunteer" means unpaid or volunteer roles.
 - Identify if the listing company is a recruiting/staffing/headhunting agency rather than the direct hiring employer (e.g. Randstad, Fuze HR, Teksystems, Robert Half, or if the description uses third-person phrasing like "Our client...", "A leading firm is seeking...", etc.).
   * If the job is posted by a recruiting/staffing firm: set "isRecruiter" to true. In this case, you MUST set "shouldProceed" to false, add "Posted by a recruiting agency/staffing firm" to the "gaps" list, and apply a penalty to "matchScore" by subtracting 15 points (or capping it at a maximum of 70).
   * If it is a direct employer, set "isRecruiter" to false.
-- Extract any salary/compensation details from the description (e.g., "$120,000 - $140,000" or "$75/hour"). Return it formatted cleanly under the "salary" key. If not mentioned in the description, return an empty string.
+- Extract Posted Salary / compensation from the description (and any salary field in the listing text).
+  * Always set "salary" to a clean human-readable string of the listed pay (e.g. "$120,000 - $140,000", "$70-80/hr"). If pay is not mentioned, set "salary" to "" and "postedSalary" to null.
+  * When pay is present, also set "postedSalary" to structured facts (code annualizes these; do not convert periods yourself):
+    - Single-location / single band:
+      {{"period": "<hourly|daily|monthly|yearly>", "amountMin": <number>, "amountMax": <number or omit if point>, "currency": "<ISO code e.g. USD|CAD>", "hoursPerWeek": <number or omit>}}
+    - Multi-location pay: use "bands" with one object per location:
+      {{"bands": [{{"location": "<place as stated>", "period": "...", "amountMin": <n>, "amountMax": <n>, "currency": "...", "hoursPerWeek": <n or omit>}}, ...]}}
+  * "period" must reflect the listing unit (hourly / daily / monthly / yearly), not an annualized guess.
+  * Include "hoursPerWeek" only when the listing states hours per week for hourly pay.
+  * "amountMin"/"amountMax" are numeric amounts in that period's unit (not annualized). For a single figure, set amountMin only (or equal min/max).
+  * "currency" is the listing currency code when known (default USD if "$" with no other cue).
 """
 
 
@@ -94,7 +108,7 @@ async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=No
 async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:
     """
     Evaluate a job against a resume using the Gemini API.
-    Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, seniority, summary, isRecruiter, salary.
+    Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, seniority, employmentType, summary, isRecruiter, salary, postedSalary.
     Implements exponential backoff on rate limit (429) errors.
     Returns {} if no API key is configured or on unrecoverable error.
     """

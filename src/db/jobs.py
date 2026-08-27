@@ -1,9 +1,21 @@
 import json
+import uuid
 from datetime import UTC, datetime
 
+from ..schemas import ActivityLogEntry, JobComment
 from . import connection
-from .contacted_elsewhere import enrich_jobs_with_contacted_elsewhere
-from .job_model import normalize_add_job_input, parse_job_row
+from .contacted_elsewhere import (
+    enrich_jobs_with_contacted_elsewhere,
+    sync_job_contacted_profiles_index,
+)
+from .job_model import (
+    COMMENT_BODY_MAX,
+    _parse_activity_log,
+    _parse_job_comments,
+    activity_log_as_dicts,
+    normalize_add_job_input,
+    parse_job_row,
+)
 
 VALID_STATUSES = frozenset({
     "scraped", "matched", "accepted",
@@ -17,28 +29,21 @@ def _format_lane(status: str) -> str:
     return status.replace("_", " ").title()
 
 
-def _parse_activity_log(raw) -> list:
-    try:
-        return json.loads(raw) if raw else []
-    except Exception:
-        return []
-
-
 def _append_activity_log(cursor, job_id: int, message: str) -> None:
     cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
     if not row:
         return
     log = _parse_activity_log(row[0])
-    log.append({
-        "ts": datetime.now(UTC).isoformat(),
-        "message": message,
-    })
+    log.append(ActivityLogEntry(
+        ts=datetime.now(UTC).isoformat(),
+        message=message,
+    ))
     if len(log) > ACTIVITY_LOG_MAX:
         log = log[-ACTIVITY_LOG_MAX:]
     cursor.execute(
         "UPDATE jobs SET activityLog = ? WHERE id = ?",
-        (json.dumps(log), job_id),
+        (json.dumps([e.model_dump() for e in log]), job_id),
     )
 
 
@@ -135,24 +140,142 @@ def update_job_status(job_id, status, db_path=None):
     return parse_job_row_enriched(row, db_path=db_path)
 
 
-def update_job_comment(job_id, comment, db_path=None):
+def add_job_comment(job_id, body, parent_id=None, db_path=None):
+    """Append a Job Comment (root when parent_id is None). Returns updated Job or None."""
     if db_path is None:
         db_path = connection.DB_PATH
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("Comment body cannot be blank or whitespace-only")
+    if len(text) > COMMENT_BODY_MAX:
+        raise ValueError(f"Comment body exceeds {COMMENT_BODY_MAX} characters")
+    resolved_parent = (parent_id or "").strip() or None
+
     conn = connection.get_db_connection(db_path)
+    from .migrations import apply_legacy_comment_blob_migration
+
+    apply_legacy_comment_blob_migration(conn)
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-    if not cursor.fetchone():
+    cursor.execute("SELECT comments FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
         conn.close()
         return None
-    cursor.execute("UPDATE jobs SET comment = ? WHERE id = ?", (comment, job_id))
-    _append_activity_log(cursor, job_id, "Notes updated")
+
+    comments = _parse_job_comments(row[0])
+    if resolved_parent is not None:
+        parent = next((c for c in comments if c.id == resolved_parent), None)
+        if parent is None:
+            conn.close()
+            raise ValueError("Parent comment not found")
+        if parent.parentId is not None:
+            conn.close()
+            raise ValueError("Cannot reply to a reply")
+
+    comment = JobComment(
+        id=f"c{uuid.uuid4().hex[:12]}",
+        parentId=resolved_parent,
+        body=text,
+        createdAt=datetime.now(UTC).isoformat(),
+        editedAt=None,
+    )
+    comments.append(comment)
+    cursor.execute(
+        "UPDATE jobs SET comments = ?, comment = '' WHERE id = ?",
+        (json.dumps([c.model_dump() for c in comments]), job_id),
+    )
+    _append_activity_log(cursor, job_id, "Comment added")
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-    row = cursor.fetchone()
+    updated = cursor.fetchone()
     conn.close()
-    if not row:
+    if not updated:
         return None
-    return parse_job_row_enriched(row, db_path=db_path)
+    return parse_job_row_enriched(updated, db_path=db_path)
+
+
+def update_job_comment(job_id, comment_id, body, db_path=None):
+    """Update a Job Comment body; keep createdAt and set editedAt. Returns Job or None."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("Comment body cannot be blank or whitespace-only")
+    if len(text) > COMMENT_BODY_MAX:
+        raise ValueError(f"Comment body exceeds {COMMENT_BODY_MAX} characters")
+
+    conn = connection.get_db_connection(db_path)
+    from .migrations import apply_legacy_comment_blob_migration
+
+    apply_legacy_comment_blob_migration(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT comments FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    comments = _parse_job_comments(row[0])
+    target = next((c for c in comments if c.id == comment_id), None)
+    if target is None:
+        conn.close()
+        return None
+
+    target.body = text
+    target.editedAt = datetime.now(UTC).isoformat()
+    cursor.execute(
+        "UPDATE jobs SET comments = ?, comment = '' WHERE id = ?",
+        (json.dumps([c.model_dump() for c in comments]), job_id),
+    )
+    _append_activity_log(cursor, job_id, "Comment edited")
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    if not updated:
+        return None
+    return parse_job_row_enriched(updated, db_path=db_path)
+
+
+def delete_job_comment(job_id, comment_id, db_path=None):
+    """Delete a Job Comment. Root delete cascades to replies. Returns Job or None."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+
+    conn = connection.get_db_connection(db_path)
+    from .migrations import apply_legacy_comment_blob_migration
+
+    apply_legacy_comment_blob_migration(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT comments FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    comments = _parse_job_comments(row[0])
+    target = next((c for c in comments if c.id == comment_id), None)
+    if target is None:
+        conn.close()
+        return None
+
+    if target.parentId is None:
+        remaining = [c for c in comments if c.id != comment_id and c.parentId != comment_id]
+    else:
+        remaining = [c for c in comments if c.id != comment_id]
+
+    cursor.execute(
+        "UPDATE jobs SET comments = ?, comment = '' WHERE id = ?",
+        (json.dumps([c.model_dump() for c in remaining]), job_id),
+    )
+    _append_activity_log(cursor, job_id, "Comment deleted")
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    if not updated:
+        return None
+    return parse_job_row_enriched(updated, db_path=db_path)
 
 
 def update_contact_status(job_id, contact_idx, contacted, db_path=None):
@@ -188,6 +311,18 @@ def update_contact_status(job_id, contact_idx, contacted, db_path=None):
     cursor.execute(
         "UPDATE jobs SET contacts = ? WHERE id = ?",
         (json.dumps(contacts), job_id),
+    )
+
+    cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (job_id,))
+    activity_row = cursor.fetchone()
+    activity_log = activity_log_as_dicts(activity_row[0] if activity_row else None)
+    sync_job_contacted_profiles_index(
+        conn,
+        job_id,
+        job["company"],
+        job["title"],
+        contacts,
+        activity_log,
     )
     conn.commit()
 
@@ -276,6 +411,18 @@ def enrich_job(
         count = len(contacts)
         label = "contact" if count == 1 else "contacts"
         _append_activity_log(cursor, job_id, f"Enriched · {count} {label}")
+    if not keep_contacts:
+        cursor.execute("SELECT company, title, activityLog FROM jobs WHERE id = ?", (job_id,))
+        job_row = cursor.fetchone()
+        if job_row:
+            sync_job_contacted_profiles_index(
+                conn,
+                job_id,
+                job_row["company"],
+                job_row["title"],
+                contacts,
+                activity_log_as_dicts(job_row["activityLog"]),
+            )
     conn.commit()
     cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = cursor.fetchone()
@@ -292,6 +439,29 @@ def log_activity(job_id: int, message: str, db_path=None) -> None:
     _append_activity_log(cursor, job_id, message)
     conn.commit()
     conn.close()
+
+
+def update_company_research(job_id: int, company_research: dict, db_path=None):
+    """Persist denormalized companyResearch snapshot on a job row."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute(
+        "UPDATE jobs SET companyResearch = ? WHERE id = ?",
+        (json.dumps(company_research), job_id),
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return parse_job_row_enriched(row, db_path=db_path)
 
 
 def update_outreach_template(job_id, audience, template, db_path=None):
@@ -316,6 +486,35 @@ def update_outreach_template(job_id, audience, template, db_path=None):
     row = cursor.fetchone()
     conn.close()
     return parse_job_row_enriched(row, db_path=db_path)
+
+
+def set_job_favorited(job_id: int, favorited: bool, db_path=None):
+    """Set favorite bookmark flag and append Job Activity Log entry.
+
+    Does not change pipeline status, archive flags, or trigger enrichment.
+    """
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None
+    cursor.execute(
+        "UPDATE jobs SET favorited = ? WHERE id = ?",
+        (1 if favorited else 0, job_id),
+    )
+    _append_activity_log(
+        cursor,
+        job_id,
+        "Marked favorite" if favorited else "Unmarked favorite",
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    updated = cursor.fetchone()
+    conn.close()
+    return parse_job_row_enriched(updated, db_path=db_path)
 
 
 def archive_job(job_id: int, db_path=None):
@@ -361,6 +560,28 @@ def get_unevaluated_jobs(db_path=None):
     cursor = conn.cursor()
     cursor.execute(
         "SELECT * FROM jobs WHERE matchType = '' OR matchType IS NULL ORDER BY id ASC"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [parse_job_row(r) for r in rows]
+
+
+def get_retryable_scraped_jobs(db_path=None, *, max_attempts: int = 3):
+    """Scraped jobs with empty matchType and poison attempts still under the cap."""
+    if db_path is None:
+        db_path = connection.DB_PATH
+    conn = connection.get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT * FROM jobs
+        WHERE status = 'scraped'
+          AND (matchType = '' OR matchType IS NULL)
+          AND COALESCE(batchAttempts, 0) > 0
+          AND COALESCE(batchAttempts, 0) < ?
+        ORDER BY id ASC
+        """,
+        (max_attempts,),
     )
     rows = cursor.fetchall()
     conn.close()
@@ -414,12 +635,12 @@ def add_job(job, db_path=None):
 
     cursor.execute("""
         INSERT INTO jobs (
-            title, company, size, link, date, location, remoteType, seniority, salary,
-            description, matchScore, matchType, shouldProceed, status, resumeUsed,
-            strengths, gaps, contacts, outreachMessage, comment, isRecruiter, companyUrl,
+            title, company, size, link, date, location, remoteType, seniority, employmentType,
+            salary, description, matchScore, matchType, shouldProceed, status, resumeUsed,
+            strengths, gaps, contacts, outreachMessage, comments, isRecruiter, companyUrl,
             unclassified
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         title,
@@ -430,6 +651,7 @@ def add_job(job, db_path=None):
         fields["location"],
         fields["remoteType"],
         fields["seniority"],
+        fields["employmentType"],
         fields["salary"],
         fields["description"],
         fields["matchScore"],
@@ -441,13 +663,27 @@ def add_job(job, db_path=None):
         json.dumps(fields["gaps"]),
         json.dumps(fields["contacts"]),
         fields["outreachMessage"],
-        fields["comment"],
+        json.dumps([
+            c.model_dump() if hasattr(c, "model_dump") else c
+            for c in fields["comments"]
+        ]),
         1 if fields["isRecruiter"] else 0,
         fields["companyUrl"],
         1 if fields["unclassified"] else 0,
     ))
     new_id = cursor.lastrowid
     _append_activity_log(cursor, new_id, "Found")
+    cursor.execute("SELECT activityLog FROM jobs WHERE id = ?", (new_id,))
+    activity_row = cursor.fetchone()
+    activity_log = activity_log_as_dicts(activity_row[0] if activity_row else None)
+    sync_job_contacted_profiles_index(
+        conn,
+        new_id,
+        company,
+        title,
+        fields["contacts"],
+        activity_log,
+    )
     conn.commit()
     conn.close()
     return new_id
@@ -459,16 +695,34 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         db_path = connection.DB_PATH
     conn = connection.get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT matchScore, resumeUsed FROM jobs WHERE id = ?", (job_id,))
+    cursor.execute(
+        "SELECT matchScore, resumeUsed, employmentType, annualMin, annualMax, annualCurrency "
+        "FROM jobs WHERE id = ?",
+        (job_id,),
+    )
     row = cursor.fetchone()
     if not row:
         conn.close()
         return None
     old_score = row[0] or 0
     old_resume = row[1] or ""
+    old_employment_type = row[2] or ""
+    old_annual_min = row[3]
+    old_annual_max = row[4]
+    old_annual_currency = row[5]
 
     resume_used = fields.get("resumeUsed", old_resume)
     new_score = fields.get("matchScore", old_score)
+    employment_type = (
+        fields["employmentType"]
+        if "employmentType" in fields
+        else old_employment_type
+    )
+    annual_min = fields["annualMin"] if "annualMin" in fields else old_annual_min
+    annual_max = fields["annualMax"] if "annualMax" in fields else old_annual_max
+    annual_currency = (
+        fields["annualCurrency"] if "annualCurrency" in fields else old_annual_currency
+    )
     cursor.execute("""
         UPDATE jobs SET
             matchScore = ?,
@@ -480,8 +734,12 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
             description = ?,
             isRecruiter = ?,
             salary = ?,
+            annualMin = ?,
+            annualMax = ?,
+            annualCurrency = ?,
             remoteType = ?,
             seniority = ?,
+            employmentType = ?,
             unclassified = ?
         WHERE id = ?
     """, (
@@ -494,8 +752,12 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         fields.get("description") or "",
         1 if fields.get("isRecruiter") else 0,
         fields.get("salary") or "",
+        annual_min,
+        annual_max,
+        annual_currency,
         fields.get("remoteType") or "",
         fields.get("seniority") or "",
+        employment_type or "",
         1 if fields.get("unclassified") else 0,
         job_id,
     ))

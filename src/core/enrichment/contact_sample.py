@@ -7,7 +7,6 @@ import re
 import time
 
 import httpx
-from dotenv import load_dotenv
 
 
 class ApifyTimeoutError(Exception):
@@ -122,7 +121,6 @@ async def _fetch_apify_employees_at_url(
             else:
                 log_func(msg, level)
 
-    load_dotenv(override=True)
     api_token = os.getenv("APIFY_API_TOKEN")
     if not api_token:
         raise ApifyInfrastructureError("APIFY_API_TOKEN not set")

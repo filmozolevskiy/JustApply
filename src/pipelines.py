@@ -1,21 +1,50 @@
 import inspect
 
 from . import db as database
+from .core.annual_posted_salary import annualize_posted_salary
+from .core.apify_linkedin_scraper import scrape_apify_linkedin_jobs
 from .core.attribute_gating import (
+    format_attribute_mismatch,
     merge_job_attributes,
+    passes_attribute_gate,
 )
 from .core.batch_evaluation import submit_backfill_batches, submit_batch_evaluation
+from .core.company_research.glassdoor_intel import (
+    GlassdoorInfrastructureError,
+    GlassdoorIntelError,
+    _pick_company_match,
+    _summarize_interviews,
+    build_job_company_research_snapshot,
+    default_apify_runner,
+    format_activity_log_message,
+    format_repick_activity_log_message,
+    normalize_salary_row,
+    parse_overview_row,
+)
+from .core.company_research.preflight import (
+    company_research_allowed,
+    resolve_company_research_slices,
+)
 from .core.enrichment import company_cache_slug, generate_outreach_templates, source_contacts
 from .core.enrichment.contact_sample import (
     _run_apify_for_recruiters,
     _run_apify_for_russian_speakers,
     detect_country_from_location,
+    linkedin_company_slug_from_url,
 )
 from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
 from .core.scraper import scrape_linkedin_jobs
+from .core.source_platform import (
+    APIFY_LINKEDIN,
+    BRIGHTDATA_LINKEDIN,
+    validate_source_platform,
+)
 from .db.job_model import coerce_job
 from .schemas import Job, OutreachSettings
+
+# Reassess demotes on attribute-gate failure only from these lanes.
+_REASSESS_DEMOTE_STATUSES = frozenset({"scraped", "matched"})
 
 
 async def run_search_pipeline(
@@ -29,17 +58,24 @@ async def run_search_pipeline(
     allowed_remote_types: list = None,
     seniorities: str = "any",
     company_sizes: str = "any",
+    employment_types: str = "any",
+    salary_min: int | None = None,
     countries: str = "us",
     time_range: str = "any",
+    platform: str | None = None,
     log_func=None,
     job_saved_func=None,
 ) -> list:
     """Scrape, deduplicate, evaluate, attribute-gate, and save jobs. Returns list of saved job dicts.
 
+    ``platform`` selects the scrape provider (Source Platform). Unsupported
+    values raise before any vendor call — never fall through to Bright Data.
+
     ``mock_scraper`` forces the LinkedIn scraper into mock mode (no Bright Data
-    call). Callers should resolve it via ``service.scraper_will_mock`` so a
-    mock-evaluation run never triggers a real, billable scrape.
+    or Apify Actor call). Callers should resolve it via ``service.scraper_will_mock``
+    so a mock-evaluation run never triggers a real, billable scrape.
     """
+    resolved_platform = validate_source_platform(platform)
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -49,19 +85,41 @@ async def run_search_pipeline(
         else:
             log_func(msg, level)
 
-    jobs = await scrape_linkedin_jobs(
-        query=query,
-        location=location,
-        search_regions=search_regions,
-        per_region_limit=per_region_limit,
-        remote_types=allowed_remote_types,
-        seniorities=seniorities,
-        company_sizes=company_sizes,
-        countries=countries,
-        time_range=time_range,
-        log_func=log_func,
-        force_mock=mock_scraper,
-    )
+    if resolved_platform == BRIGHTDATA_LINKEDIN:
+        jobs = await scrape_linkedin_jobs(
+            query=query,
+            location=location,
+            search_regions=search_regions,
+            per_region_limit=per_region_limit,
+            remote_types=allowed_remote_types,
+            seniorities=seniorities,
+            company_sizes=company_sizes,
+            employment_types=employment_types,
+            countries=countries,
+            time_range=time_range,
+            log_func=log_func,
+            force_mock=mock_scraper,
+        )
+    elif resolved_platform == APIFY_LINKEDIN:
+        await log("Source Platform: Apify LinkedIn scrape starting.", "info")
+        jobs = await scrape_apify_linkedin_jobs(
+            query=query,
+            location=location,
+            search_regions=search_regions,
+            per_region_limit=per_region_limit,
+            remote_types=allowed_remote_types,
+            seniorities=seniorities,
+            company_sizes=company_sizes,
+            employment_types=employment_types,
+            countries=countries,
+            time_range=time_range,
+            log_func=log_func,
+            force_mock=mock_scraper,
+        )
+        await log("Source Platform: Apify LinkedIn scrape finished.", "info")
+    else:
+        # validate_source_platform only returns supported values; keep exhaustiveness.
+        raise RuntimeError(f"No scrape dispatcher for platform {resolved_platform!r}")
 
     scraped_count = len(jobs)
     await log(f"Found {scraped_count} matching jobs.")
@@ -144,6 +202,8 @@ async def run_search_pipeline(
             log_func=log_func,
             allowed_remote_types=allowed_remote_types,
             seniorities=seniorities,
+            employment_types=employment_types,
+            salary_min=salary_min,
         )
         batches_submitted = len(created_batches)
 
@@ -160,6 +220,8 @@ async def run_backfill_pipeline(
     active_resume: str = "general_cv.md",
     allowed_remote_types: list = None,
     seniorities: str = "any",
+    employment_types: str = "any",
+    salary_min: int | None = None,
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -210,6 +272,8 @@ async def run_backfill_pipeline(
         db_path=db_path,
         allowed_remote_types=allowed_remote_types,
         seniorities=seniorities,
+        employment_types=employment_types,
+        salary_min=salary_min,
     )
 
     await log(
@@ -228,12 +292,23 @@ async def run_backfill_pipeline(
 async def run_reassess_pipeline(
     job_id: int,
     active_resume: str = "general_cv.md",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    employment_types: str = "any",
+    salary_min: int | None = None,
     log_func=None,
 ) -> Job:
-    """Re-run Resume Matcher on an existing job and persist updated scores."""
+    """Re-run Resume Matcher on an existing job and persist updated scores.
+
+    Applies the attribute gate from the caller's Job Search Settings (defaults
+    are “any” — CLI v1). On gate failure, only Scraped/Matched jobs move to
+    Rejected; Accepted+ keep their lane while matcher fields still update.
+    """
     job = database.get_job(job_id)
     if not job:
         raise ValueError("Job not found")
+
+    remote_prefs = allowed_remote_types if allowed_remote_types is not None else ["any"]
 
     async def log(msg: str, level: str = "info"):
         if log_func is None:
@@ -258,12 +333,17 @@ async def run_reassess_pipeline(
     await log(f"Re-assessing '{title}' at {company} with {active_resume}...")
 
     job_dict = job.model_dump()
+    original_status = (job_dict.get("status") or "").strip().lower()
     evaluation = await evaluate_job(job_dict, resume_content, log_func)
     if not evaluation:
         await log("Resume Matcher returned no result; job unchanged.", "warning")
         raise ValueError("Resume Matcher failed — no evaluation returned")
 
     merged = merge_job_attributes(job_dict, evaluation)
+    annual_band = annualize_posted_salary(
+        evaluation.get("postedSalary"),
+        job_location=job_dict.get("location") or "",
+    )
     fields = {
         "matchScore": evaluation.get("matchScore", 0),
         "matchType": evaluation.get("matchType", ""),
@@ -274,14 +354,48 @@ async def run_reassess_pipeline(
         "description": evaluation.get("summary") or job.description or "",
         "isRecruiter": evaluation.get("isRecruiter", False),
         "salary": evaluation.get("salary") or job.salary or "",
+        "annualMin": annual_band["annualMin"] if annual_band else None,
+        "annualMax": annual_band["annualMax"] if annual_band else None,
+        "annualCurrency": annual_band["annualCurrency"] if annual_band else None,
         "remoteType": merged["remoteType"],
         "seniority": merged["seniority"],
+        "employmentType": merged["employmentType"],
         "unclassified": False,
     }
 
     updated = database.update_job_evaluation(job_id, fields)
     if not updated:
         raise ValueError("Failed to persist reassessed job")
+
+    gate_ok = passes_attribute_gate(
+        merged["remoteType"],
+        merged["seniority"],
+        remote_prefs,
+        seniorities,
+        employment_type=merged["employmentType"],
+        employment_types=employment_types,
+        annual_max=fields["annualMax"],
+        annual_min=fields["annualMin"],
+        salary_min=salary_min,
+    )
+    if not gate_ok and original_status in _REASSESS_DEMOTE_STATUSES:
+        mismatch = format_attribute_mismatch(
+            title,
+            company,
+            remote_type=merged["remoteType"],
+            seniority=merged["seniority"],
+            allowed_remote_types=remote_prefs,
+            seniorities=seniorities,
+            employment_type=merged["employmentType"],
+            employment_types=employment_types,
+            annual_max=fields["annualMax"],
+            annual_min=fields["annualMin"],
+            salary_min=salary_min,
+        )
+        await log(mismatch, "warning")
+        demoted = database.update_job_status(job_id, "rejected")
+        if demoted:
+            updated = demoted
 
     await log(
         f"Re-assessed: score {fields['matchScore']}, "
@@ -622,3 +736,193 @@ async def run_enrichment_pipeline(job: Job, log_func=None) -> Job | None:
         else:
             await log(f"Enrichment complete for job id={job_id}.", "success")
     return enriched
+
+
+async def run_company_research_pipeline(
+    job_id: int,
+    glassdoor_job_title: str,
+    log_func=None,
+    apify_runner=None,
+    db_path=None,
+    activity_log_override: str | None = None,
+) -> Job:
+    """Fetch Glassdoor employer intel, update cache, and persist job snapshot."""
+
+    async def log(msg: str, level: str = "info"):
+        if log_func is None:
+            return
+        if inspect.iscoroutinefunction(log_func):
+            await log_func(msg, level)
+        else:
+            log_func(msg, level)
+
+    job = database.get_job(job_id, db_path=db_path)
+    if not job:
+        raise ValueError(f"Job id={job_id} not found")
+    if not company_research_allowed(job.status, job.archived):
+        raise ValueError("Company research is only available for Matched and later lanes")
+
+    title = (glassdoor_job_title or job.title or "").strip()
+    resolved = resolve_company_research_slices(
+        job.company or "",
+        job.title or "",
+        glassdoor_job_title=title,
+    )
+    company_key = resolved["company_key"]
+    title_key = resolved["title_key"]
+    cache_row = resolved.get("cache_row") or {}
+    billable = set(resolved["billable_slices"])
+
+    runner = apify_runner or default_apify_runner
+    linkedin_slug = linkedin_company_slug_from_url(job.companyUrl or "")
+
+    company_id = cache_row.get("glassdoorCompanyId") or ""
+    matched_name = cache_row.get("matchedName") or ""
+    overview = {
+        "companySize": cache_row.get("companySize"),
+        "rating": cache_row.get("rating"),
+        "reviewCount": cache_row.get("reviewCount"),
+        "recommendPercent": cache_row.get("recommendPercent"),
+    }
+    salary = (cache_row.get("salariesByTitle") or {}).get(title_key)
+    interviews = (cache_row.get("interviewsByTitle") or {}).get(title_key)
+
+    try:
+        if "companySearch" in billable:
+            await log(f"Glassdoor company search for '{job.company}'…")
+            search_rows = await runner("companySearch", company_name=job.company or "")
+            match = _pick_company_match(job.company or "", search_rows, linkedin_slug)
+            company_id = str(
+                match.get("companyId") or match.get("id") or match.get("employerId") or ""
+            )
+            if not company_id:
+                raise GlassdoorIntelError(f"Could not resolve Glassdoor company ID for '{job.company}'")
+            matched_name = str(
+                match.get("companyName") or match.get("name") or match.get("shortName") or job.company
+            )
+            await log(f"Matched Glassdoor employer: {matched_name}")
+            database.set_company_research_cache(
+                company_key,
+                {"glassdoorCompanyId": company_id, "matchedName": matched_name},
+                db_path=db_path,
+            )
+
+        if "companyOverview" in billable:
+            await log(f"Glassdoor overview for {matched_name}…")
+            overview_rows = await runner("companyOverview", company_id=company_id)
+            overview = parse_overview_row(overview_rows)
+            database.set_company_research_cache(
+                company_key,
+                {
+                    "glassdoorCompanyId": company_id,
+                    "matchedName": matched_name,
+                    **overview,
+                },
+                db_path=db_path,
+            )
+            await log("Overview cached")
+
+        if "companySalaries" in billable:
+            await log(f"Glassdoor salaries for '{title}'…")
+            salary_rows = await runner(
+                "companySalaries",
+                company_id=company_id,
+                job_title=title,
+            )
+            salary = None
+            for row in salary_rows:
+                salary = normalize_salary_row(row, title)
+                if salary:
+                    break
+            salaries_by_title = dict(cache_row.get("salariesByTitle") or {})
+            salaries_by_title[title_key] = salary
+            database.set_company_research_cache(
+                company_key,
+                {"salariesByTitle": salaries_by_title},
+                db_path=db_path,
+            )
+            await log("Salary slice cached" if salary else "Salary slice cached (empty)")
+
+        if "companyInterviews" in billable:
+            await log(f"Glassdoor interviews for '{title}'…")
+            interview_rows = await runner(
+                "companyInterviews",
+                company_id=company_id,
+                job_title=title,
+            )
+            interviews = _summarize_interviews(interview_rows, title)
+            interviews_by_title = dict(cache_row.get("interviewsByTitle") or {})
+            interviews_by_title[title_key] = interviews
+            database.set_company_research_cache(
+                company_key,
+                {"interviewsByTitle": interviews_by_title},
+                db_path=db_path,
+            )
+            await log(f"Interview slice cached ({len(interviews)} snippets)")
+
+        snapshot = build_job_company_research_snapshot(
+            glassdoor_company_id=company_id,
+            matched_name=matched_name,
+            overview=overview,
+            glassdoor_job_title=title,
+            salary=salary,
+            interviews=interviews or [],
+        )
+        updated = database.update_company_research(job_id, snapshot, db_path=db_path)
+        if not updated:
+            raise ValueError("Failed to persist company research snapshot")
+        database.log_activity(
+            job_id,
+            activity_log_override or format_activity_log_message(snapshot),
+            db_path=db_path,
+        )
+        await log("Company research complete.", "success")
+        return database.get_job(job_id, db_path=db_path) or updated
+
+    except GlassdoorInfrastructureError as exc:
+        database.log_activity(job_id, f"Company research failed · {exc}", db_path=db_path)
+        await log(f"Company research failed: {exc}", "error")
+        raise
+    except GlassdoorIntelError as exc:
+        database.log_activity(job_id, f"Company research failed · {exc}", db_path=db_path)
+        await log(f"Company research failed: {exc}", "error")
+        raise
+
+
+async def run_company_research_repick_pipeline(
+    job_id: int,
+    glassdoor_job_title: str,
+    glassdoor_company_id: str,
+    matched_name: str,
+    log_func=None,
+    apify_runner=None,
+    db_path=None,
+) -> Job:
+    """Repick Glassdoor employer — clear cache, seed new match, fetch billable slices."""
+    from .db.company_research_cache import delete_company_research_cache, normalize_company_name
+
+    job = database.get_job(job_id, db_path=db_path)
+    if not job:
+        raise ValueError(f"Job id={job_id} not found")
+    if not company_research_allowed(job.status, job.archived):
+        raise ValueError("Company research is only available for Matched and later lanes")
+
+    company_key = normalize_company_name(job.company or "")
+    delete_company_research_cache(company_key, db_path=db_path)
+    database.set_company_research_cache(
+        company_key,
+        {
+            "glassdoorCompanyId": glassdoor_company_id,
+            "matchedName": matched_name,
+        },
+        db_path=db_path,
+    )
+
+    return await run_company_research_pipeline(
+        job_id,
+        glassdoor_job_title,
+        log_func=log_func,
+        apify_runner=apify_runner,
+        db_path=db_path,
+        activity_log_override=format_repick_activity_log_message(matched_name),
+    )

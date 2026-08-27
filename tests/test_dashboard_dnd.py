@@ -1,12 +1,17 @@
 import os
 
+from tests.kanban_js import load_dashboard_js, read_dashboard_css, read_dashboard_html
+
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 BOARD_RENDERER_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "static", "js", "boardRenderer.js")
 
 
 def _read_html():
-    with open(HTML_PATH, encoding="utf-8") as f:
-        return f.read()
+    return read_dashboard_html()
+
+
+def _read_css():
+    return read_dashboard_css()
 
 
 def _read_board_renderer():
@@ -15,7 +20,7 @@ def _read_board_renderer():
 
 
 def _read_kanban_sources():
-    return _read_html() + "\n" + _read_board_renderer()
+    return load_dashboard_js() + "\n" + _read_board_renderer()
 
 
 def test_chevron_move_left_absent():
@@ -40,18 +45,18 @@ def test_dragstart_wired():
 
 
 def test_dragover_wired():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "dragover" in content, "dragover event listener must be wired on lane columns"
 
 
 def test_drop_handler_wired():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "addEventListener('drop'" in content, \
         "drop event listener must be wired on lane columns"
 
 
 def test_hover_reject_css_defined():
-    content = _read_html()
+    content = _read_css()
     assert ".hover-reject" in content, "hover-reject CSS class must be defined"
 
 
@@ -62,13 +67,13 @@ def test_hover_reject_class_on_button():
 
 
 def test_same_lane_drop_noop():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "job.status === lane" in content, \
         "Same-lane drop must be a no-op (guarded by job.status === lane check)"
 
 
 def test_init_kanban_dnd_defined_and_called():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "function initKanbanDnd" in content, "initKanbanDnd function must be defined"
     assert "initKanbanDnd()" in content, "initKanbanDnd must be called at init"
 

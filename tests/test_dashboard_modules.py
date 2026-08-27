@@ -2,12 +2,10 @@
 
 import os
 import subprocess
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
 from src.web.server import app
+from tests.kanban_js import DASHBOARD_CSS_PATH, load_dashboard_js, read_dashboard_css
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JOB_STORE_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "jobStore.js")
@@ -15,7 +13,6 @@ BOARD_RENDERER_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "boa
 DRAWER_CONTROLLER_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "drawerController.js")
 TASK_LOG_CLIENT_PATH = os.path.join(REPO_ROOT, "src", "web", "static", "js", "taskLogClient.js")
 HTML_PATH = os.path.join(REPO_ROOT, "src", "web", "dashboard.html")
-
 
 def _run_node(script: str) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -25,7 +22,6 @@ def _run_node(script: str) -> subprocess.CompletedProcess:
         text=True,
         timeout=10,
     )
-
 
 def test_job_store_round_trips_jobs():
     """jobStore owns in-memory job list — set, find, update, remove."""
@@ -56,7 +52,6 @@ def test_job_store_round_trips_jobs():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_job_store_integrates_incoming_search_jobs():
     """integrateIncomingJobs adds new jobs and skips duplicates by id or title/company."""
     result = _run_node(
@@ -80,7 +75,6 @@ def test_job_store_integrates_incoming_search_jobs():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_filters_and_sorts_jobs():
     """boardRenderer applies Board Controls filters without touching the DOM."""
@@ -107,7 +101,6 @@ def test_board_renderer_filters_and_sorts_jobs():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_search_filters_by_title_company_location_description():
     """Board Search uses multi-word AND across title, company, location, and description."""
@@ -161,7 +154,6 @@ def test_board_renderer_search_filters_by_title_company_location_description():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_search_matches_contact_names():
     """Board Search includes contact display names in the haystack (name only, case-insensitive AND)."""
@@ -225,9 +217,8 @@ def test_board_renderer_search_matches_contact_names():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_resolve_jobs_archived_fetch_param():
-    """Active visibility + non-empty search fetches all jobs; otherwise unchanged."""
+    """Active visibility + non-empty search or favorites-only fetches all jobs; otherwise unchanged."""
     result = _run_node(
         """
         import { resolveJobsArchivedFetchParam } from './src/web/static/js/boardRenderer.js';
@@ -237,12 +228,14 @@ def test_board_renderer_resolve_jobs_archived_fetch_param():
         if (resolveJobsArchivedFetchParam('active', '') !== 'active') process.exit(3);
         if (resolveJobsArchivedFetchParam('archived', 'jane') !== 'archived') process.exit(4);
         if (resolveJobsArchivedFetchParam('all', 'jane') !== 'all') process.exit(5);
+        if (resolveJobsArchivedFetchParam('active', '', true) !== 'all') process.exit(6);
+        if (resolveJobsArchivedFetchParam('active', '', false) !== 'active') process.exit(7);
+        if (resolveJobsArchivedFetchParam('archived', '', true) !== 'archived') process.exit(8);
 
         console.log('ok');
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_active_search_surfaces_archived_on_contact_match_only():
     """Under Active visibility, archived jobs appear only when contact names match search."""
@@ -319,7 +312,6 @@ def test_board_renderer_active_search_surfaces_archived_on_contact_match_only():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_archived_and_all_visibility_skip_contact_bypass():
     """Archived and All visibility modes use normal search — no contact-only bypass."""
     result = _run_node(
@@ -372,7 +364,6 @@ def test_board_renderer_archived_and_all_visibility_skip_contact_bypass():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_active_archived_bypass_combines_with_other_filters():
     """Contact-name archived bypass still respects remote, size, and recruiter filters."""
     result = _run_node(
@@ -420,22 +411,17 @@ def test_board_renderer_active_archived_bypass_combines_with_other_filters():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_load_jobs_uses_archived_fetch_resolver():
     """loadJobs uses resolveJobsArchivedFetchParam for search-aware fetch under Active."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = load_dashboard_js()
     assert "resolveJobsArchivedFetchParam" in content
     assert "getJobsFetchArchivedParam" in content
 
-
 def test_dashboard_clear_board_search_reloads_jobs():
     """Clearing Board Search reloads jobs so archived rows drop under Active visibility."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = load_dashboard_js()
     clear_fn = content[content.find("function clearBoardSearch"): content.find("function resetBoardControls")]
     assert "loadJobs()" in clear_fn
-
 
 def test_board_renderer_search_combines_with_other_board_filters():
     """Board Search ANDs with remote, size, and recruiter filters."""
@@ -479,6 +465,303 @@ def test_board_renderer_search_combines_with_other_board_filters():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
+def test_board_renderer_favorites_only_shows_favorited_jobs():
+    """Favorites Filter keeps only jobs with favorited === true."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'QA Lead',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: true,
+          },
+          {
+            id: 2,
+            title: 'SDET',
+            company: 'Beta',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: false,
+          },
+        ];
+
+        const off = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          favoritesOnly: false,
+        });
+        if (off.map((j) => j.id).join(',') !== '1,2') process.exit(1);
+
+        const on = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          favoritesOnly: true,
+        });
+        if (on.length !== 1 || on[0].id !== 1) process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+def test_board_renderer_favorites_only_ands_with_search_and_remote():
+    """Favorites Filter ANDs with Board Search and remote type filters."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1,
+            title: 'QA Lead',
+            company: 'Acme',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: true,
+          },
+          {
+            id: 2,
+            title: 'QA Lead',
+            company: 'Beta',
+            location: 'Hybrid',
+            description: 'Testing',
+            remoteType: 'hybrid',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: true,
+          },
+          {
+            id: 3,
+            title: 'QA Lead',
+            company: 'Gamma',
+            location: 'Remote',
+            description: 'Testing',
+            remoteType: 'remote',
+            size: '10-50',
+            isRecruiter: false,
+            favorited: false,
+          },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'remote',
+          size: 'all',
+          recruiter: 'all',
+          search: 'qa',
+          favoritesOnly: true,
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+def test_board_renderer_favorites_only_surfaces_favorited_archived_under_active():
+    """Under Active visibility, favorites-only includes favorited archived jobs."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const base = {
+          title: 'Old QA',
+          company: 'Acme',
+          location: 'Remote',
+          description: 'Testing',
+          remoteType: 'remote',
+          size: '10-50',
+          isRecruiter: false,
+          status: 'rejected',
+        };
+
+        const jobs = [
+          { id: 1, ...base, archived: false, favorited: true },
+          { id: 2, ...base, archived: true, favorited: true },
+          { id: 3, ...base, archived: true, favorited: false },
+          { id: 4, ...base, archived: false, favorited: false },
+        ];
+
+        const favoritesOn = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: '',
+          archivedVisibility: 'active',
+          favoritesOnly: true,
+        });
+        const onIds = favoritesOn.map((j) => j.id).sort((a, b) => a - b);
+        if (onIds.join(',') !== '1,2') process.exit(1);
+
+        const favoritesOff = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: '',
+          archivedVisibility: 'active',
+          favoritesOnly: false,
+        });
+        if (favoritesOff.some((j) => j.archived)) process.exit(2);
+        if (favoritesOff.map((j) => j.id).sort((a, b) => a - b).join(',') !== '1,4') process.exit(3);
+
+        const withSearch = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          search: 'acme',
+          archivedVisibility: 'active',
+          favoritesOnly: true,
+        });
+        if (withSearch.map((j) => j.id).sort((a, b) => a - b).join(',') !== '1,2') process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_employment_type_none_checked_passes_all_including_unknown():
+    """Empty Employment Type refine leaves all types and unknowns visible."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          { id: 1, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Full-time' },
+          { id: 2, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Contract' },
+          { id: 3, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: '' },
+          { id: 4, remoteType: 'remote', size: '10-50', isRecruiter: false },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          employmentTypes: [],
+        });
+        if (filtered.map((j) => j.id).join(',') !== '1,2,3,4') process.exit(1);
+
+        const omitted = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+        });
+        if (omitted.map((j) => j.id).join(',') !== '1,2,3,4') process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_employment_type_refine_keeps_selected_hides_unknown():
+    """Active Employment Type refine keeps matching types and hides unknowns."""
+    result = _run_node(
+        """
+        import { filterJobs } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          { id: 1, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Full-time' },
+          { id: 2, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Contract' },
+          { id: 3, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: 'Part-time' },
+          { id: 4, remoteType: 'remote', size: '10-50', isRecruiter: false, employmentType: '' },
+          { id: 5, remoteType: 'remote', size: '10-50', isRecruiter: false },
+        ];
+
+        const contractOnly = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          employmentTypes: ['Contract'],
+        });
+        if (contractOnly.length !== 1 || contractOnly[0].id !== 2) process.exit(1);
+
+        const multi = filterJobs(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          employmentTypes: ['Full-time', 'Contract'],
+        });
+        if (multi.map((j) => j.id).join(',') !== '1,2') process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_renderer_employment_type_ands_with_search_remote_favorites():
+    """Employment Type refine ANDs with search, remote, and favorites filters."""
+    result = _run_node(
+        """
+        import { filterJobs, getBoardJobOrder } from './src/web/static/js/boardRenderer.js';
+
+        const jobs = [
+          {
+            id: 1, status: 'matched', title: 'QA Lead', company: 'Acme',
+            location: 'Remote', description: 'Testing', remoteType: 'remote',
+            size: '10-50', isRecruiter: false, favorited: true,
+            employmentType: 'Contract', matchScore: 80,
+          },
+          {
+            id: 2, status: 'matched', title: 'QA Lead', company: 'Beta',
+            location: 'Hybrid', description: 'Testing', remoteType: 'hybrid',
+            size: '10-50', isRecruiter: false, favorited: true,
+            employmentType: 'Contract', matchScore: 90,
+          },
+          {
+            id: 3, status: 'matched', title: 'QA Lead', company: 'Gamma',
+            location: 'Remote', description: 'Testing', remoteType: 'remote',
+            size: '10-50', isRecruiter: false, favorited: true,
+            employmentType: 'Full-time', matchScore: 95,
+          },
+          {
+            id: 4, status: 'matched', title: 'QA Lead', company: 'Delta',
+            location: 'Remote', description: 'Testing', remoteType: 'remote',
+            size: '10-50', isRecruiter: false, favorited: false,
+            employmentType: 'Contract', matchScore: 70,
+          },
+        ];
+
+        const filtered = filterJobs(jobs, {
+          remote: 'remote',
+          size: 'all',
+          recruiter: 'all',
+          search: 'qa',
+          favoritesOnly: true,
+          employmentTypes: ['Contract'],
+        });
+        if (filtered.length !== 1 || filtered[0].id !== 1) process.exit(1);
+
+        const ordered = getBoardJobOrder(jobs, {
+          remote: 'all',
+          size: 'all',
+          recruiter: 'all',
+          sortBy: 'match_desc',
+          employmentTypes: ['Contract'],
+        });
+        if (ordered.map((j) => j.id).join(',') !== '2,1,4') process.exit(2);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
 
 def test_board_renderer_job_order_follows_lanes_and_sort():
     """getBoardJobOrder returns jobs lane-by-lane using the active sort."""
@@ -501,20 +784,19 @@ def test_board_renderer_job_order_follows_lanes_and_sort():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_drawer_has_prev_next_navigation():
     """Job drawer exposes previous/next navigation controls."""
     with open(HTML_PATH, encoding="utf-8") as f:
         content = f.read()
     assert 'id="drawer-nav-prev"' in content
     assert 'id="drawer-nav-next"' in content
-    assert "navigateDrawerJob" in content
+    dashboard_js = load_dashboard_js()
+    assert "navigateDrawerJob" in dashboard_js
 
     with open(DRAWER_CONTROLLER_PATH, encoding="utf-8") as f:
         drawer = f.read()
     assert "navigateDrawerJob" in drawer
     assert "getBoardJobOrder" in drawer
-
 
 def test_drawer_controller_substitutes_greeting_name():
     """drawerController applies Name Placeholder greeting substitution."""
@@ -542,7 +824,6 @@ def test_drawer_controller_substitutes_greeting_name():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_drawer_controller_company_row_and_size_helpers():
     """Drawer company row shows LinkedIn badge only when companyUrl is present."""
     result = _run_node(
@@ -561,7 +842,6 @@ def test_drawer_controller_company_row_and_size_helpers():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_drawer_controller_pick_default_active_contact_deprioritizes_elsewhere():
     """Active Contact defaults to uncontacted contacts without Contacted Elsewhere first."""
@@ -594,7 +874,6 @@ def test_drawer_controller_pick_default_active_contact_deprioritizes_elsewhere()
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_drawer_controller_contact_sample_actions_after_empty_reclassify():
     """Load More / Re-classify stay available when enrichment ran but contacts are empty."""
     result = _run_node(
@@ -614,7 +893,6 @@ def test_drawer_controller_contact_sample_actions_after_empty_reclassify():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_task_log_client_routes_sse_message_types():
     """taskLogClient routes log/result/done SSE payloads through one handler."""
@@ -649,33 +927,109 @@ def test_task_log_client_routes_sse_message_types():
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_task_log_client_batch_poller_sse_uses_single_event_source():
+    """Batch-poller SSE reuses handleTaskLogMessage and replaces prior EventSource."""
+    result = _run_node(
+        """
+        import {
+          BATCH_POLLER_LOG_SKIP_KEY,
+          createTaskLogClient,
+        } from './src/web/static/js/taskLogClient.js';
+
+        const store = new Map();
+        globalThis.localStorage = {
+          getItem: (k) => (store.has(k) ? store.get(k) : null),
+          setItem: (k, v) => store.set(k, String(v)),
+          removeItem: (k) => store.delete(k),
+        };
+        globalThis.document = {
+          getElementById: () => null,
+        };
+        globalThis.window = {
+          clearTimeout: clearTimeout,
+          setTimeout: setTimeout,
+        };
+
+        const constructed = [];
+        class FakeEventSource {
+          constructor(url) {
+            this.url = url;
+            this.closed = false;
+            this.onmessage = null;
+            this.onerror = null;
+            constructed.push(this);
+          }
+          close() {
+            this.closed = true;
+          }
+        }
+        globalThis.EventSource = FakeEventSource;
+
+        const client = createTaskLogClient();
+        store.set(BATCH_POLLER_LOG_SKIP_KEY, '2');
+        const first = client.connectBatchPollerLogStream();
+        if (constructed.length !== 1) process.exit(1);
+        if (!first.url.includes('/api/batch-poller/logs?skip=2')) process.exit(2);
+        if (client.getBatchPollerEventSource() !== first) process.exit(3);
+
+        const second = client.connectBatchPollerLogStream();
+        if (constructed.length !== 2) process.exit(4);
+        if (!first.closed || first._intentionalClose !== true) process.exit(5);
+        if (client.getBatchPollerEventSource() !== second) process.exit(6);
+        if (second.url.includes('/api/logs/')) process.exit(7);
+
+        second.onmessage({
+          data: JSON.stringify({
+            type: 'log',
+            level: 'summary',
+            message: 'Batch chunk completed: 1 matched, 0 attribute-filtered, 0 fallback-rejected, 0 failed, 0 unclassified',
+          }),
+        });
+        if (store.get(BATCH_POLLER_LOG_SKIP_KEY) !== '3') process.exit(8);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
 def test_dashboard_has_no_inline_mock_job_database():
     """Kanban Dashboard loads jobs from the API — no static masterJobs mock array."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
-    for marker in ('<script type="module">', '<script>'):
-        script_start = content.find(marker)
-        if script_start != -1:
-            break
-    else:
-        raise AssertionError("<script> block not found")
-    script_end = content.rindex("</script>")
-    script = content[script_start:script_end]
-    assert "let masterJobs = [" not in script
-    assert "Senior QA Automation Engineer" not in script
-    assert "Using static fallback database" not in script
-
+    content = load_dashboard_js()
+    assert "let masterJobs = [" not in content
+    assert "Senior QA Automation Engineer" not in content
+    assert "Using static fallback database" not in content
 
 def test_dashboard_loads_kanban_modules():
     """dashboard.html imports Kanban Dashboard modules instead of inline monolith state."""
     with open(HTML_PATH, encoding="utf-8") as f:
         content = f.read()
     assert 'type="module"' in content
-    assert "/static/js/jobStore.js" in content
-    assert "/static/js/boardRenderer.js" in content
-    assert "/static/js/drawerController.js" in content
-    assert "/static/js/taskLogClient.js" in content
+    assert "/static/js/dashboardApp.js" in content
+    dashboard_js = load_dashboard_js()
+    assert "/static/js/jobStore.js" in dashboard_js or "from './jobStore.js'" in dashboard_js
+    assert "/static/js/boardRenderer.js" in dashboard_js or "from './boardRenderer.js'" in dashboard_js
+    assert "/static/js/drawerController.js" in dashboard_js or "from './drawerController.js'" in dashboard_js
+    assert "/static/js/taskLogClient.js" in dashboard_js or "from './taskLogClient.js'" in dashboard_js
+    assert "boardOrchestration.js" in dashboard_js
+    assert "jobSearchSettings.js" in dashboard_js
+    assert "spendConfirmation.js" in dashboard_js
+    assert "evaluationLock.js" in dashboard_js
+    assert "profileManager.js" in dashboard_js
 
+def test_dashboard_links_stylesheet():
+    """dashboard.html links extracted CSS from the static mount."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert "/static/css/dashboard.css" in content
+    assert "<style" not in content
+
+def test_server_serves_dashboard_stylesheet():
+    """FastAPI serves extracted dashboard CSS."""
+    client = TestClient(app)
+    resp = client.get("/static/css/dashboard.css")
+    assert resp.status_code == 200
+    assert ":root {" in resp.text
+    assert ".kanban-board-container" in resp.text
 
 def test_server_serves_kanban_static_modules():
     """FastAPI serves extracted dashboard JS modules."""
@@ -685,11 +1039,16 @@ def test_server_serves_kanban_static_modules():
         "/static/js/boardRenderer.js",
         "/static/js/drawerController.js",
         "/static/js/taskLogClient.js",
+        "/static/js/boardOrchestration.js",
+        "/static/js/jobSearchSettings.js",
+        "/static/js/spendConfirmation.js",
+        "/static/js/evaluationLock.js",
+        "/static/js/profileManager.js",
+        "/static/js/dashboardApp.js",
     ):
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert "export " in resp.text
-
 
 def test_board_renderer_shows_enriching_badge_for_active_task():
     """boardRenderer.cardEnrichingBadge returns spinner for matching job, empty otherwise."""
@@ -712,7 +1071,6 @@ def test_board_renderer_shows_enriching_badge_for_active_task():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_board_renderer_shows_load_more_badge_for_active_task():
     """boardRenderer.cardLoadMoreBadge returns spinner for matching job, empty otherwise."""
     result = _run_node(
@@ -733,7 +1091,6 @@ def test_board_renderer_shows_load_more_badge_for_active_task():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
-
 
 def test_board_renderer_shows_reclassify_badge_for_active_task():
     """boardRenderer.cardReclassifyBadge returns spinner for matching job, empty otherwise."""
@@ -756,14 +1113,12 @@ def test_board_renderer_shows_reclassify_badge_for_active_task():
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-
 def test_dashboard_has_summary_log_level_style():
     """Task Logs summary level has distinct styling in dashboard CSS."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = read_dashboard_css()
     assert ".terminal-text.summary" in content
     assert "border-top" in content
-
+    assert os.path.isfile(DASHBOARD_CSS_PATH)
 
 def test_board_renderer_includes_unclassified_badge():
     """boardRenderer shows Unclassified badge with hover tooltip for unclassified jobs."""
@@ -773,7 +1128,6 @@ def test_board_renderer_includes_unclassified_badge():
     assert "Unclassified" in content
     assert "title=" in content
 
-
 def test_drawer_shows_reclassify_progress_banner():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
@@ -782,11 +1136,9 @@ def test_drawer_shows_reclassify_progress_banner():
     assert "refreshDrawerIfOpen" in content, \
         "drawerController must export refreshDrawerIfOpen to avoid reopening closed drawer"
 
-
 def test_drawer_inline_handlers_exported_to_window():
     """Inline oninput/onclick in drawer HTML require globals on window."""
-    with open(HTML_PATH, encoding="utf-8") as f:
-        content = f.read()
+    content = load_dashboard_js()
     window_block = content[content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3]
     for name in (
         "postJobComment",
@@ -796,5 +1148,382 @@ def test_drawer_inline_handlers_exported_to_window():
         "onCommentDraftInput",
         "onOutreachDraftInput",
         "updateOutreachCounter",
+        "showMoreCommentRoots",
+        "showFewerCommentRoots",
     ):
         assert f"{name}," in window_block, f"{name} must be exported to window for drawer inline handlers"
+
+
+def test_card_comment_root_count_chip_counts_roots_only():
+    """Kanban card chip shows root Job Comment count; zero roots → no chrome; never body text."""
+    result = _run_node(
+        """
+        import { cardCommentRootCountChip } from './src/web/static/js/boardRenderer.js';
+
+        const empty = cardCommentRootCountChip({ comments: [] });
+        if (empty !== '') process.exit(1);
+
+        const missing = cardCommentRootCountChip({});
+        if (missing !== '') process.exit(2);
+
+        const oneRoot = cardCommentRootCountChip({
+          comments: [
+            { id: 'c1', parentId: null, body: 'Secret note body', createdAt: '2026-07-01T10:00:00Z' },
+          ],
+        });
+        if (!oneRoot.includes('comment-root-count-chip')) process.exit(3);
+        if (!oneRoot.includes('>1<') && !oneRoot.includes('> 1<') && !/\\b1\\b/.test(oneRoot)) process.exit(4);
+        if (oneRoot.includes('Secret note body')) process.exit(5);
+
+        const rootsAndReply = cardCommentRootCountChip({
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root A', createdAt: '2026-07-01T10:00:00Z' },
+            { id: 'r2', parentId: null, body: 'Root B', createdAt: '2026-07-02T10:00:00Z' },
+            { id: 'reply', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-03T10:00:00Z' },
+          ],
+        });
+        if (!/\\b2\\b/.test(rootsAndReply)) process.exit(6);
+        if (rootsAndReply.includes('Root A') || rootsAndReply.includes('Nested reply')) process.exit(7);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_board_card_uses_comment_root_count_chip_not_text_preview():
+    """Card header shows root-count chip; no italic comment body preview on the card."""
+    with open(BOARD_RENDERER_PATH, encoding="utf-8") as f:
+        board = f.read()
+    css = read_dashboard_css()
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+
+    assert "cardCommentRootCountChip(job)" in board
+    assert "comment-root-count-chip" in board
+    assert "${commentChip}" in board
+    assert "kanban-card-header-actions" in board
+    # No legacy string-blob field or body text preview on the card.
+    assert "job.comment " not in board
+    assert "job.comment}" not in board
+    assert "job.comment." not in board
+    assert "fa-comment-dots" in board
+    assert ".comment-root-count-chip" in css
+    # Chip helper must not interpolate comment bodies onto the card.
+    helper_start = board.find("function cardCommentRootCountChip")
+    assert helper_start != -1
+    helper_end = board.find("\nexport function", helper_start + 1)
+    helper = board[helper_start:helper_end if helper_end != -1 else helper_start + 600]
+    assert "body" not in helper or ".body" not in helper
+    assert "c.body" not in helper
+    assert "${" not in helper or "rootCount" in helper
+    # Posting a root refreshes the board so the chip count updates without full page reload.
+    post_start = drawer.find("function postJobComment(")
+    assert post_start != -1
+    post_body = drawer[post_start : post_start + 1600]
+    assert "onJobMutated()" in post_body
+    assert "job.comments" in post_body
+
+
+def test_comment_thread_default_shows_three_newest_root_bubbles():
+    """Notes / Comments bubble thread shows at most three newest roots by default."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            { id: 'r1', parentId: null, body: 'Oldest root', createdAt: '2026-07-20T09:00:00Z' },
+            { id: 'r2', parentId: null, body: 'Middle root', createdAt: '2026-07-22T09:00:00Z' },
+            { id: 'r3', parentId: null, body: 'Newer root', createdAt: '2026-07-24T09:00:00Z' },
+            { id: 'r4', parentId: null, body: 'Newest root', createdAt: '2026-07-26T09:00:00Z' },
+          ],
+        };
+        const html = renderCommentThreadHtml(job);
+        if (!html.includes('comment-thread') && !html.includes('jc-feed') && !html.includes('drawer-comment-bubble')) {
+          process.exit(1);
+        }
+        if (!html.includes('Newest root') || !html.includes('Newer root') || !html.includes('Middle root')) {
+          process.exit(2);
+        }
+        if (html.includes('Oldest root')) process.exit(3);
+        if (!html.includes('drawer-comment-bubble') && !html.includes('jc-bubble')) process.exit(4);
+        // creation time must appear (formatted or raw iso)
+        if (!html.includes('Jul') && !html.includes('2026-07-26')) process.exit(5);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_thread_shows_replies_under_visible_roots():
+    """Replies under a visible root always render as nested bubbles."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root note', createdAt: '2026-07-26T09:00:00Z' },
+            { id: 'r1a', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-26T10:00:00Z' },
+          ],
+        };
+        const html = renderCommentThreadHtml(job);
+        if (!html.includes('Root note') || !html.includes('Nested reply')) process.exit(1);
+        if (!html.includes('is-reply')) process.exit(2);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_thread_show_more_and_show_fewer():
+    """Show more reveals all older roots; show fewer collapses to three."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            { id: 'r1', parentId: null, body: 'Oldest root', createdAt: '2026-07-20T09:00:00Z' },
+            { id: 'r2', parentId: null, body: 'Middle root', createdAt: '2026-07-22T09:00:00Z' },
+            { id: 'r3', parentId: null, body: 'Newer root', createdAt: '2026-07-24T09:00:00Z' },
+            { id: 'r4', parentId: null, body: 'Newest root', createdAt: '2026-07-26T09:00:00Z' },
+          ],
+        };
+        const collapsed = renderCommentThreadHtml(job, { showAllRoots: false });
+        if (!collapsed.includes('Show 1 older') && !collapsed.includes('data-show-more')) process.exit(1);
+        if (collapsed.includes('Oldest root')) process.exit(2);
+        if (collapsed.includes('Show fewer') || collapsed.includes('data-show-less')) process.exit(3);
+
+        const expanded = renderCommentThreadHtml(job, { showAllRoots: true });
+        if (!expanded.includes('Oldest root')) process.exit(4);
+        if (!expanded.includes('Show fewer') && !expanded.includes('data-show-less')) process.exit(5);
+        if (expanded.includes('data-show-more')) process.exit(6);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_notes_comments_section_uses_bubble_thread_in_place():
+    """Notes / Comments keeps heading after Strengths/Gaps and uses bubble thread markup/CSS."""
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    css = read_dashboard_css()
+    notes_heading = '">Notes / Comments</h4>'
+    notes_idx = drawer.find(notes_heading)
+    strengths_idx = drawer.find("Strengths</div>")
+    assert notes_idx != -1
+    assert strengths_idx != -1
+    assert strengths_idx < notes_idx
+    assert "renderCommentThreadHtml" in drawer or "renderCommentsListHtml" in drawer
+    assert "jc-bubble-c" in drawer or "drawer-comment-bubble" in drawer
+    assert "showMoreCommentRoots" in drawer
+    assert "showFewerCommentRoots" in drawer
+    assert ".jc-bubble-c" in css or ".drawer-comment-bubble" in css
+    assert ".jc-feed-c" in css or ".comment-thread" in css
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "showMoreCommentRoots," in window_block
+    assert "showFewerCommentRoots," in window_block
+
+
+def test_comment_thread_inline_edit_and_edited_marker():
+    """Edit opens inline textarea with Post/Cancel; editedAt shows quiet marker."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          comments: [
+            {
+              id: 'c1',
+              parentId: null,
+              body: 'Posted body',
+              createdAt: '2026-07-26T09:00:00Z',
+              editedAt: '2026-07-26T10:00:00Z',
+            },
+          ],
+        };
+        const viewed = renderCommentThreadHtml(job);
+        if (!viewed.includes('data-edit-comment') && !viewed.includes('startEditJobComment')) process.exit(1);
+        if (!viewed.includes('(edited)') && !viewed.includes('jc-edited')) process.exit(2);
+        if (!viewed.includes('Edited') && !viewed.includes('title=')) process.exit(3);
+        if (viewed.includes('drawer-comment-edit-text')) process.exit(4);
+
+        const editing = renderCommentThreadHtml(job, { editingCommentId: 'c1' });
+        if (!editing.includes('drawer-comment-edit-text') && !editing.includes('textarea')) process.exit(5);
+        if (!editing.includes('Posted body')) process.exit(6);
+        if (!editing.includes('postEditJobComment') && !editing.includes('data-post-edit')) process.exit(7);
+        if (!editing.includes('cancelEditJobComment') && !editing.includes('data-cancel-edit')) process.exit(8);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_inline_edit_handlers_wired_to_window():
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    css = read_dashboard_css()
+    assert "startEditJobComment" in drawer
+    assert "cancelEditJobComment" in drawer
+    assert "postEditJobComment" in drawer
+    assert ".jc-edited" in css or "jc-edited-a" in css
+    assert ".jc-actions" in css or "jc-comment-actions" in css
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "startEditJobComment," in window_block
+    assert "cancelEditJobComment," in window_block
+    assert "postEditJobComment," in window_block
+
+
+def test_comment_thread_reply_control_on_roots_only():
+    """Reply opens compose under root; reply bubbles never get a Reply control."""
+    result = _run_node(
+        """
+        import { renderCommentThreadHtml } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          id: 7,
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root note', createdAt: '2026-07-26T09:00:00Z' },
+            { id: 'r1a', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-26T10:00:00Z' },
+          ],
+        };
+        const viewed = renderCommentThreadHtml(job);
+        if (!viewed.includes('data-start-reply="r1"') && !viewed.includes("startReplyJobComment('r1')")) {
+          process.exit(1);
+        }
+        // Reply bubbles must not offer Reply (no third layer).
+        const replyBubbleIdx = viewed.indexOf('Nested reply');
+        const afterReply = viewed.slice(replyBubbleIdx, replyBubbleIdx + 500);
+        if (afterReply.includes('data-start-reply="r1a"') || afterReply.includes("startReplyJobComment('r1a')")) {
+          process.exit(2);
+        }
+        if (viewed.includes('drawer-comment-reply-text')) process.exit(3);
+
+        const composing = renderCommentThreadHtml(job, { replyingToCommentId: 'r1' });
+        if (!composing.includes('drawer-comment-reply-text') && !composing.includes('data-reply-parent')) {
+          process.exit(4);
+        }
+        if (!composing.includes('postReplyJobComment') && !composing.includes('data-post-reply')) {
+          process.exit(5);
+        }
+        if (!composing.includes('cancelReplyJobComment') && !composing.includes('data-cancel-reply')) {
+          process.exit(6);
+        }
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_reply_handlers_wired_to_window():
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    css = read_dashboard_css()
+    assert "startReplyJobComment" in drawer
+    assert "cancelReplyJobComment" in drawer
+    assert "postReplyJobComment" in drawer
+    assert "parentId" in drawer
+    assert ".drawer-comment-reply" in css or "jc-compose-a" in css
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "startReplyJobComment," in window_block
+    assert "cancelReplyJobComment," in window_block
+    assert "postReplyJobComment," in window_block
+
+    post_start = drawer.find("function postReplyJobComment(")
+    assert post_start != -1
+    post_body = drawer[post_start : post_start + 1800]
+    assert "onJobMutated()" in post_body
+    assert "parentId" in post_body
+
+
+def test_comment_thread_delete_control_and_confirm_copy():
+    """Delete on roots and replies; confirm message distinguishes cascade."""
+    result = _run_node(
+        """
+        import {
+          buildDeleteCommentConfirmMessage,
+          renderCommentThreadHtml,
+        } from './src/web/static/js/drawerController.js';
+
+        const job = {
+          id: 9,
+          comments: [
+            { id: 'r1', parentId: null, body: 'Root note', createdAt: '2026-07-26T09:00:00Z' },
+            { id: 'r1a', parentId: 'r1', body: 'Nested reply', createdAt: '2026-07-26T10:00:00Z' },
+          ],
+        };
+        const html = renderCommentThreadHtml(job);
+        if (!html.includes('data-delete-comment="r1"') && !html.includes("deleteJobComment(9, 'r1')")) {
+          process.exit(1);
+        }
+        if (!html.includes('data-delete-comment="r1a"') && !html.includes("deleteJobComment(9, 'r1a')")) {
+          process.exit(2);
+        }
+        const cascade = buildDeleteCommentConfirmMessage(job.comments[0], job.comments);
+        if (cascade !== 'Delete this note and its 1 replies?') process.exit(3);
+        const replyMsg = buildDeleteCommentConfirmMessage(job.comments[1], job.comments);
+        if (replyMsg !== 'Delete this note?') process.exit(4);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_comment_delete_handler_wired_to_window():
+    from kanban_js import read_drawer_controller
+
+    drawer = read_drawer_controller()
+    assert "deleteJobComment" in drawer
+    assert "buildDeleteCommentConfirmMessage" in drawer
+    assert "confirmDeleteComment" in drawer
+    assert "window.confirm" not in drawer
+
+    content = load_dashboard_js()
+    window_block = content[
+        content.find("Object.assign(window,") : content.find("});", content.find("Object.assign(window,")) + 3
+    ]
+    assert "deleteJobComment," in window_block or "deleteJobComment:" in window_block
+
+    start = drawer.find("function deleteJobComment(")
+    assert start != -1
+    body = drawer[start : start + 2200]
+    assert "onJobMutated()" in body
+    assert "DELETE" in body
+    assert "confirmDeleteComment" in body
+    assert "buildDeleteCommentConfirmMessage" in body
+    assert "await confirmDeleteComment" in body
+
+    spend = open(
+        os.path.join(REPO_ROOT, "src/web/static/js/spendConfirmation.js"), encoding="utf-8"
+    ).read()
+    assert "function confirmDeleteComment" in spend
+    assert "Delete note" in spend
+    assert "This cannot be undone." in spend
+
+    app = open(
+        os.path.join(REPO_ROOT, "src/web/static/js/dashboardApp.js"), encoding="utf-8"
+    ).read()
+    assert "confirmDeleteComment" in app
+    board = open(
+        os.path.join(REPO_ROOT, "src/web/static/js/boardOrchestration.js"), encoding="utf-8"
+    ).read()
+    assert "confirmDeleteComment" in board

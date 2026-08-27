@@ -1,18 +1,14 @@
 import json
 import os
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import src.core.enrichment.contact_sample as contact_sample_module
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
-from src.core.outreach import (
+from src.core.enrichment import (
     ApifyTimeoutError,
     _normalize_apify_employee,
     _run_apify_actor,
@@ -29,7 +25,6 @@ from src.web.server import app
 
 client = TestClient(app)
 
-
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
     test_db = tmp_path / "test_just_apply.db"
@@ -37,7 +32,6 @@ def setup_test_db(tmp_path, monkeypatch):
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db_str)
     database.init_db(test_db_str)
     yield test_db_str
-
 
 # --- normalize_linkedin_url ---
 
@@ -60,7 +54,6 @@ def test_normalize_linkedin_url_returns_empty_for_non_linkedin():
     assert normalize_linkedin_url("") == ""
     assert normalize_linkedin_url("https://example.com/user/bob") == ""
 
-
 # --- source_contacts: always calls Apify ---
 
 @pytest.mark.asyncio
@@ -77,13 +70,11 @@ async def test_source_contacts_calls_apify_on_cache_miss_with_existing_job_poste
         await source_contacts(job, settings=OutreachSettings(target_recruiters=False, target_russian_speakers=False))
     mock_apify.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_returns_empty_when_no_company_and_no_contacts():
     job = {"title": "QA Engineer", "company": "", "contacts": []}
     result = await source_contacts(job)
     assert result == []
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_injects_poster_when_not_in_apify_sample():
@@ -108,7 +99,6 @@ async def test_source_contacts_injects_poster_when_not_in_apify_sample():
     assert len(classify_calls) == 1
     assert len(classify_calls[0]) == 2  # 1 Apify + 1 injected poster
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_does_not_inject_poster_when_already_in_apify_sample():
     poster_url = "https://linkedin.com/in/sarah-jenkins"
@@ -129,7 +119,6 @@ async def test_source_contacts_does_not_inject_poster_when_already_in_apify_samp
         await source_contacts(job)
 
     assert len(classify_calls[0]) == 1  # no synthetic extra injected
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_classifies_poster_alone_when_apify_returns_empty():
@@ -154,7 +143,6 @@ async def test_source_contacts_classifies_poster_alone_when_apify_returns_empty(
     assert len(classify_calls[0]) == 1
     assert result[0]["is_job_poster"] is True
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_preserves_contacted_status_by_normalized_url():
     contact_url = "https://linkedin.com/in/ivan-petrov"
@@ -174,7 +162,6 @@ async def test_source_contacts_preserves_contacted_status_by_normalized_url():
 
     assert result[0]["contacted"] is True
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_sets_is_job_poster_on_matched_contact():
     poster_url = "https://linkedin.com/in/sarah-jenkins"
@@ -191,7 +178,6 @@ async def test_source_contacts_sets_is_job_poster_on_matched_contact():
         result = await source_contacts(job)
 
     assert result[0]["is_job_poster"] is True
-
 
 # --- source_contacts: LLM-based classification via classify_contacts ---
 
@@ -212,7 +198,6 @@ async def test_source_contacts_delegates_to_classify_contacts_with_settings():
     mock_classify.assert_called_once_with(employees, settings)
     assert result == classified
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_uses_default_settings_when_none_provided():
     employees = [{"firstName": "Bob", "lastName": "Lee", "headline": "Dev", "linkedinUrl": ""}]
@@ -229,7 +214,6 @@ async def test_source_contacts_uses_default_settings_when_none_provided():
     assert called_settings.target_russian_speakers is True
     assert called_settings.target_recruiters is True
 
-
 # --- _normalize_apify_employee ---
 
 def test_normalize_no_russian_when_no_matching_language():
@@ -241,12 +225,10 @@ def test_normalize_no_russian_when_no_matching_language():
     result = _normalize_apify_employee(item)
     assert result["russian_speaker"] is False
 
-
 def test_normalize_handles_missing_languages_field():
     result = _normalize_apify_employee({"firstName": "Bob", "lastName": "Lee", "linkedinUrl": ""})
     assert result["russian_speaker"] is False
     assert result["name"] == "Bob Lee"
-
 
 def test_normalize_handles_empty_item():
     result = _normalize_apify_employee({})
@@ -255,7 +237,6 @@ def test_normalize_handles_empty_item():
     assert result["url"] == ""
     assert result["contacted"] is False
     assert result["russian_speaker"] is False
-
 
 def test_normalize_extracts_current_position_and_location():
     item = {
@@ -269,7 +250,6 @@ def test_normalize_extracts_current_position_and_location():
     assert result["currentPosition"] == "Senior Engineer at TechCorp"
     assert result["location"] == "Montreal, QC"
 
-
 def test_normalize_handles_missing_current_position_and_location():
     item = {
         "firstName": "Jane", "lastName": "Smith",
@@ -279,7 +259,6 @@ def test_normalize_handles_missing_current_position_and_location():
     result = _normalize_apify_employee(item)
     assert result["currentPosition"] == ""
     assert result["location"] == ""
-
 
 # --- DB round-trip ---
 
@@ -308,7 +287,6 @@ def test_contact_new_fields_persist_through_db_roundtrip(setup_test_db):
     assert contact.currentPosition == "HR Manager at Acme"
     assert contact.location == "Toronto, ON"
 
-
 # --- API: PUT /api/jobs/{id}/contacts/{idx} ---
 
 def test_contact_toggle_updates_contact_flag_only(setup_test_db):
@@ -329,7 +307,6 @@ def test_contact_toggle_updates_contact_flag_only(setup_test_db):
     assert data["contacts"][0]["contacted"] is True
     assert data["status"] == "sourced"
 
-
 def test_contact_toggle_does_not_downgrade_status(setup_test_db):
     db_path = setup_test_db
     contacts = [
@@ -348,11 +325,9 @@ def test_contact_toggle_does_not_downgrade_status(setup_test_db):
     assert data["contacts"][0]["contacted"] is False
     assert data["status"] == "interviewing"
 
-
 def test_contact_toggle_returns_404_for_missing_job():
     response = client.put("/api/jobs/99999/contacts/0", json={"contacted": True})
     assert response.status_code == 404
-
 
 # --- Company slug resolution ---
 
@@ -362,23 +337,18 @@ def test_company_cache_slug_prefers_company_url():
         "https://www.linkedin.com/company/tranetechnologies?trk=x",
     ) == "tranetechnologies"
 
-
 def test_linkedin_company_slug_from_url_extracts_slug():
     url = "https://www.linkedin.com/company/tranetechnologies?trk=public_jobs_topcard-org-name"
     assert linkedin_company_slug_from_url(url) == "tranetechnologies"
 
-
 def test_normalize_company_slug():
     assert normalize_company_slug("Trane Technologies") == "trane-technologies"
-
 
 def test_company_slug_candidates_includes_first_word_and_suffix_strips():
     assert company_slug_candidates("Trane Technologies") == ["trane-technologies", "trane"]
 
-
 def test_company_slug_candidates_deduplicates_suffix_variants():
     assert company_slug_candidates("Acme Corp") == ["acme-corp", "acme"]
-
 
 @pytest.mark.asyncio
 async def test_run_apify_actor_uses_company_url():
@@ -392,14 +362,12 @@ async def test_run_apify_actor_uses_company_url():
     assert result == employees
     mock_url.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_run_apify_actor_raises_infrastructure_error_without_url():
     """_run_apify_actor raises ApifyInfrastructureError when no URL is provided."""
     from src.core.enrichment.contact_sample import ApifyInfrastructureError
     with pytest.raises(ApifyInfrastructureError):
         await _run_apify_actor("")
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_passes_company_url_to_apify():
@@ -420,7 +388,6 @@ async def test_source_contacts_passes_company_url_to_apify():
     mock_apify.assert_called_once()
     assert mock_apify.call_args.args[0] == job["companyUrl"]
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
     """When Apify returns zero profiles, meta gets empty_reason=no_employees."""
@@ -431,7 +398,6 @@ async def test_source_contacts_sets_meta_no_employees_when_apify_empty():
         result = await source_contacts(job, settings=OutreachSettings(target_recruiters=False, target_russian_speakers=False), meta=meta)
     assert result == []
     assert meta["empty_reason"] == "no_employees"
-
 
 @pytest.mark.asyncio
 async def test_source_contacts_sets_meta_no_audience_match_when_classified_empty():
@@ -444,7 +410,6 @@ async def test_source_contacts_sets_meta_no_audience_match_when_classified_empty
         result = await source_contacts(job, meta=meta)
     assert result == []
     assert meta["empty_reason"] == "no_audience_match"
-
 
 # --- Apify polling timeout ---
 
@@ -472,7 +437,6 @@ async def test_run_apify_actor_raises_apify_timeout_error():
         with pytest.raises(ApifyTimeoutError):
             await _run_apify_actor("https://www.linkedin.com/company/testcorp/", timeout_seconds=300.0)
 
-
 @pytest.mark.asyncio
 async def test_source_contacts_returns_empty_on_apify_timeout():
     """source_contacts returns [] when _run_apify_actor raises ApifyTimeoutError."""
@@ -480,7 +444,6 @@ async def test_source_contacts_returns_empty_on_apify_timeout():
     with patch.object(source_module, "_run_apify_actor", new=AsyncMock(side_effect=ApifyTimeoutError("timed out"))):
         result = await source_contacts(job)
     assert result == []
-
 
 def test_contact_toggle_returns_404_for_missing_contact_idx(setup_test_db):
     db_path = setup_test_db
@@ -493,7 +456,6 @@ def test_contact_toggle_returns_404_for_missing_contact_idx(setup_test_db):
 
     response = client.put(f"/api/jobs/{job_id}/contacts/5", json={"contacted": True})
     assert response.status_code == 404
-
 
 # --- classify_contacts ---
 
@@ -512,7 +474,6 @@ async def test_classify_contacts_assigns_russian_speaker_flag(monkeypatch):
     assert result[0]["russian_speaker"] is True
     assert result[0]["is_recruiter"] is False
 
-
 @pytest.mark.asyncio
 async def test_classify_contacts_assigns_recruiter_flag(monkeypatch):
     from src.schemas import OutreachSettings
@@ -527,7 +488,6 @@ async def test_classify_contacts_assigns_recruiter_flag(monkeypatch):
     assert len(result) == 1
     assert result[0]["is_recruiter"] is True
     assert result[0]["russian_speaker"] is False
-
 
 @pytest.mark.asyncio
 async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
@@ -544,7 +504,6 @@ async def test_classify_contacts_handles_dual_classified_contact(monkeypatch):
     assert result[0]["russian_speaker"] is True
     assert result[0]["is_recruiter"] is True
 
-
 @pytest.mark.asyncio
 async def test_classify_contacts_keeps_all_matching_russian_speakers(monkeypatch):
     from src.schemas import OutreachSettings
@@ -560,7 +519,6 @@ async def test_classify_contacts_keeps_all_matching_russian_speakers(monkeypatch
 
     assert sum(1 for c in result if c["russian_speaker"]) == 7
 
-
 @pytest.mark.asyncio
 async def test_classify_contacts_returns_empty_when_llm_returns_no_matches(monkeypatch):
     from src.schemas import OutreachSettings
@@ -573,7 +531,6 @@ async def test_classify_contacts_returns_empty_when_llm_returns_no_matches(monke
         result = await classify_contacts(items, settings)
 
     assert result == []
-
 
 # --- Apify poll status on-change logging ---
 
@@ -622,7 +579,6 @@ async def test_apify_poll_logs_running_once_for_repeated_status():
     assert sum(1 for m in status_logs if "RUNNING" in m) == 1
     assert sum(1 for m in status_logs if "SUCCEEDED" in m) == 1
     assert len(status_logs) == 2
-
 
 @pytest.mark.asyncio
 async def test_apify_poll_logs_terminal_failure_status():

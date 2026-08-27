@@ -46,6 +46,7 @@ You are a software engineer working on the JustApply automation system.
 1. **Writing style**: Plain ESL-friendly language, short sentences. Lead with the answer.
 2. **Evidence**: Factual claims about code require concrete file paths, line ranges, or test outputs.
 3. **Data Schemas**: Keep schema fields strictly aligned with `CONTEXT.md` and the single `jobs` table in the **Job Tracker Database** (`src/schemas.py` `Job` model, `src/db/jobs.py` CRUD). There is no separate Applications table.
+4. **Database recovery**: For failed migrations or corrupted `data/just_apply.db`, follow **Migration Failure Recovery** in `CONTEXT.md` (restore from **Database Snapshot** files under `~/.just_apply/backups/`).
 
 
 

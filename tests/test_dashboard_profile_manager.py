@@ -3,7 +3,7 @@
 import os
 import re
 
-from tests.kanban_js import get_script_section
+from tests.kanban_js import load_dashboard_js
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
@@ -46,18 +46,18 @@ def test_profile_manager_two_pane_modal_present():
 
 
 def test_active_resume_persisted_in_local_storage():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert "ACTIVE_RESUME_KEY" in js
     assert "localStorage.setItem(ACTIVE_RESUME_KEY" in js or "localStorage.setItem(ACTIVE_RESUME_KEY," in js
 
 
 def test_active_resume_not_hardcoded_to_general_cv():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert 'let activeResume = "general_cv.md"' not in js
 
 
 def test_resolve_active_resume_fallback_logic():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert "resolveActiveResume" in js
     assert "general_cv.md" not in re.search(
         r"function resolveActiveResume\([^)]*\)\s*\{[^}]+\}",
@@ -67,12 +67,12 @@ def test_resolve_active_resume_fallback_logic():
 
 
 def test_trigger_scrape_uses_active_resume_variable():
-    js = get_script_section(_read_html())
-    assert "active_resume: activeResume" in js
+    js = load_dashboard_js()
+    assert "active_resume: getActiveResume()" in js
 
 
 def test_load_resumes_restores_stored_active_profile():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert "resolveActiveResume" in js
     assert "localStorage.getItem(ACTIVE_RESUME_KEY" in js
 
@@ -84,23 +84,23 @@ def test_profile_manager_editor_is_editable():
 
 
 def test_profile_manager_save_posts_to_api_resumes():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert "saveProfileManagerProfile" in js
     assert "fetch('/api/resumes'" in js or "fetch(\"/api/resumes\"" in js
 
 
 def test_profile_manager_new_opens_review_state():
     content = _read_html()
-    js = get_script_section(content)
+    js = load_dashboard_js()
     assert "newProfileManagerProfile" in js
     assert "profileManagerReviewing" in js
     assert "pm-review-banner" in content
     assert "Review before save" in content
-    assert "pm-name-input" in content
+    assert "pm-name-input" in js
 
 
 def test_profile_manager_review_disables_set_active_and_delete():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert "profileManagerReviewing" in js
     # Set active and delete disabled while reviewing
     assert re.search(
@@ -113,21 +113,33 @@ def test_profile_manager_review_disables_set_active_and_delete():
     )
 
 
+def _function_body(js: str, name: str) -> str:
+    for prefix in (f"async function {name}(", f"function {name}("):
+        start = js.find(prefix)
+        if start == -1:
+            continue
+        brace = js.find("{", start)
+        depth = 0
+        for i in range(brace, len(js)):
+            if js[i] == "{":
+                depth += 1
+            elif js[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return js[start : i + 1]
+    raise AssertionError(f"{name} function not found")
+
+
 def test_profile_manager_delete_calls_api_with_confirmation():
-    js = get_script_section(_read_html())
-    fn_match = re.search(
-        r"async function deleteProfileManagerProfile\(\)\s*\{([\s\S]*?)\n    \}",
-        js,
-    )
-    assert fn_match, "deleteProfileManagerProfile function not found"
-    fn_body = fn_match.group(1)
+    js = load_dashboard_js()
+    fn_body = _function_body(js, "deleteProfileManagerProfile")
     assert "confirm(" in fn_body
     assert "method: 'DELETE'" in fn_body or 'method: "DELETE"' in fn_body
     assert "active_resume" in fn_body
 
 
 def test_profile_manager_delete_disabled_for_active_or_last_profile():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert re.search(
         r"canDelete[\s\S]{0,120}activeResume",
         js,
@@ -139,7 +151,7 @@ def test_profile_manager_delete_disabled_for_active_or_last_profile():
 
 
 def test_profile_manager_import_pdf_posts_to_convert_endpoint():
-    js = get_script_section(_read_html())
+    js = load_dashboard_js()
     assert "triggerProfileManagerImport" in js
     assert "handleProfileManagerImportFile" in js
     assert "/api/resumes/convert" in js
@@ -147,24 +159,14 @@ def test_profile_manager_import_pdf_posts_to_convert_endpoint():
 
 
 def test_profile_manager_import_shows_spinner_during_conversion():
-    js = get_script_section(_read_html())
-    fn_match = re.search(
-        r"async function handleProfileManagerImportFile\([^)]*\)\s*\{([\s\S]*?)\n    \}",
-        js,
-    )
-    assert fn_match, "handleProfileManagerImportFile function not found"
-    fn_body = fn_match.group(1)
+    js = load_dashboard_js()
+    fn_body = _function_body(js, "handleProfileManagerImportFile")
     assert "fa-spinner" in fn_body
     assert "Converting" in fn_body
 
 
 def test_profile_manager_import_opens_review_state_on_success():
-    js = get_script_section(_read_html())
-    fn_match = re.search(
-        r"async function handleProfileManagerImportFile\([^)]*\)\s*\{([\s\S]*?)\n    \}",
-        js,
-    )
-    assert fn_match
-    fn_body = fn_match.group(1)
+    js = load_dashboard_js()
+    fn_body = _function_body(js, "handleProfileManagerImportFile")
     assert "profileManagerReviewing = true" in fn_body
     assert "profileManagerDraftContent" in fn_body

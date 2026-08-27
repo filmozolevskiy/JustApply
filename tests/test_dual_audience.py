@@ -8,18 +8,13 @@ classifies the combined batch once, and applies caps:
 Dual-classified contacts count toward the Recruiter cap only.
 """
 import json
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.core.enrichment.source as source_module
 import src.db.connection as _db_connection
 from src import db as database
-from src.core.outreach import source_contacts
+from src.core.enrichment import source_contacts
 from src.db.cache import get_contact_sample, set_contact_sample
 from src.schemas import OutreachSettings
 
@@ -31,11 +26,9 @@ def db(tmp_path, monkeypatch):
     database.init_db(db_path)
     return db_path
 
-
 @pytest.fixture
 def dual_settings():
     return OutreachSettings(target_recruiters=True, target_russian_speakers=True)
-
 
 # ─── Two Apify runs on cache miss ─────────────────────────────────────────────
 
@@ -56,7 +49,6 @@ async def test_dual_audience_calls_recruiter_apify_on_cache_miss(db, dual_settin
 
     mock_recruiters.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_calls_russian_apify_on_cache_miss(db, dual_settings):
     """Both toggles on, cache miss → _run_apify_for_russian_speakers is called."""
@@ -74,7 +66,6 @@ async def test_dual_audience_calls_russian_apify_on_cache_miss(db, dual_settings
 
     mock_russian.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_does_not_call_unfiltered_apify(db, dual_settings):
     """Both toggles on → the legacy unfiltered Apify fetch is never called."""
@@ -91,7 +82,6 @@ async def test_dual_audience_does_not_call_unfiltered_apify(db, dual_settings):
         await source_contacts(job, settings=dual_settings)
 
     mock_unfiltered.assert_not_called()
-
 
 # ─── Per-stream caching ────────────────────────────────────────────────────────
 
@@ -113,7 +103,6 @@ async def test_dual_audience_caches_recruiter_stream(db, dual_settings):
     assert cached is not None
     assert cached["profiles"] == recruiter_profiles
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_caches_russian_stream(db, dual_settings):
     """Dual-audience enrichment writes Apify result to the 'russian' stream cache."""
@@ -131,7 +120,6 @@ async def test_dual_audience_caches_russian_stream(db, dual_settings):
     cached = get_contact_sample("acme", stream="russian", db_path=db)
     assert cached is not None
     assert cached["profiles"] == russian_profiles
-
 
 @pytest.mark.asyncio
 async def test_dual_audience_recruiter_cache_hit_skips_recruiter_apify(db, dual_settings):
@@ -154,7 +142,6 @@ async def test_dual_audience_recruiter_cache_hit_skips_recruiter_apify(db, dual_
     mock_recruiters.assert_not_called()
     mock_russian.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_russian_cache_hit_skips_russian_apify(db, dual_settings):
     """When 'russian' stream is cached, that Apify call is skipped; Recruiter still runs."""
@@ -176,7 +163,6 @@ async def test_dual_audience_russian_cache_hit_skips_russian_apify(db, dual_sett
     mock_russian.assert_not_called()
     mock_recruiters.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_both_cache_hit_skips_all_apify(db, dual_settings):
     """Both streams cached → zero Apify calls."""
@@ -195,7 +181,6 @@ async def test_dual_audience_both_cache_hit_skips_all_apify(db, dual_settings):
 
     mock_recruiters.assert_not_called()
     mock_russian.assert_not_called()
-
 
 # ─── Merged batch classification ──────────────────────────────────────────────
 
@@ -225,7 +210,6 @@ async def test_dual_audience_classifies_merged_batch(db, dual_settings):
     assert "/in/alice" in urls
     assert "/in/ivan" in urls
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_deduplicates_overlapping_profiles(db, dual_settings):
     """A profile appearing in both streams is included only once in the classification batch."""
@@ -253,7 +237,6 @@ async def test_dual_audience_deduplicates_overlapping_profiles(db, dual_settings
     assert urls.count("/in/shared") == 1
     assert "/in/ivan" in urls
 
-
 # ─── Cap enforcement with dual audience ───────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -278,7 +261,6 @@ async def test_dual_audience_keeps_all_recruiters():
     assert len(result) == 5
     assert all(c["is_recruiter"] for c in result)
 
-
 @pytest.mark.asyncio
 async def test_dual_audience_keeps_all_non_hr_russian():
     """Classifier with both toggles on keeps all non-HR Russian Speakers."""
@@ -301,7 +283,6 @@ async def test_dual_audience_keeps_all_non_hr_russian():
     assert len(result) == 7
     assert all(c["russian_speaker"] for c in result)
     assert not any(c["is_recruiter"] for c in result)
-
 
 @pytest.mark.asyncio
 async def test_dual_audience_dual_classified_counts_toward_recruiter_only():
@@ -336,7 +317,6 @@ async def test_dual_audience_dual_classified_counts_toward_recruiter_only():
     assert len(recruiters) == 1
     assert recruiters[0]["russian_speaker"] is True
     assert len(russians) == 5
-
 
 @pytest.mark.asyncio
 async def test_dual_audience_dual_classified_appears_once_in_output():

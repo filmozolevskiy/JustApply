@@ -6,14 +6,9 @@ with a warning Enrichment Note naming the empty stream(s) and suggesting Load Mo
 
 Full failure (zero kept across all active streams) is unchanged.
 """
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from src import db as database
 from src.core.enrichment.coordinator import begin_enrichment
@@ -27,15 +22,12 @@ def db(tmp_path, monkeypatch):
     init_db(db_path)
     return db_path
 
-
 def _accepted_job(db):
     begin_enrichment(1, db)
     return database.get_job(1, db_path=db)
 
-
 _TEMPLATES = {"recruiter": "Hello recruiter.", "russian_speaker": "Hello Russian."}
 _EMPTY_TEMPLATES = {"recruiter": "", "russian_speaker": ""}
-
 
 # ─── Tracer bullet: dual-audience, recruiters kept, zero Russian ────────────
 
@@ -66,7 +58,6 @@ async def test_partial_success_recruiters_kept_zero_russian_sets_warning_note(db
     assert "Load More" in result.enrichmentNote
     assert result.enrichmentNoteKind == "warning"
 
-
 # ─── Russian kept, zero recruiters ──────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -96,7 +87,6 @@ async def test_partial_success_russian_kept_zero_recruiters_sets_warning_note(db
     assert "Load More" in result.enrichmentNote
     assert result.enrichmentNoteKind == "warning"
 
-
 # ─── Both streams empty → full failure (unchanged) ──────────────────────────
 
 @pytest.mark.asyncio
@@ -119,7 +109,6 @@ async def test_dual_audience_zero_all_contacts_is_full_failure(db):
     assert result.enrichmentNote != ""
     # Full failure: note should NOT mention "Load More" (it's about no-match, not a partial)
     assert "Load More" not in result.enrichmentNote
-
 
 # ─── Both streams have contacts → clean success, no note ────────────────────
 
@@ -149,7 +138,6 @@ async def test_dual_audience_both_streams_have_contacts_clears_note(db):
     assert result.enrichmentNote == ""
     assert result.status == "accepted"
 
-
 # ─── Partial success is not logged as "Enrichment failed" ───────────────────
 
 @pytest.mark.asyncio
@@ -178,7 +166,6 @@ async def test_partial_success_not_logged_as_enrichment_failed(db):
     assert not any("Enrichment failed" in msg for msg in log_messages), (
         f"Expected no 'Enrichment failed' in log, got: {log_messages}"
     )
-
 
 # ─── Single-stream modes are unaffected by partial success logic ────────────
 

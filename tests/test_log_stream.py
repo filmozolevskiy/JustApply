@@ -1,18 +1,14 @@
 import json
-import os
-import sys
+import time
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi.testclient import TestClient
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
-from src.web.server import TaskState, active_tasks, app
+from src.web.server import TaskState, _schedule_active_task_prune, active_tasks, app
 
 client = TestClient(app)
-
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):
@@ -21,13 +17,11 @@ def setup_test_db(tmp_path, monkeypatch):
     database.init_db(test_db)
     yield test_db
 
-
 @pytest.fixture(autouse=True)
 def reset_active_tasks():
     active_tasks.clear()
     yield
     active_tasks.clear()
-
 
 def _make_completed_state(log_messages):
     """Return a completed TaskState with pre-filled logs and a sentinel in the queue."""
@@ -39,7 +33,6 @@ def _make_completed_state(log_messages):
     state.queue.put_nowait(None)
     return state
 
-
 def _collect_messages(task_id, skip=0):
     """Stream the SSE endpoint and return all parsed JSON payloads."""
     messages = []
@@ -50,14 +43,26 @@ def _collect_messages(task_id, skip=0):
                 messages.append(json.loads(line[6:]))
     return messages
 
-
 # --- 404 on unknown task ---
+
+def test_scrape_log_sse_enables_keepalive_ping_like_batch_poller():
+    """Long Apify scrapes idle between Actor polls; without ping, EventSource drops."""
+    from pathlib import Path
+
+    text = Path(__file__).resolve().parents[1].joinpath("src/web/server.py").read_text()
+    logs_idx = text.find('@app.get("/api/logs/{task_id}")')
+    poller_idx = text.find('@app.get("/api/batch-poller/logs")')
+    assert logs_idx != -1 and poller_idx != -1
+    logs_block = text[logs_idx:poller_idx]
+    poller_block = text[poller_idx : poller_idx + 2500]
+    assert "ping=15" in poller_block
+    assert "ping=15" in logs_block
+
 
 def test_unknown_task_returns_404():
     resp = client.get("/api/logs/nonexistent-id")
     assert resp.status_code == 404
     assert resp.json() == {"message": "Task ID not found"}
-
 
 # --- skip parameter skips already-seen log lines ---
 
@@ -67,7 +72,6 @@ def test_skip_zero_returns_all_logs():
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["Step 1", "Step 2", "Step 3"]
 
-
 def test_skip_two_omits_first_two_logs():
     active_tasks["t2"] = _make_completed_state(["Step 1", "Step 2", "Step 3"])
     msgs = _collect_messages("t2", skip=2)
@@ -75,20 +79,17 @@ def test_skip_two_omits_first_two_logs():
     assert len(logs) == 1
     assert logs[0]["message"] == "Step 3"
 
-
 def test_skip_equal_to_total_yields_no_logs():
     active_tasks["t3"] = _make_completed_state(["Step 1", "Step 2"])
     msgs = _collect_messages("t3", skip=2)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert len(logs) == 0
 
-
 def test_negative_skip_is_treated_as_zero():
     active_tasks["t4"] = _make_completed_state(["Line A", "Line B"])
     msgs = _collect_messages("t4", skip=-5)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["Line A", "Line B"]
-
 
 # --- stream termination events ---
 
@@ -97,7 +98,6 @@ def test_completed_task_stream_ends_with_done_event():
     msgs = _collect_messages("t5")
     done = [m for m in msgs if m.get("type") == "done"]
     assert len(done) == 1
-
 
 def test_failed_task_stream_ends_with_error_and_done():
     state = TaskState({"job_id": 1})
@@ -110,7 +110,6 @@ def test_failed_task_stream_ends_with_error_and_done():
     errors = [m for m in msgs if m.get("type") == "log" and m.get("level") == "error"]
     assert len(done) == 1
     assert len(errors) >= 1
-
 
 # --- skip is independent per reconnect ---
 
@@ -128,7 +127,6 @@ def test_skip_one_then_skip_two_covers_all_logs():
     assert len(logs2) == 2
     assert logs2[0]["message"] == "B"
 
-
 def _make_live_task_state(log_messages):
     """Mirror log_callback: each line is stored in logs and queued."""
     state = TaskState({"job_id": 1})
@@ -139,7 +137,6 @@ def _make_live_task_state(log_messages):
     state.status = "completed"
     state.queue.put_nowait(None)
     return state
-
 
 def test_live_stream_does_not_duplicate_replayed_logs():
     """Logs buffered before SSE connect must not appear twice (replay + queue)."""
@@ -153,14 +150,12 @@ def test_live_stream_does_not_duplicate_replayed_logs():
         "Fetching up to 25 employees for 'Acme'...",
     ]
 
-
 def test_live_stream_reconnect_skips_replayed_and_queued_history():
     """Reconnect with skip=N must not re-deliver lines already seen."""
     active_tasks["live2"] = _make_live_task_state(["A", "B", "C"])
     msgs = _collect_messages("live2", skip=1)
     logs = [m for m in msgs if m.get("type") == "log"]
     assert [m["message"] for m in logs] == ["B", "C"]
-
 
 def test_live_stream_yields_incremental_job_results():
     """Search saves emit result events on the SSE stream before done."""
@@ -180,3 +175,222 @@ def test_live_stream_yields_incremental_job_results():
     assert len(results) == 1
     assert results[0]["job"]["id"] == 42
     assert any(m.get("type") == "done" for m in msgs)
+
+# --- active_tasks pruning after terminal SSE ---
+
+@pytest.mark.asyncio
+async def test_schedule_active_task_prune_removes_terminal_task(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    state = TaskState({"job_id": 1})
+    state.status = "completed"
+    active_tasks["prune-me"] = state
+    await _schedule_active_task_prune("prune-me")
+    assert "prune-me" not in active_tasks
+
+@pytest.mark.asyncio
+async def test_schedule_active_task_prune_keeps_running_task(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    state = TaskState({"job_id": 1})
+    state.status = "running"
+    active_tasks["keep-me"] = state
+    await _schedule_active_task_prune("keep-me")
+    assert "keep-me" in active_tasks
+
+@pytest.mark.asyncio
+async def test_schedule_active_task_prune_skips_when_stream_active(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    state = TaskState({"job_id": 1})
+    state.status = "completed"
+    state.stream_count = 1
+    active_tasks["streaming"] = state
+    await _schedule_active_task_prune("streaming")
+    assert "streaming" in active_tasks
+
+def test_completed_task_pruned_after_stream_and_ttl(monkeypatch):
+    monkeypatch.setattr("src.web.server.asyncio.sleep", AsyncMock())
+    active_tasks["t8"] = _make_completed_state(["Step 1"])
+    _collect_messages("t8")
+    time.sleep(0.05)
+    assert "t8" not in active_tasks
+
+def test_completed_task_replayable_during_prune_ttl():
+    active_tasks["t9"] = _make_completed_state(["A", "B"])
+    _collect_messages("t9")
+    assert "t9" in active_tasks
+    msgs = _collect_messages("t9", skip=0)
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["message"] for m in logs] == ["A", "B"]
+
+
+# --- batch-poller SSE ---
+
+
+@pytest.fixture
+def reset_batch_poller_logs():
+    import src.web.server as server
+
+    server.batch_poller_logs.clear()
+    server.batch_poller_subscribers.clear()
+    yield server
+    server.batch_poller_logs.clear()
+    server.batch_poller_subscribers.clear()
+
+
+def _collect_batch_poller_messages(skip=0):
+    """Read SSE until the live tail is stopped (TestClient cannot leave SSE open)."""
+    import threading
+    import time
+
+    import src.web.server as server
+
+    def _stop_live_tail():
+        for _ in range(200):
+            if server.batch_poller_subscribers:
+                break
+            time.sleep(0.01)
+        for queue in list(server.batch_poller_subscribers):
+            queue.put_nowait(None)
+
+    threading.Thread(target=_stop_live_tail, daemon=True).start()
+    messages = []
+    with client.stream("GET", f"/api/batch-poller/logs?skip={skip}") as resp:
+        assert resp.status_code == 200
+        for line in resp.iter_lines():
+            if line.startswith("data: "):
+                messages.append(json.loads(line[6:]))
+    return messages
+
+
+def test_batch_poller_logs_replay_buffered_entries(reset_batch_poller_logs):
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.extend(
+        [
+            {
+                "level": "summary",
+                "message": (
+                    "Batch chunk completed: 2 matched, 1 attribute-filtered, "
+                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                ),
+            },
+            {
+                "level": "summary",
+                "message": (
+                    "Evaluation round complete (search): 2 matched, 1 attribute-filtered, "
+                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                ),
+            },
+        ]
+    )
+
+    msgs = _collect_batch_poller_messages(skip=0)
+    assert msgs[0]["type"] == "hello"
+    assert msgs[0]["bufferLength"] == 2
+    assert msgs[0]["effectiveSkip"] == 0
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["type"] for m in logs] == ["log", "log"]
+    assert logs[0]["level"] == "summary"
+    assert "Batch chunk completed" in logs[0]["message"]
+    assert "attribute-filtered" in logs[0]["message"]
+    assert "Evaluation round complete (search)" in logs[1]["message"]
+
+
+def test_batch_poller_logs_skip_replays_from_offset(reset_batch_poller_logs):
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.extend(
+        [
+            {"level": "info", "message": "chunk-a"},
+            {"level": "info", "message": "chunk-b"},
+            {"level": "info", "message": "chunk-c"},
+        ]
+    )
+
+    msgs = _collect_batch_poller_messages(skip=2)
+    assert msgs[0]["type"] == "hello"
+    assert msgs[0]["effectiveSkip"] == 2
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["message"] for m in logs] == ["chunk-c"]
+
+
+def test_batch_poller_logs_stale_skip_after_buffer_reset_replays_current(reset_batch_poller_logs):
+    """After server reload the in-memory buffer resets but localStorage skip stays high.
+
+    A skip past the current buffer must not drop Evaluation Round summaries.
+    """
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.extend(
+        [
+            {
+                "level": "summary",
+                "message": (
+                    "Batch chunk completed: 0 matched, 12 attribute-filtered, "
+                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                ),
+            },
+            {
+                "level": "summary",
+                "message": (
+                    "Evaluation round complete (search): 0 matched, 12 attribute-filtered, "
+                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                ),
+            },
+        ]
+    )
+
+    msgs = _collect_batch_poller_messages(skip=20)
+    hello = next(m for m in msgs if m.get("type") == "hello")
+    assert hello["bufferLength"] == 2
+    assert hello["effectiveSkip"] == 0
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert len(logs) == 2
+    assert "Batch chunk completed" in logs[0]["message"]
+    assert "Evaluation round complete (search)" in logs[1]["message"]
+
+
+def test_batch_poller_logs_negative_skip_treated_as_zero(reset_batch_poller_logs):
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.append({"level": "info", "message": "only"})
+    msgs = _collect_batch_poller_messages(skip=-3)
+    assert msgs[0]["type"] == "hello"
+    assert msgs[0]["effectiveSkip"] == 0
+    assert [m["message"] for m in msgs if m.get("type") == "log"] == ["only"]
+
+
+@pytest.mark.asyncio
+async def test_batch_poller_emit_fans_out_to_all_subscribers(reset_batch_poller_logs):
+    """Live evaluation lines must reach every open Task Logs SSE, not only one queue consumer."""
+    import asyncio
+
+    server = reset_batch_poller_logs
+    first = asyncio.Queue()
+    second = asyncio.Queue()
+    server.batch_poller_subscribers.add(first)
+    server.batch_poller_subscribers.add(second)
+
+    await server._emit_batch_poller_log(
+        "Evaluation round complete (search): 0 matched, 12 attribute-filtered, "
+        "0 fallback-rejected, 0 failed, 0 unclassified",
+        "summary",
+    )
+
+    assert len(server.batch_poller_logs) == 1
+    for queue in (first, second):
+        event = queue.get_nowait()
+        assert event["type"] == "log"
+        assert event["level"] == "summary"
+        assert "Evaluation round complete" in event["message"]
+
+
+def test_batch_poller_logs_replay_history_without_live_duplicate(reset_batch_poller_logs):
+    """History comes from the buffer only; live events are separate fan-out messages."""
+    server = reset_batch_poller_logs
+    server.batch_poller_logs.extend(
+        [
+            {"level": "summary", "message": "hist-1"},
+            {"level": "summary", "message": "hist-2"},
+        ]
+    )
+
+    msgs = _collect_batch_poller_messages(skip=0)
+    assert msgs[0]["type"] == "hello"
+    logs = [m for m in msgs if m.get("type") == "log"]
+    assert [m["message"] for m in logs] == ["hist-1", "hist-2"]

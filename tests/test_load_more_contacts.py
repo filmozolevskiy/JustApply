@@ -1,12 +1,7 @@
 """Tests for Load More Contacts — append next Apify page to cache and re-classify."""
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
@@ -15,14 +10,12 @@ from src.web.server import app
 
 client = TestClient(app)
 
-
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     test_db = str(tmp_path / "test.db")
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db)
     database.init_db(test_db)
     return test_db
-
 
 # --- Cache schema: pages_fetched ---
 
@@ -32,13 +25,11 @@ def test_cache_returns_pages_fetched_default_one(db):
     cached = get_contact_sample("acme", db_path=db)
     assert cached["pages_fetched"] == 1
 
-
 def test_cache_set_with_explicit_pages_fetched(db):
     """set_contact_sample respects explicit pages_fetched value."""
     set_contact_sample("acme", [{"firstName": "Ivan"}], pages_fetched=3, db_path=db)
     cached = get_contact_sample("acme", db_path=db)
     assert cached["pages_fetched"] == 3
-
 
 # --- append_contact_sample ---
 
@@ -58,7 +49,6 @@ def test_append_dedupes_by_normalized_linkedin_url(db):
     assert "Ivan" in names
     assert "Anna" in names
 
-
 def test_append_increments_pages_fetched(db):
     """append_contact_sample increments pages_fetched by 1."""
     from src.db.cache import append_contact_sample
@@ -66,7 +56,6 @@ def test_append_increments_pages_fetched(db):
     append_contact_sample("acme", [{"firstName": "Anna", "linkedinUrl": ""}], db_path=db)
     cached = get_contact_sample("acme", db_path=db)
     assert cached["pages_fetched"] == 2
-
 
 def test_append_second_call_increments_again(db):
     """Each append_contact_sample call increments pages_fetched."""
@@ -76,7 +65,6 @@ def test_append_second_call_increments_again(db):
     append_contact_sample("acme", [{"firstName": "Boris", "linkedinUrl": ""}], db_path=db)
     cached = get_contact_sample("acme", db_path=db)
     assert cached["pages_fetched"] == 3
-
 
 # --- Pipeline: run_load_more_contacts_pipeline ---
 
@@ -113,13 +101,11 @@ def _make_accepted_job_with_cache(db):
     )
     return job_id
 
-
 @pytest.mark.asyncio
 async def test_pipeline_raises_for_unknown_job(db):
     from src.pipelines import run_load_more_contacts_pipeline
     with pytest.raises(ValueError, match="not found"):
         await run_load_more_contacts_pipeline(9999)
-
 
 @pytest.mark.asyncio
 async def test_pipeline_raises_for_non_accepted_job(db):
@@ -128,7 +114,6 @@ async def test_pipeline_raises_for_non_accepted_job(db):
     job_id = add_job({"title": "Dev", "company": "TechCo", "status": "found"}, db_path=db)
     with pytest.raises(ValueError, match="[Aa]ccepted"):
         await run_load_more_contacts_pipeline(job_id)
-
 
 @pytest.mark.asyncio
 async def test_pipeline_fetches_page_one_when_no_cache(db):
@@ -146,7 +131,6 @@ async def test_pipeline_fetches_page_one_when_no_cache(db):
 
     mock_apify.assert_called_once()
     assert mock_apify.call_args.kwargs.get("start_page") == 1
-
 
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_with_next_page(db):
@@ -169,7 +153,6 @@ async def test_pipeline_calls_apify_with_next_page(db):
     call_kwargs = mock_apify.call_args
     start_page = call_kwargs.kwargs.get("start_page")
     assert start_page == 2, f"Expected start_page=2, got {start_page}"
-
 
 @pytest.mark.asyncio
 async def test_pipeline_appends_profiles_to_cache(db):
@@ -194,7 +177,6 @@ async def test_pipeline_appends_profiles_to_cache(db):
     assert cached["pages_fetched"] == 2
     assert len(cached["profiles"]) == 2  # original Alice + new Bob
 
-
 @pytest.mark.asyncio
 async def test_pipeline_job_stays_accepted(db):
     """Job status remains 'accepted' after load-more."""
@@ -213,7 +195,6 @@ async def test_pipeline_job_stays_accepted(db):
         updated = await run_load_more_contacts_pipeline(job_id)
 
     assert updated.status == "accepted"
-
 
 @pytest.mark.asyncio
 async def test_second_load_more_requests_page_3(db):
@@ -241,13 +222,11 @@ async def test_second_load_more_requests_page_3(db):
     start_page = call_kwargs.kwargs.get("start_page")
     assert start_page == 3, f"Expected start_page=3, got {start_page}"
 
-
 # --- API endpoint ---
 
 def test_load_more_endpoint_returns_404_for_unknown_job(db):
     resp = client.post("/api/jobs/9999/load-more-contacts")
     assert resp.status_code == 404
-
 
 def test_load_more_endpoint_returns_422_for_non_accepted_job(db):
     from src.db.jobs import add_job
@@ -255,7 +234,6 @@ def test_load_more_endpoint_returns_422_for_non_accepted_job(db):
     resp = client.post(f"/api/jobs/{job_id}/load-more-contacts")
     assert resp.status_code == 422
     assert "accepted" in resp.json()["message"].lower()
-
 
 def test_load_more_endpoint_fetches_when_no_cache(db):
     """Missing cache is not a blocker — endpoint runs pipeline at page 1."""
@@ -269,7 +247,6 @@ def test_load_more_endpoint_fetches_when_no_cache(db):
          patch.object(pipelines_module, "generate_outreach_templates", new=AsyncMock(return_value={})):
         resp = client.post(f"/api/jobs/{job_id}/load-more-contacts")
     assert resp.status_code == 200
-
 
 @pytest.mark.asyncio
 async def test_load_more_endpoint_logs_activity(db):
@@ -291,7 +268,6 @@ async def test_load_more_endpoint_logs_activity(db):
     assert any("Load more contacts" in e["message"] for e in data["activityLog"])
     assert any("new profile" in e["message"] for e in data["activityLog"])
 
-
 # --- Drawer UI ---
 
 def test_drawer_shows_load_more_contacts_button():
@@ -301,7 +277,6 @@ def test_drawer_shows_load_more_contacts_button():
         "drawerController.js must contain 'Load More Contacts' button text"
     assert "loadMoreContacts" in content, \
         "drawerController.js must call loadMoreContacts()"
-
 
 def test_drawer_load_more_only_on_accepted_jobs():
     from kanban_js import read_drawer_controller
@@ -314,7 +289,6 @@ def test_drawer_load_more_only_on_accepted_jobs():
     assert "companyUrl" in nearby, \
         "Load More Contacts must be gated on job.companyUrl"
 
-
 def test_drawer_load_more_not_gated_on_enrichment():
     from kanban_js import read_drawer_controller
     content = read_drawer_controller()
@@ -325,7 +299,6 @@ def test_drawer_load_more_not_gated_on_enrichment():
     nearby = content[max(0, idx - 600):idx + 50]
     assert "hasContactSampleActions" not in nearby, \
         "Load More Contacts must not require prior enrichment"
-
 
 def test_drawer_load_more_shows_spinner_while_loading():
     """Load More button and contacts section show spinner when active."""
@@ -341,11 +314,10 @@ def test_drawer_load_more_shows_spinner_while_loading():
     nearby = content[max(0, idx - 800):idx + 200]
     assert "fa-spinner fa-spin" in nearby
 
-
 # --- Dashboard JS export ---
 
 def test_dashboard_exports_load_more_contacts():
-    from kanban_js import get_script_section, read_dashboard_html
-    script = get_script_section(read_dashboard_html())
+    from kanban_js import load_dashboard_js
+    script = load_dashboard_js()
     assert "loadMoreContacts" in script, \
-        "dashboard.html must define and export loadMoreContacts"
+        "dashboard must define and export loadMoreContacts"

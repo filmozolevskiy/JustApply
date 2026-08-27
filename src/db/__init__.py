@@ -9,19 +9,31 @@ from .batch_jobs import (
     update_batch_job,
 )
 from .cache import delete_contact_sample, get_contact_sample, set_contact_sample
+from .company_research_cache import (
+    delete_company_research_cache,
+    get_company_research_cache,
+    normalize_company_name,
+    normalize_glassdoor_job_title,
+    set_company_research_cache,
+)
 from .connection import DB_PATH, get_db_connection, init_db
 from .jobs import (
     VALID_STATUSES,
     add_job,
+    add_job_comment,
     archive_job,
     archive_stale_rejected_jobs,
+    delete_job_comment,
     enrich_job,
     get_job,
     get_jobs,
+    get_retryable_scraped_jobs,
     get_unevaluated_jobs,
     increment_batch_attempts,
     job_exists,
     log_activity,
+    set_job_favorited,
+    update_company_research,
     update_contact_status,
     update_job_comment,
     update_job_evaluation,

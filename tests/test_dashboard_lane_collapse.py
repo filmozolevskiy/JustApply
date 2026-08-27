@@ -1,11 +1,16 @@
 import os
 
+from tests.kanban_js import load_dashboard_js, read_dashboard_css, read_dashboard_html
+
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
 
 def _read_html():
-    with open(HTML_PATH, encoding="utf-8") as f:
-        return f.read()
+    return read_dashboard_html()
+
+
+def _read_css():
+    return read_dashboard_css()
 
 
 def test_lane_collapse_btn_present():
@@ -33,19 +38,19 @@ def test_lane_name_text_class_present():
 
 
 def test_lane_collapsed_css_defined():
-    content = _read_html()
+    content = _read_css()
     assert ".lane-collapsed" in content, \
         ".lane-collapsed CSS class must be defined"
 
 
 def test_lane_collapse_btn_css_defined():
-    content = _read_html()
+    content = _read_css()
     assert ".lane-collapse-btn" in content, \
         ".lane-collapse-btn CSS class must be defined"
 
 
 def test_kanban_board_uses_flex():
-    content = _read_html()
+    content = _read_css()
     # Board container must use flex so collapsed columns shrink and expanded ones grow
     idx = content.find(".kanban-board-container")
     snippet = content[idx:idx + 200]
@@ -54,7 +59,7 @@ def test_kanban_board_uses_flex():
 
 
 def test_kanban_column_has_flex_grow():
-    content = _read_html()
+    content = _read_css()
     idx = content.find(".kanban-column {")
     snippet = content[idx:idx + 200]
     assert "flex:" in snippet or "flex-grow" in snippet or "flex: 1" in snippet, \
@@ -62,7 +67,7 @@ def test_kanban_column_has_flex_grow():
 
 
 def test_collapsed_lane_has_narrow_width():
-    content = _read_html()
+    content = _read_css()
     assert "lane-collapsed" in content
     # Collapsed column must have a narrow fixed size so it renders as a rail
     idx = content.find(".kanban-column.lane-collapsed")
@@ -72,7 +77,7 @@ def test_collapsed_lane_has_narrow_width():
 
 
 def test_collapsed_lane_hides_cards():
-    content = _read_html()
+    content = _read_css()
     idx = content.find(".kanban-column.lane-collapsed")
     after = content[idx:]
     # The cards-wrapper rule appears within ~1200 chars of the first lane-collapsed block
@@ -81,31 +86,31 @@ def test_collapsed_lane_hides_cards():
 
 
 def test_toggle_lane_collapse_function_defined():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "function toggleLaneCollapse" in content, \
         "toggleLaneCollapse function must be defined in JavaScript"
 
 
 def test_init_lane_collapse_function_defined():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "function initLaneCollapse" in content, \
         "initLaneCollapse function must be defined for restoring state on page load"
 
 
 def test_init_lane_collapse_called_at_init():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "initLaneCollapse()" in content, \
         "initLaneCollapse() must be called during page initialisation"
 
 
 def test_storage_key_uses_kanban_lane_prefix():
-    content = _read_html()
+    content = load_dashboard_js()
     assert "kanban-lane-" in content, \
         "Local storage key for collapsed lane must use 'kanban-lane-' prefix"
 
 
 def test_kanban_board_stretches_columns_to_equal_height():
-    content = _read_html()
+    content = _read_css()
     idx = content.find(".kanban-board-container")
     snippet = content[idx:idx + 220]
     assert "align-items: stretch" in snippet, (
@@ -114,7 +119,7 @@ def test_kanban_board_stretches_columns_to_equal_height():
 
 
 def test_kanban_cards_wrapper_fills_column():
-    content = _read_html()
+    content = _read_css()
     idx = content.find(".kanban-cards-wrapper {")
     snippet = content[idx:idx + 220]
     assert "flex: 1" in snippet, (
@@ -126,7 +131,7 @@ def test_kanban_cards_wrapper_fills_column():
 
 
 def test_collapsed_column_is_valid_drop_target():
-    content = _read_html()
+    content = load_dashboard_js()
     # DnD drop handler is registered on .kanban-column — collapsed columns
     # are still .kanban-column, so no extra wiring is needed; assert the
     # drop wiring targets the column (not only the wrapper).

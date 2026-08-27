@@ -1,8 +1,4 @@
 """Tests for Job Activity Log DB behavior."""
-import os
-import sys
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src.db import add_job, enrich_job, get_jobs, init_db, update_job_status
 from src.db.jobs import update_contact_status
@@ -13,11 +9,9 @@ def _fresh_db(tmp_path):
     init_db(db_str)
     return db_str
 
-
 def _get_job(db_str, job_id):
     jobs = get_jobs(db_str)
     return next(j for j in jobs if j.id == job_id)
-
 
 # --- add_job ---
 
@@ -27,7 +21,6 @@ def test_add_job_creates_found_entry(tmp_path):
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
     assert "Found" in messages
-
 
 # --- update_job_status ---
 
@@ -39,7 +32,6 @@ def test_update_job_status_logs_move(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Moved Scraped → Applied" in messages
 
-
 def test_update_job_status_to_accepted_logs_move(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA Engineer", "company": "Acme", "status": "scraped"}, db_str)
@@ -47,7 +39,6 @@ def test_update_job_status_to_accepted_logs_move(tmp_path):
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
     assert "Moved Scraped → Accepted" in messages
-
 
 def test_update_job_status_same_status_no_log_entry(tmp_path):
     db_str = _fresh_db(tmp_path)
@@ -57,7 +48,6 @@ def test_update_job_status_same_status_no_log_entry(tmp_path):
     update_job_status(job_id, "scraped", db_str)
     after = _get_job(db_str, job_id)
     assert len(after.activityLog) == before_len
-
 
 # --- enrich_job ---
 
@@ -73,7 +63,6 @@ def test_enrich_job_success_logs_contact_count(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Enriched · 2 contacts" in messages
 
-
 def test_enrich_job_single_contact_singular_label(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
@@ -83,7 +72,6 @@ def test_enrich_job_single_contact_singular_label(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Enriched · 1 contact" in messages
 
-
 def test_enrich_job_failure_logs_enrichment_note(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
@@ -91,7 +79,6 @@ def test_enrich_job_failure_logs_enrichment_note(tmp_path):
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
     assert "Enrichment failed · Apify failed: HTTP 403" in messages
-
 
 def test_enrich_job_reclassify_logs_reclassified(tmp_path):
     db_str = _fresh_db(tmp_path)
@@ -105,7 +92,6 @@ def test_enrich_job_reclassify_logs_reclassified(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Re-classified · 2 contacts" in messages
     assert not any("Enriched" in m for m in messages)
-
 
 def test_enrich_job_load_more_logs_new_profiles(tmp_path):
     db_str = _fresh_db(tmp_path)
@@ -123,7 +109,6 @@ def test_enrich_job_load_more_logs_new_profiles(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Load more contacts · 1 contact (3 new profiles)" in messages
 
-
 # --- update_contact_status ---
 
 def test_contact_marked_contacted_logs_name(tmp_path):
@@ -136,7 +121,6 @@ def test_contact_marked_contacted_logs_name(tmp_path):
     messages = [e.message for e in job.activityLog]
     assert "Marked Jane Doe contacted" in messages
 
-
 def test_contact_marked_contacted_does_not_change_job_status(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
@@ -147,7 +131,6 @@ def test_contact_marked_contacted_does_not_change_job_status(tmp_path):
     job = _get_job(db_str, job_id)
     assert job.status == "accepted"
 
-
 def test_contact_marked_contacted_no_lane_move_in_log(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme", "status": "found"}, db_str)
@@ -157,7 +140,6 @@ def test_contact_marked_contacted_no_lane_move_in_log(tmp_path):
     job = _get_job(db_str, job_id)
     messages = [e.message for e in job.activityLog]
     assert not any("→ Applied" in m for m in messages)
-
 
 # --- cap at 50 ---
 
@@ -173,18 +155,16 @@ def test_activity_log_capped_at_50_entries(tmp_path):
     job = _get_job(db_str, job_id)
     assert len(job.activityLog) <= 50
 
-
 # --- Job Comment Post (PRD #105) ---
 
-def test_update_job_comment_appends_notes_updated(tmp_path):
+def test_add_job_comment_appends_comment_added(tmp_path):
     db_str = _fresh_db(tmp_path)
     job_id = add_job({"title": "QA", "company": "Acme"}, db_str)
-    from src.db import update_job_comment
+    from src.db import add_job_comment
 
-    update_job_comment(job_id, "Phone screen next week", db_str)
+    add_job_comment(job_id, "Phone screen next week", db_path=db_str)
     job = _get_job(db_str, job_id)
-    assert "Notes updated" in [e.message for e in job.activityLog]
-
+    assert "Comment added" in [e.message for e in job.activityLog]
 
 def test_update_outreach_template_appends_outreach_template_updated(tmp_path):
     db_str = _fresh_db(tmp_path)
@@ -195,7 +175,6 @@ def test_update_outreach_template_appends_outreach_template_updated(tmp_path):
     job = _get_job(db_str, job_id)
     assert "Outreach template updated" in [e.message for e in job.activityLog]
 
-
 # --- activityLog field on job ---
 
 def test_activity_log_field_is_list_on_all_jobs(tmp_path):
@@ -203,7 +182,6 @@ def test_activity_log_field_is_list_on_all_jobs(tmp_path):
     jobs = get_jobs(db_str)
     for job in jobs:
         assert isinstance(job.activityLog, list)
-
 
 def test_activity_log_entries_have_ts_and_message(tmp_path):
     db_str = _fresh_db(tmp_path)

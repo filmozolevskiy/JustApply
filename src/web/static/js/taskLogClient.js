@@ -6,7 +6,11 @@ export const ACTIVE_SCRAPE_TASK_KEY = 'activeScrapeTaskId';
 export const ACTIVE_SCRAPE_LOG_SKIP_KEY = 'activeScrapeTaskLogSkip';
 export const ACTIVE_ENRICH_TASK_KEY = 'activeEnrichTaskId';
 export const ACTIVE_ENRICH_LOG_SKIP_KEY = 'activeEnrichTaskLogSkip';
+export const ACTIVE_COMPANY_RESEARCH_TASK_KEY = 'activeCompanyResearchTaskId';
+export const ACTIVE_COMPANY_RESEARCH_LOG_SKIP_KEY = 'activeCompanyResearchTaskLogSkip';
 export const ACTIVE_RECLASSIFY_TASKS_KEY = 'activeReclassifyTasks';
+export const BATCH_POLLER_LOG_SKIP_KEY = 'batchPollerLogSkip';
+export const BATCH_POLLER_RECONNECT_MS = 2000;
 
 export function reclassifyTaskLogSkipKey(taskId) {
   return `activeReclassifyTaskLogSkip:${taskId}`;
@@ -53,6 +57,8 @@ export function handleTaskLogMessage(logData, { addLogLine, onResult, onDone }) 
 export function createTaskLogClient() {
   let logEventSource = null;
   let enrichEventSource = null;
+  let batchPollerEventSource = null;
+  let batchPollerReconnectTimer = null;
   const reclassifyEventSources = new Map();
   let pageUnloading = false;
   let sessionLogs = [];
@@ -174,6 +180,8 @@ export function createTaskLogClient() {
       onDone,
       onError,
       existingSource = null,
+      // When false, keep active-task keys so the caller can reconnect (scrape).
+      clearStorageOnError = true,
     } = options;
 
     if (existingSource) {
@@ -204,9 +212,76 @@ export function createTaskLogClient() {
       if (intentional) {
         return;
       }
-      localStorage.removeItem(taskKey);
-      localStorage.removeItem(skipKey);
+      if (clearStorageOnError) {
+        localStorage.removeItem(taskKey);
+        localStorage.removeItem(skipKey);
+      }
       if (onError) onError(err);
+    };
+
+    return es;
+  }
+
+  function connectBatchPollerLogStream(options = {}) {
+    const { onBoardNeedsRefresh = null } = options;
+    if (batchPollerReconnectTimer != null) {
+      window.clearTimeout(batchPollerReconnectTimer);
+      batchPollerReconnectTimer = null;
+    }
+    if (batchPollerEventSource) {
+      closeTaskLogStreamQuietly(batchPollerEventSource);
+      batchPollerEventSource = null;
+    }
+
+    const skip = parseInt(localStorage.getItem(BATCH_POLLER_LOG_SKIP_KEY) || '0', 10);
+    const es = new EventSource(`/api/batch-poller/logs?skip=${skip}`);
+    batchPollerEventSource = es;
+    // Preserve refresh callback across reconnects from onerror.
+    es._onBoardNeedsRefresh = onBoardNeedsRefresh;
+
+    es.onmessage = function (event) {
+      const logData = JSON.parse(event.data);
+      if (logData.type === 'hello') {
+        // Align localStorage skip with the server buffer generation. A stale
+        // skip after uvicorn reload would otherwise miss replayed summaries.
+        const effectiveSkip = Number(logData.effectiveSkip);
+        if (Number.isFinite(effectiveSkip) && effectiveSkip >= 0) {
+          localStorage.setItem(BATCH_POLLER_LOG_SKIP_KEY, String(effectiveSkip));
+        }
+        return;
+      }
+      handleTaskLogMessage(logData, {
+        addLogLine: (msg, level) => {
+          addLogLine(msg, level);
+          bumpTaskLogSkip(BATCH_POLLER_LOG_SKIP_KEY);
+          // Summary lines mean the poller wrote evaluation outcomes to the DB.
+          if (level === 'summary') {
+            expandLogsConsole();
+            if (typeof es._onBoardNeedsRefresh === 'function') {
+              es._onBoardNeedsRefresh();
+            }
+          }
+        },
+      });
+    };
+
+    es.onerror = function () {
+      const intentional = es._intentionalClose || pageUnloading;
+      closeTaskLogStreamQuietly(es);
+      if (batchPollerEventSource === es) {
+        batchPollerEventSource = null;
+      }
+      if (intentional) {
+        return;
+      }
+      batchPollerReconnectTimer = window.setTimeout(() => {
+        batchPollerReconnectTimer = null;
+        if (!pageUnloading) {
+          connectBatchPollerLogStream({
+            onBoardNeedsRefresh: es._onBoardNeedsRefresh,
+          });
+        }
+      }, BATCH_POLLER_RECONNECT_MS);
     };
 
     return es;
@@ -227,8 +302,10 @@ export function createTaskLogClient() {
     bumpTaskLogSkip,
     clearLogs,
     closeTaskLogStreamQuietly,
+    connectBatchPollerLogStream,
     connectTaskLogStream,
     expandLogsConsole,
+    getBatchPollerEventSource: () => batchPollerEventSource,
     getEnrichEventSource: () => enrichEventSource,
     getLogEventSource: () => logEventSource,
     getReclassifyEventSource: (taskId) => reclassifyEventSources.get(taskId) ?? null,

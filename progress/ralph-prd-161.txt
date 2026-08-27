@@ -1,0 +1,23 @@
+# Ralph Loop Progress — PRD #161
+
+## 2026-07-12 — #162 Batch Poller split counters and chunk summaries
+- Split CollectResult / collect aggregation into attribute_filtered + fallback_rejected (removed combined rejected).
+- Chunk summary log lists all five counters; removed per-job Attribute mismatch poller logs.
+- CLI --collect footer prints split rejection counters; stderr still gets chunk summary via log_func.
+- Tests: test_batch_poller.py + test_collect_cli.py cover counter split, summary format, and no Attribute mismatch.
+- Quality: ruff OK, mypy OK, pytest 911 passed (1 unrelated fail: preexisting src/web/prototype/NOTES.md vs company-research prototype cleanup test).
+
+## 2026-07-12 — #163 Evaluation Round Summary on lock clear
+- Accumulate chunk counters across the current Evaluation Lock cycle; emit one Evaluation Round Summary when the last in-flight batch finishes.
+- Round line format: `Evaluation round complete (search|backfill): …` via poller log_func (summary level); CLI --collect/--wait stderr gets the same footer after chunk summaries.
+- Orphaned totals cleared when poll/collect starts with no in-flight batches (e.g. mid-round cancel).
+- Tests: multi-chunk aggregation, deferred emit until last chunk, backfill kind label, wait path order; collect CLI asserts round line after chunk.
+- Quality: ruff OK, mypy OK, pytest 916 passed (1 unrelated fail: company-research prototype cleanup vs leftover favorite prototypes).
+
+## 2026-07-12 — #164 Dashboard Task Logs batch-poller SSE subscription
+- Always-on `/api/batch-poller/logs` SSE from dashboard bootstrap via `connectBatchPollerLogStream` in taskLogClient.
+- Reuses `handleTaskLogMessage` + session log persistence; `batchPollerLogSkip` supports reload mid-round.
+- Single EventSource (reconnect replaces prior); enrichment stays on per-task `/api/logs` streams.
+- Batch-poller SSE drains queued history after buffer replay to avoid duplicate lines.
+- Tests: test_log_stream.py (replay/skip/no-dup), test_dashboard_sse_refresh.py + test_dashboard_modules.py (wiring).
+- Quality: ruff OK, mypy OK, pytest 922 passed (1 unrelated fail: company-research prototype cleanup vs leftover favorite prototypes).

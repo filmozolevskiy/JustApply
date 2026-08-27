@@ -1,10 +1,23 @@
 /** Job details drawer — Active Contact, templates, and outreach UI. */
 
+import { buildCompanyResearchSectionHtml } from './companyResearchUi.js';
 import { findJob, getJobs, setJobs, updateJob, upsertJob } from './jobStore.js';
-import { getBoardJobOrder, resolveJobsArchivedFetchParam } from './boardRenderer.js';
+import {
+  formatAnnualPostedSalary,
+  getBoardJobOrder,
+  resolveJobsArchivedFetchParam,
+} from './boardRenderer.js';
 
 export const NAME_PLACEHOLDER = '______';
 
+/** Primary drawer salary line — Annual Posted Salary band only (not raw listing text). */
+export function drawerSalaryDisplay(job) {
+  const annual = formatAnnualPostedSalary(job);
+  if (annual) {
+    return annual;
+  }
+  return 'Not specified';
+}
 export function applyGreetingName(template, firstName) {
   return template.replace(/^((?:Hello|Hi|Dear)\s+)\S+,/m, `$1${firstName},`);
 }
@@ -71,11 +84,173 @@ export function pickDefaultActiveContact(contacts) {
   return 0;
 }
 
+export function escapeCommentHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function formatCommentTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch (_) {
+    return iso;
+  }
+}
+
+/** Root Job Comments newest-first. */
+export function commentThreadRoots(comments) {
+  return (Array.isArray(comments) ? comments : [])
+    .filter((c) => c && (c.parentId == null || c.parentId === ''))
+    .slice()
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+/** Direct replies under a root, oldest-first. */
+export function commentThreadReplies(comments, rootId) {
+  return (Array.isArray(comments) ? comments : [])
+    .filter((c) => c && c.parentId === rootId)
+    .slice()
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+/** Confirm copy before deleting a Job Comment (root cascade vs solo/reply). */
+export function buildDeleteCommentConfirmMessage(comment, comments) {
+  if (!comment) return 'Delete this note?';
+  const isRoot = comment.parentId == null || comment.parentId === '';
+  if (!isRoot) return 'Delete this note?';
+  const replyCount = commentThreadReplies(comments, comment.id).length;
+  if (replyCount > 0) {
+    return `Delete this note and its ${replyCount} replies?`;
+  }
+  return 'Delete this note?';
+}
+
+/**
+ * Bubble Comment Thread HTML for Notes / Comments.
+ * Default: three newest roots; replies under each visible root always included.
+ */
+export function renderCommentThreadHtml(
+  job,
+  { showAllRoots = false, editingCommentId = null, replyingToCommentId = null } = {},
+) {
+  const comments = Array.isArray(job?.comments) ? job.comments : [];
+  const roots = commentThreadRoots(comments);
+  if (!roots.length) {
+    return '<div id="drawer-comments-list" class="drawer-comments-list comment-thread" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:8px;">No comments yet.</div>';
+  }
+  const visible = showAllRoots ? roots : roots.slice(0, 3);
+  const hidden = Math.max(0, roots.length - 3);
+  const bubbles = [];
+
+  function editedMarkHtml(comment) {
+    if (!comment?.editedAt) return '';
+    const when = formatCommentTime(comment.editedAt);
+    return ` <span class="jc-edited-a" title="Edited ${escapeCommentHtml(when)}">(edited)</span>`;
+  }
+
+  function renderBubble(comment, { isReply = false } = {}) {
+    const id = escapeCommentHtml(comment.id);
+    const parentAttr = isReply ? escapeCommentHtml(comment.parentId || '') : '';
+    const replyClass = isReply ? ' is-reply' : '';
+    const meta = `${escapeCommentHtml(formatCommentTime(comment.createdAt))}${editedMarkHtml(comment)}`;
+    if (editingCommentId && comment.id === editingCommentId) {
+      return `
+      <div class="drawer-comment-bubble jc-bubble-c${replyClass}" data-comment-id="${id}" data-parent-id="${parentAttr}">
+        <div class="jc-bubble-meta-c">${meta}</div>
+        <textarea id="drawer-comment-edit-text" class="drawer-comment-edit-text" rows="3">${escapeCommentHtml(comment.body || '')}</textarea>
+        <div class="jc-actions-a jc-comment-actions">
+          <button type="button" class="btn btn-secondary" data-cancel-edit onclick="cancelEditJobComment()">Cancel</button>
+          <button type="button" class="btn btn-primary" data-post-edit onclick="void postEditJobComment(${job.id}, '${id}')">Post</button>
+        </div>
+      </div>`;
+    }
+    const replyBtn = !isReply
+      ? `<button type="button" class="btn btn-secondary" data-start-reply="${id}" onclick="startReplyJobComment('${id}')">Reply</button>`
+      : '';
+    return `
+      <div class="drawer-comment-bubble jc-bubble-c${replyClass}" data-comment-id="${id}" data-parent-id="${parentAttr}">
+        <div class="jc-bubble-meta-c">${meta}</div>
+        <div class="jc-bubble-body-c">${escapeCommentHtml(comment.body || '')}</div>
+        <div class="jc-actions-a jc-comment-actions">
+          <button type="button" class="btn btn-secondary" data-edit-comment="${id}" onclick="startEditJobComment('${id}')">Edit</button>
+          ${replyBtn}
+          <button type="button" class="btn btn-secondary" data-delete-comment="${id}" onclick="void deleteJobComment(${job.id}, '${id}')">Delete</button>
+        </div>
+      </div>`;
+  }
+
+  function renderReplyCompose(rootId) {
+    const id = escapeCommentHtml(rootId);
+    return `
+      <div class="jc-compose-a drawer-comment-reply-compose" data-reply-parent="${id}" style="margin-left:28px">
+        <textarea id="drawer-comment-reply-text" class="drawer-comment-reply-text" rows="2" placeholder="Reply…"></textarea>
+        <div class="jc-actions-a jc-comment-actions">
+          <button type="button" class="btn btn-secondary" data-cancel-reply onclick="cancelReplyJobComment()">Cancel</button>
+          <button type="button" class="btn btn-primary" data-post-reply="${id}" onclick="void postReplyJobComment(${job.id}, '${id}')">Post</button>
+        </div>
+      </div>`;
+  }
+
+  for (const root of visible) {
+    bubbles.push(renderBubble(root));
+    for (const reply of commentThreadReplies(comments, root.id)) {
+      bubbles.push(renderBubble(reply, { isReply: true }));
+    }
+    if (replyingToCommentId && root.id === replyingToCommentId) {
+      bubbles.push(renderReplyCompose(root.id));
+    }
+  }
+  let controls = '';
+  if (!showAllRoots && hidden > 0) {
+    controls = `<button type="button" class="btn btn-secondary comment-thread-show-more" data-show-more onclick="showMoreCommentRoots()">Show ${hidden} older</button>`;
+  } else if (showAllRoots && roots.length > 3) {
+    controls = `<button type="button" class="btn btn-secondary comment-thread-show-fewer" data-show-less onclick="showFewerCommentRoots()">Show fewer</button>`;
+  }
+  return `<div id="drawer-comments-list" class="drawer-comments-list comment-thread jc-feed-c">${bubbles.join('')}${controls}</div>`;
+}
+
 function contactedElsewhereBadgeHtml(contact) {
   if (contact.contacted || !hasContactedElsewhere(contact)) return '';
   const { jobId, company, title } = contact.contactedElsewhere;
   const label = `${company} — ${title}`;
   return `<button type="button" class="contacted-elsewhere-badge" onclick="openContactedElsewhereJob(${jobId}, event)" title="Already contacted for another role — click to review">${label}</button>`;
+}
+
+/**
+ * Pure dirty check for Job Comment Drawer Drafts (root compose, reply, inline edit).
+ * replyComposeValue / editValue are null when that UI is not open.
+ */
+export function isCommentDraftDirty({
+  rootComposeValue = '',
+  replyComposeValue = null,
+  editValue = null,
+  editOriginalBody = '',
+} = {}) {
+  if (String(rootComposeValue ?? '').trim().length > 0) return true;
+  if (replyComposeValue != null && String(replyComposeValue).trim().length > 0) return true;
+  if (editValue != null && String(editValue) !== String(editOriginalBody ?? '')) return true;
+  return false;
+}
+
+/** Unsaved Draft Warning body copy for dirty Job Comment and/or outreach drafts. */
+export function buildDiscardDraftMessage({ commentDirty = false, outreachDirty = false } = {}) {
+  if (commentDirty && outreachDirty) {
+    return 'Discard unsaved notes and outreach draft?';
+  }
+  if (commentDirty) return 'Discard unsaved notes?';
+  if (outreachDirty) return 'Discard unsaved outreach draft?';
+  return '';
 }
 
 export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
@@ -131,19 +306,184 @@ export function buildContactGroupsHtml(jobId, contacts, activeContactIdx) {
 export function createDrawerController({
   onJobMutated,
   addLogLine,
+  confirmDeleteComment = async () => true,
   confirmDiscardUnsavedEdits = async () => true,
   getActiveReclassifyJobIds = () => [],
   getActiveLoadMoreJobId = () => null,
+  getActiveCompanyResearchJobId = () => null,
   getBoardFilters = () => ({}),
 }) {
   let activeContactIdx = -1;
   let drawerJobId = null;
-  let postedComment = '';
   let postedRecruiterTemplate = '';
   let postedRussianSpeakerTemplate = '';
+  let showAllCommentRoots = false;
+  let editingCommentId = null;
+  let replyingToCommentId = null;
+
+  function renderCommentsListHtml(job) {
+    return renderCommentThreadHtml(job, {
+      showAllRoots: showAllCommentRoots,
+      editingCommentId,
+      replyingToCommentId,
+    });
+  }
+
+  function refreshCommentsListInDrawer() {
+    const job = drawerJobId != null ? findJob(drawerJobId) : null;
+    const listHost = document.getElementById('drawer-comments-list');
+    if (!listHost || !job) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderCommentsListHtml(job);
+    const next = wrapper.firstElementChild;
+    if (next) listHost.replaceWith(next);
+  }
+
+  function showMoreCommentRoots() {
+    showAllCommentRoots = true;
+    refreshCommentsListInDrawer();
+  }
+
+  function showFewerCommentRoots() {
+    showAllCommentRoots = false;
+    refreshCommentsListInDrawer();
+  }
+
+  function startEditJobComment(commentId) {
+    editingCommentId = commentId || null;
+    replyingToCommentId = null;
+    refreshCommentsListInDrawer();
+    const el = document.getElementById('drawer-comment-edit-text');
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }
+
+  function cancelEditJobComment() {
+    editingCommentId = null;
+    refreshCommentsListInDrawer();
+  }
+
+  async function postEditJobComment(jobId, commentId) {
+    const el = document.getElementById('drawer-comment-edit-text');
+    if (!el || !commentId) return;
+    const job = findJob(jobId);
+    const value = el.value;
+    if (!value.trim()) {
+      addLogLine('Comment cannot be blank', 'warning');
+      return;
+    }
+    if (value.trim().length > 2000) {
+      addLogLine('Comment is too long (max 2,000 characters)', 'warning');
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/comments/${commentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: value }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      if (job) {
+        job.comments = updatedJob.comments || job.comments;
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
+      }
+      editingCommentId = null;
+      addLogLine(`Edited comment for [${job ? job.title : jobId}]`, 'success');
+      onJobMutated();
+      refreshCommentsListInDrawer();
+    } catch (err) {
+      addLogLine(`Failed to save comment: ${err.message}`, 'warning');
+      await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
+    }
+  }
+
+  function startReplyJobComment(rootId) {
+    editingCommentId = null;
+    replyingToCommentId = rootId || null;
+    refreshCommentsListInDrawer();
+    const el = document.getElementById('drawer-comment-reply-text');
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }
+
+  function cancelReplyJobComment() {
+    replyingToCommentId = null;
+    refreshCommentsListInDrawer();
+  }
+
+  async function postReplyJobComment(jobId, parentId) {
+    const el = document.getElementById('drawer-comment-reply-text');
+    if (!el || !parentId) return;
+    const job = findJob(jobId);
+    const value = el.value;
+    if (!value.trim()) {
+      addLogLine('Comment cannot be blank', 'warning');
+      return;
+    }
+    if (value.trim().length > 2000) {
+      addLogLine('Comment is too long (max 2,000 characters)', 'warning');
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: value, parentId }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      if (job) {
+        job.comments = updatedJob.comments || job.comments;
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
+      }
+      replyingToCommentId = null;
+      addLogLine(`Posted reply for [${job ? job.title : jobId}]`, 'success');
+      onJobMutated();
+      refreshCommentsListInDrawer();
+    } catch (err) {
+      addLogLine(`Failed to save comment: ${err.message}`, 'warning');
+      await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
+    }
+  }
+
+  async function deleteJobComment(jobId, commentId) {
+    if (!commentId) return;
+    const job = findJob(jobId);
+    const comments = Array.isArray(job?.comments) ? job.comments : [];
+    const comment = comments.find((c) => c.id === commentId);
+    if (!comment) return;
+    const message = buildDeleteCommentConfirmMessage(comment, comments);
+    if (!(await confirmDeleteComment(message))) return;
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/comments/${commentId}`, {
+        method: 'DELETE',
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      if (job) {
+        job.comments = updatedJob.comments || [];
+        job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
+      }
+      if (editingCommentId === commentId) editingCommentId = null;
+      if (replyingToCommentId === commentId) replyingToCommentId = null;
+      addLogLine(`Deleted comment for [${job ? job.title : jobId}]`, 'success');
+      onJobMutated();
+      refreshCommentsListInDrawer();
+    } catch (err) {
+      addLogLine(`Failed to delete comment: ${err.message}`, 'warning');
+      await appendActivityLogFailure(jobId, `Comment delete failed · ${err.message}`, job);
+    }
+  }
 
   function initPostedBaselines(job) {
-    postedComment = job.comment || '';
     postedRecruiterTemplate = job.recruiterOutreachTemplate || job.outreachMessage || '';
     postedRussianSpeakerTemplate = job.russianSpeakerOutreachTemplate || '';
   }
@@ -167,8 +507,21 @@ export function createDrawerController({
   }
 
   function isCommentDirty() {
-    const el = document.getElementById('drawer-comment-text');
-    return Boolean(el && el.value !== postedComment);
+    const rootEl = document.getElementById('drawer-comment-text');
+    const replyEl = document.getElementById('drawer-comment-reply-text');
+    const editEl = document.getElementById('drawer-comment-edit-text');
+    let editOriginalBody = '';
+    if (editEl && editingCommentId && drawerJobId != null) {
+      const job = findJob(drawerJobId);
+      const comment = (job?.comments || []).find((c) => c.id === editingCommentId);
+      editOriginalBody = comment?.body || '';
+    }
+    return isCommentDraftDirty({
+      rootComposeValue: rootEl ? rootEl.value : '',
+      replyComposeValue: replyEl ? replyEl.value : null,
+      editValue: editEl ? editEl.value : null,
+      editOriginalBody,
+    });
   }
 
   function isOutreachDirty() {
@@ -183,19 +536,19 @@ export function createDrawerController({
   }
 
   function getDiscardMessage() {
-    const commentDirty = isCommentDirty();
-    const outreachDirty = isOutreachDirty();
-    if (commentDirty && outreachDirty) {
-      return 'Discard unsaved notes and outreach draft?';
-    }
-    if (commentDirty) return 'Discard unsaved notes?';
-    if (outreachDirty) return 'Discard unsaved outreach draft?';
-    return '';
+    return buildDiscardDraftMessage({
+      commentDirty: isCommentDirty(),
+      outreachDirty: isOutreachDirty(),
+    });
   }
 
   function revertDraftFields() {
     const commentEl = document.getElementById('drawer-comment-text');
-    if (commentEl) commentEl.value = postedComment;
+    if (commentEl) commentEl.value = '';
+    const hadCommentUiDraft = editingCommentId != null || replyingToCommentId != null;
+    editingCommentId = null;
+    replyingToCommentId = null;
+    if (hadCommentUiDraft) refreshCommentsListInDrawer();
     const job = drawerJobId != null ? findJob(drawerJobId) : null;
     const outreachEl = document.getElementById('drawer-outreach-text');
     if (outreachEl && job) {
@@ -219,14 +572,15 @@ export function createDrawerController({
   }
 
   function updateDraftButtonStates() {
-    const commentDirty = isCommentDirty();
+    const rootEl = document.getElementById('drawer-comment-text');
+    const rootComposeDirty = Boolean(rootEl && rootEl.value.trim().length > 0);
     const outreachDirty = isOutreachDirty();
     const commentPost = document.getElementById('drawer-comment-post');
     const commentCancel = document.getElementById('drawer-comment-cancel');
     const outreachPost = document.getElementById('drawer-outreach-post');
     const outreachCancel = document.getElementById('drawer-outreach-cancel');
-    if (commentPost) commentPost.disabled = !commentDirty;
-    if (commentCancel) commentCancel.disabled = !commentDirty;
+    if (commentPost) commentPost.disabled = !rootComposeDirty;
+    if (commentCancel) commentCancel.disabled = !rootComposeDirty;
     if (outreachPost) outreachPost.disabled = !outreachDirty;
     if (outreachCancel) outreachCancel.disabled = !outreachDirty;
   }
@@ -259,34 +613,41 @@ export function createDrawerController({
 
   async function postJobComment(jobId) {
     const el = document.getElementById('drawer-comment-text');
-    if (!el || !isCommentDirty()) return;
+    if (!el || !el.value.trim()) return;
     const job = findJob(jobId);
     const value = el.value;
+    if (!value.trim()) return;
+    if (value.trim().length > 2000) {
+      addLogLine('Comment is too long (max 2,000 characters)', 'warning');
+      return;
+    }
     try {
-      const resp = await fetch(`/api/jobs/${jobId}/comment`, {
-        method: 'PUT',
+      const resp = await fetch(`/api/jobs/${jobId}/comments`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ comment: value }),
+        body: JSON.stringify({ body: value }),
       });
       if (!resp.ok) throw new Error('HTTP error ' + resp.status);
       const updatedJob = await resp.json();
-      postedComment = updatedJob.comment;
       if (job) {
-        job.comment = updatedJob.comment;
+        job.comments = updatedJob.comments || job.comments;
         job.activityLog = updatedJob.activityLog || job.activityLog;
+        updateJob(jobId, job);
       }
-      addLogLine(`Posted notes for [${job ? job.title : jobId}]`, 'success');
+      el.value = '';
+      addLogLine(`Posted comment for [${job ? job.title : jobId}]`, 'success');
       updateDraftButtonStates();
       onJobMutated();
+      refreshCommentsListInDrawer();
     } catch (err) {
       addLogLine(`Failed to save comment: ${err.message}`, 'warning');
-      await appendActivityLogFailure(jobId, `Notes save failed · ${err.message}`, job);
+      await appendActivityLogFailure(jobId, `Comment save failed · ${err.message}`, job);
     }
   }
 
   function cancelJobComment() {
     const el = document.getElementById('drawer-comment-text');
-    if (el) el.value = postedComment;
+    if (el) el.value = '';
     updateDraftButtonStates();
   }
 
@@ -425,6 +786,9 @@ export function createDrawerController({
     if (!job) return;
 
     drawerJobId = id;
+    showAllCommentRoots = false;
+    editingCommentId = null;
+    replyingToCommentId = null;
     initPostedBaselines(job);
 
     const body = document.getElementById('drawer-body');
@@ -457,8 +821,10 @@ export function createDrawerController({
 
     const isReclassifying = getActiveReclassifyJobIds().includes(job.id);
     const isLoadingMore = getActiveLoadMoreJobId() === job.id;
+    const isResearching = getActiveCompanyResearchJobId() === job.id;
     const contactActionInProgress = isReclassifying || isLoadingMore;
     const reclassifyBusy = isReclassifying;
+    const companyResearchSection = buildCompanyResearchSectionHtml(job, { isResearching });
 
     const hasPostingLink =
       job.link && job.link.trim() && job.link !== '#' && job.link !== 'undefined';
@@ -472,6 +838,9 @@ export function createDrawerController({
             ` : ''}
           </h2>
           <div class="drawer-header-actions">
+            <button type="button" class="drawer-favorite-btn${job.favorited ? ' is-favorited' : ''}" onclick="toggleJobFavorite(${job.id})" title="${job.favorited ? 'Unmark favorite' : 'Mark favorite'}" aria-pressed="${job.favorited ? 'true' : 'false'}" aria-label="${job.favorited ? 'Unmark favorite' : 'Mark favorite'}">
+              <i class="fa-${job.favorited ? 'solid' : 'regular'} fa-star"></i>
+            </button>
             <span class="match-pill ${matchClass}" style="font-size:1.1rem; padding: 4px 10px;">${job.matchScore}% Match</span>
           </div>
         </div>
@@ -498,10 +867,13 @@ export function createDrawerController({
               <div>${buildDrawerCompanyRowHtml(job.company, job.companyUrl)}</div>
               <div>Location: ${job.location}</div>
               <div>Remote Policy: <span style="text-transform:capitalize;">${job.remoteType}</span></div>
-              <div>Salary: <span class="drawer-salary">${job.salary || 'Not specified'}</span></div>
+              ${job.employmentType ? `<div>Employment Type: <span>${job.employmentType}</span></div>` : ''}
+              <div>Salary: <span class="drawer-salary">${drawerSalaryDisplay(job)}</span></div>
               <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
             </div>
           </div>
+
+          ${companyResearchSection}
 
           ${job.activityLog && job.activityLog.length > 0
             ? (() => {
@@ -571,7 +943,8 @@ export function createDrawerController({
 
           <div>
             <h4 style="font-size:0.8rem; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Notes / Comments</h4>
-            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write comments or updates here..." oninput="onCommentDraftInput(${job.id})">${postedComment}</textarea>
+            ${renderCommentsListHtml(job)}
+            <textarea id="drawer-comment-text" style="width:100%; min-height:80px; background:rgba(10,14,26,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:10px; border-radius:6px; font-family:var(--font-body); font-size:0.85rem; resize:vertical; outline:none;" placeholder="Write a new comment..." oninput="onCommentDraftInput(${job.id})"></textarea>
             <div class="drawer-draft-actions">
               <button id="drawer-comment-cancel" type="button" class="btn btn-secondary drawer-draft-btn" disabled onclick="cancelJobComment(${job.id})">Cancel</button>
               <button id="drawer-comment-post" type="button" class="btn btn-primary drawer-draft-btn" disabled onclick="void postJobComment(${job.id})">Post</button>
@@ -791,6 +1164,32 @@ export function createDrawerController({
     }
   }
 
+  async function toggleJobFavorite(jobId) {
+    const job = findJob(jobId);
+    if (!job) return;
+    const nextFavorited = !Boolean(job.favorited);
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorited: nextFavorited }),
+      });
+      if (!resp.ok) throw new Error('HTTP error ' + resp.status);
+      const updatedJob = await resp.json();
+      updateJob(jobId, updatedJob);
+      addLogLine(
+        nextFavorited
+          ? `Marked favorite: [${job.title}]`
+          : `Unmarked favorite: [${job.title}]`,
+        'success',
+      );
+      onJobMutated();
+      await openJobDetailsDrawer(jobId);
+    } catch (err) {
+      addLogLine(`Failed to toggle favorite: ${err.message}`, 'warning');
+    }
+  }
+
   async function rejectJobFromDrawer(jobId) {
     if (!(await confirmDiscardIfNeeded())) return;
     closeDrawerImmediate();
@@ -808,12 +1207,15 @@ export function createDrawerController({
   }
 
   return {
+    cancelEditJobComment,
     cancelJobComment,
     cancelOutreachTemplate,
+    cancelReplyJobComment,
     closeDrawer,
     closeDrawerImmediate,
     confirmDiscardIfNeeded,
     copyDrawerOutreach,
+    deleteJobComment,
     enrichJobFromDrawer,
     markAppliedFromDrawer,
     navigateDrawerJob,
@@ -821,14 +1223,21 @@ export function createDrawerController({
     onOutreachDraftInput,
     openContactedElsewhereJob,
     openJobDetailsDrawer,
+    postEditJobComment,
     postJobComment,
     postOutreachTemplate,
+    postReplyJobComment,
     refreshDrawerIfOpen,
     rejectJobFromDrawer,
     runWithDiscardGuard,
     selectActiveContact,
+    showFewerCommentRoots,
+    showMoreCommentRoots,
+    startEditJobComment,
+    startReplyJobComment,
     toggleActivityLog,
     toggleContacted,
+    toggleJobFavorite,
     updateDrawerNav,
     updateOutreachCounter,
   };

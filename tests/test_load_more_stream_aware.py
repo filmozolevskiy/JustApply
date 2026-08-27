@@ -1,12 +1,7 @@
 """Tests for stream-aware Load More Contacts — preflight endpoint and per-stream pipeline."""
-import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.db.connection as _db_connection
 from fastapi.testclient import TestClient
 from src import db as database
@@ -15,14 +10,12 @@ from src.web.server import app
 
 client = TestClient(app)
 
-
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     test_db = str(tmp_path / "test.db")
     monkeypatch.setattr(_db_connection, "DB_PATH", test_db)
     database.init_db(test_db)
     return test_db
-
 
 def _make_accepted_job(db, contacts=None, company_url="https://www.linkedin.com/company/acme/"):
     from src.core.enrichment.coordinator import begin_enrichment
@@ -42,7 +35,6 @@ def _make_accepted_job(db, contacts=None, company_url="https://www.linkedin.com/
     )
     return job_id
 
-
 # --- Preflight endpoint ---
 
 def test_preflight_recruiter_below_cap_returns_stream(db):
@@ -60,7 +52,6 @@ def test_preflight_recruiter_below_cap_returns_stream(db):
     streams = [s["stream"] for s in data["billable_streams"]]
     assert "Recruiters" in streams
 
-
 def test_preflight_recruiter_at_cap_still_billable(db):
     """Contact count does not cap Load More — recruiter stream with cache remains billable."""
     contacts = [
@@ -76,7 +67,6 @@ def test_preflight_recruiter_at_cap_still_billable(db):
     data = resp.json()
     streams = [s["stream"] for s in data["billable_streams"]]
     assert "Recruiters" in streams
-
 
 def test_preflight_russian_at_cap_still_billable(db):
     """Contact count does not cap Load More — russian stream with cache remains billable."""
@@ -94,7 +84,6 @@ def test_preflight_russian_at_cap_still_billable(db):
     streams = [s["stream"] for s in data["billable_streams"]]
     assert "Russian Speakers" in streams
 
-
 def test_preflight_inactive_toggle_excluded(db):
     """Inactive audience toggle → stream not billable even if below cap."""
     job_id = _make_accepted_job(db, contacts=[])
@@ -105,7 +94,6 @@ def test_preflight_inactive_toggle_excluded(db):
     data = resp.json()
     assert data["estimated_runs"] == 0
     assert data["billable_streams"] == []
-
 
 def test_preflight_no_cache_is_billable_page_one(db):
     """Missing per-stream cache → billable at page 1."""
@@ -118,7 +106,6 @@ def test_preflight_no_cache_is_billable_page_one(db):
     assert data["billable_streams"][0]["page"] == 1
     assert data["billable_streams"][0]["stream"] == "Recruiters"
 
-
 def test_preflight_exhausted_stream_excluded(db):
     """Stream Exhausted (last_fetch_empty) → not billable."""
     job_id = _make_accepted_job(db, contacts=[])
@@ -130,7 +117,6 @@ def test_preflight_exhausted_stream_excluded(db):
     assert data["estimated_runs"] == 0
     assert data["blocked_reason"] == "all_streams_exhausted"
 
-
 def test_preflight_blocked_reason_no_audience_toggles(db):
     job_id = _make_accepted_job(db, contacts=[])
     database.save_outreach_settings(target_recruiters=False, target_russian_speakers=False, db_path=db)
@@ -139,7 +125,6 @@ def test_preflight_blocked_reason_no_audience_toggles(db):
     data = resp.json()
     assert data["estimated_runs"] == 0
     assert data["blocked_reason"] == "no_audience_toggles"
-
 
 def test_preflight_both_short_streams_returns_both(db):
     """Both active streams below cap → both in billable_streams."""
@@ -154,7 +139,6 @@ def test_preflight_both_short_streams_returns_both(db):
     assert "Recruiters" in streams
     assert "Russian Speakers" in streams
 
-
 def test_preflight_page_number_is_pages_fetched_plus_one(db):
     """Page number in billable_streams = cache pages_fetched + 1."""
     job_id = _make_accepted_job(db, contacts=[])
@@ -164,7 +148,6 @@ def test_preflight_page_number_is_pages_fetched_plus_one(db):
     resp = client.get(f"/api/jobs/{job_id}/load-more-preflight")
     data = resp.json()
     assert data["billable_streams"][0]["page"] == 4
-
 
 def test_preflight_estimated_cost_per_run(db):
     """estimated_cost = estimated_runs × 0.05."""
@@ -176,11 +159,9 @@ def test_preflight_estimated_cost_per_run(db):
     data = resp.json()
     assert data["estimated_cost"] == round(data["estimated_runs"] * 0.05, 2)
 
-
 def test_preflight_returns_404_for_unknown_job(db):
     resp = client.get("/api/jobs/9999/load-more-preflight")
     assert resp.status_code == 404
-
 
 # --- Pipeline: stream-aware Apify dispatch ---
 
@@ -194,7 +175,6 @@ def _make_job_with_per_stream_caches(db, contacts=None, recruiter_pages=1, russi
         set_contact_sample(slug, [{"firstName": "Ivan"}], pages_fetched=russian_pages,
                            stream="russian", db_path=db)
     return job_id
-
 
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_for_recruiters_when_recruiter_short(db):
@@ -214,7 +194,6 @@ async def test_pipeline_calls_apify_for_recruiters_when_recruiter_short(db):
 
     mock_apify.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_for_russian_when_russian_short(db):
     """Pipeline calls _run_apify_for_russian_speakers when russian stream is below cap."""
@@ -233,7 +212,6 @@ async def test_pipeline_calls_apify_for_russian_when_russian_short(db):
 
     mock_apify.assert_called_once()
 
-
 @pytest.mark.asyncio
 async def test_pipeline_skips_exhausted_stream(db):
     """Pipeline does not call Apify for a Stream Exhausted stream."""
@@ -251,7 +229,6 @@ async def test_pipeline_skips_exhausted_stream(db):
 
     mock_recruiters.assert_not_called()
 
-
 @pytest.mark.asyncio
 async def test_pipeline_fetches_page_one_when_no_cache(db):
     """Pipeline calls Apify at page 1 when per-stream cache is missing."""
@@ -267,7 +244,6 @@ async def test_pipeline_fetches_page_one_when_no_cache(db):
 
     mock_apify.assert_called_once()
     assert mock_apify.call_args.kwargs.get("start_page") == 1
-
 
 @pytest.mark.asyncio
 async def test_pipeline_appends_to_per_stream_cache(db):
@@ -291,7 +267,6 @@ async def test_pipeline_appends_to_per_stream_cache(db):
     names = [p["firstName"] for p in cached["profiles"]]
     assert "Bob" in names
 
-
 @pytest.mark.asyncio
 async def test_pipeline_raises_when_all_streams_exhausted(db):
     """Pipeline raises ValueError when all active streams are Stream Exhausted."""
@@ -302,7 +277,6 @@ async def test_pipeline_raises_when_all_streams_exhausted(db):
 
     with pytest.raises(ValueError):
         await run_load_more_contacts_pipeline(job_id)
-
 
 @pytest.mark.asyncio
 async def test_pipeline_calls_apify_with_correct_start_page(db):
@@ -321,20 +295,18 @@ async def test_pipeline_calls_apify_with_correct_start_page(db):
     start_page = call_kwargs.kwargs.get("start_page")
     assert start_page == 4
 
-
 # --- Dashboard JS ---
 
 def test_dashboard_load_more_fetches_preflight():
     """loadMoreContacts JS fetches the load-more-preflight endpoint."""
-    from kanban_js import read_dashboard_html
-    content = read_dashboard_html()
+    from kanban_js import load_dashboard_js
+    content = load_dashboard_js()
     assert "load-more-preflight" in content
-
 
 def test_dashboard_load_more_uses_blocked_reason():
     """loadMoreContacts shows specific acknowledgement from blocked_reason, not generic cap message."""
-    from kanban_js import read_dashboard_html
-    content = read_dashboard_html()
+    from kanban_js import load_dashboard_js
+    content = load_dashboard_js()
     idx = content.find("loadMoreContacts")
     assert idx != -1
     nearby = content[idx:idx + 1200]
@@ -343,11 +315,10 @@ def test_dashboard_load_more_uses_blocked_reason():
     assert "alert(" not in nearby
     assert "at cap" not in nearby.lower()
 
-
 def test_dashboard_load_more_confirm_includes_stream_and_page():
     """loadMoreContacts confirm builds lines from billable_streams and includes page number."""
-    from kanban_js import read_dashboard_html
-    content = read_dashboard_html()
+    from kanban_js import load_dashboard_js
+    content = load_dashboard_js()
     idx = content.find("loadMoreContacts")
     assert idx != -1
     nearby = content[idx:idx + 1200]

@@ -18,16 +18,8 @@ from ..service import (
 )
 
 
-def _resume_name_for_position(position: str) -> str:
-    resume_name = position.lower().replace("/", "_").replace(" ", "_")
-    if not resume_name.endswith(".md"):
-        resume_name += ".md"
-    return resume_name
-
-
 async def run_search(
     position: str,
-    sites: list = None,
     mock_eval: bool = False,
     allowed_remote_types: list = None
 ) -> list:
@@ -111,7 +103,9 @@ async def run_collect(wait: bool = False) -> dict:
     print(
         f"Collect complete. "
         f"Batches polled: {result['batches_polled']} | "
-        f"Matched: {result['matched']} | Rejected: {result['rejected']} | "
+        f"Matched: {result['matched']} | "
+        f"Attribute-filtered: {result['attribute_filtered']} | "
+        f"Fallback-rejected: {result['fallback_rejected']} | "
         f"Failed: {result['failed']} | Unclassified: {result['unclassified']} | "
         f"In-flight remaining: {result['in_flight_remaining']}"
     )
@@ -169,7 +163,6 @@ def main():
         action="store_true",
         help="With --backfill or --collect, wait until all batches finish",
     )
-    parser.add_argument("--sites", help="Comma-separated list of job sites (unused, reserved for future use)")
     args = parser.parse_args()
 
     if args.search:

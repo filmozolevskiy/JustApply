@@ -6,9 +6,15 @@ import inspect
 import os
 from collections.abc import Awaitable, Callable
 
+from ..core.annual_posted_salary import parse_salary_min
 from ..core.batch_poller import run_batch_collection
 from ..core.enrichment.coordinator import abort_enrichment, begin_enrichment
 from ..core.evaluation_lock import assert_evaluation_lock_clear
+from ..core.source_platform import (
+    DEFAULT_SOURCE_PLATFORM,
+    UnsupportedSourcePlatformError,
+    validate_source_platform,
+)
 from ..db import get_job, get_jobs, init_db
 from ..pipelines import (
     run_backfill_pipeline,
@@ -32,13 +38,13 @@ def parse_remote_types(remote_type) -> list[str]:
 
 
 def scraper_will_mock(mock_eval: bool, mock_scraper: bool | None = None) -> bool:
-    """Decide whether the LinkedIn scraper runs in mock mode (no Bright Data call).
+    """Decide whether listing scrape runs in mock mode (no Bright Data / Apify call).
 
     Resolution order:
     1. ``MOCK_SCRAPER=true`` env forces mock regardless of the request.
     2. An explicit ``mock_scraper`` flag wins when provided.
     3. Otherwise a mock-evaluation run defaults to a mock scrape too — so a
-       "test" run never spends real Bright Data credits. Pass
+       "test" run never spends real scrape credits. Pass
        ``mock_scraper=False`` to force a real scrape with a mock evaluation.
     """
     if os.getenv("MOCK_SCRAPER", "false").lower() == "true":
@@ -49,7 +55,7 @@ def scraper_will_mock(mock_eval: bool, mock_scraper: bool | None = None) -> bool
 
 
 def acquire_scrape_slot(mock_eval: bool, mock_scraper: bool | None = None) -> None:
-    """Acquire the scrape rate limiter when a real Bright Data run is expected."""
+    """Acquire the scrape rate limiter when a real billable scrape is expected."""
     if not scraper_will_mock(mock_eval, mock_scraper):
         scrape_limiter.acquire()
 
@@ -66,14 +72,18 @@ async def search_jobs(
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
     company_sizes: str = "any",
+    employment_types: str = "any",
+    salary: str = "",
     countries: str = "us",
     time_range: str = "any",
+    platform: str | None = None,
     log_func=None,
     job_saved_func=None,
     rate_limit: bool = True,
 ) -> list:
-    """Run Search & Evaluation Pipeline with shared rate-limit gating."""
+    """Run Search & Evaluation Pipeline; new listings save to Scraped before batch evaluation."""
     assert_evaluation_lock_clear()
+    resolved_platform = validate_source_platform(platform)
     if rate_limit:
         acquire_scrape_slot(mock_eval, mock_scraper)
     remote_types = allowed_remote_types if allowed_remote_types is not None else ["any"]
@@ -88,8 +98,11 @@ async def search_jobs(
         allowed_remote_types=remote_types,
         seniorities=seniorities,
         company_sizes=company_sizes,
+        employment_types=employment_types,
+        salary_min=parse_salary_min(salary),
         countries=countries,
         time_range=time_range,
+        platform=resolved_platform,
         log_func=log_func,
         job_saved_func=job_saved_func,
     )
@@ -100,7 +113,7 @@ async def complete_enrichment(
     *,
     log_func=None,
 ) -> Job | None:
-    """Finish enrichment for a job already in the enriching lane."""
+    """Finish enrichment for an Accepted Job already running in the enrichment pipeline."""
     job = get_job(job_id)
     if not job:
         abort_enrichment(job_id)
@@ -121,27 +134,55 @@ async def reassess_job(
     job_id: int,
     *,
     active_resume: str = "general_cv.md",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    employment_types: str = "any",
+    salary: str = "",
     log_func=None,
 ) -> Job:
-    """Re-run Resume Matcher on a single existing job."""
+    """Re-run Resume Matcher on a single existing job.
+
+    Gate prefs default to “any” (CLI v1). Dashboard callers pass current
+    Job Search Settings so Employment Type / remote / seniority / Salary Min
+    gate apply.
+    """
     init_db()
-    return await run_reassess_pipeline(job_id, active_resume=active_resume, log_func=log_func)
+    return await run_reassess_pipeline(
+        job_id,
+        active_resume=active_resume,
+        allowed_remote_types=allowed_remote_types,
+        seniorities=seniorities,
+        employment_types=employment_types,
+        salary_min=parse_salary_min(salary),
+        log_func=log_func,
+    )
 
 
 async def reassess_all_jobs(
     *,
     active_resume: str = "general_cv.md",
     archived_filter: str = "active",
+    allowed_remote_types: list | None = None,
+    seniorities: str = "any",
+    employment_types: str = "any",
+    salary: str = "",
     log_func=None,
 ) -> list[Job]:
     """Re-run Resume Matcher on every job in the given archive filter."""
     init_db()
     jobs = get_jobs(archived_filter=archived_filter)
     updated = []
+    salary_min = parse_salary_min(salary)
     for job in jobs:
         try:
             result = await run_reassess_pipeline(
-                job.id, active_resume=active_resume, log_func=log_func
+                job.id,
+                active_resume=active_resume,
+                allowed_remote_types=allowed_remote_types,
+                seniorities=seniorities,
+                employment_types=employment_types,
+                salary_min=salary_min,
+                log_func=log_func,
             )
             updated.append(result)
         except ValueError as e:
@@ -160,7 +201,7 @@ async def collect_batch_evaluation_results(
     log_func=None,
     db_path=None,
 ) -> dict:
-    """Poll in-flight Batch Evaluation Jobs and write back completed results."""
+    """Poll in-flight Batch Evaluation Jobs and write scores back (Scraped → Matched or Rejected)."""
     init_db(db_path)
     return await run_batch_collection(
         wait=wait,
@@ -174,11 +215,13 @@ async def backfill_unevaluated_jobs(
     active_resume: str = "general_cv.md",
     allowed_remote_types: list | None = None,
     seniorities: str = "any",
+    employment_types: str = "any",
+    salary: str = "",
     wait: bool = False,
     log_func=None,
     db_path=None,
 ) -> dict:
-    """Submit Batch Evaluation Jobs for unevaluated jobs; poller writes results back."""
+    """Submit Batch Evaluation Jobs for Scraped Jobs missing scores; poller writes results back."""
     init_db(db_path)
     assert_evaluation_lock_clear(db_path=db_path)
     remote_types = allowed_remote_types if allowed_remote_types is not None else ["any"]
@@ -186,6 +229,8 @@ async def backfill_unevaluated_jobs(
         active_resume=active_resume,
         allowed_remote_types=remote_types,
         seniorities=seniorities,
+        employment_types=employment_types,
+        salary_min=parse_salary_min(salary),
         wait=wait,
         log_func=log_func,
         db_path=db_path,
@@ -193,7 +238,7 @@ async def backfill_unevaluated_jobs(
 
 
 async def promote_sourced_jobs(log_func=None) -> list:
-    """Enrich all Found jobs that passed Resume Matcher."""
+    """Run enrichment on Matched Jobs flagged to proceed by Resume Matcher."""
     init_db()
     to_promote = [
         j for j in get_jobs()
@@ -212,7 +257,9 @@ async def promote_sourced_jobs(log_func=None) -> list:
 
 
 __all__ = [
+    "DEFAULT_SOURCE_PLATFORM",
     "RateLimitError",
+    "UnsupportedSourcePlatformError",
     "acquire_scrape_slot",
     "backfill_unevaluated_jobs",
     "collect_batch_evaluation_results",
@@ -224,4 +271,5 @@ __all__ = [
     "reassess_job",
     "scraper_will_mock",
     "search_jobs",
+    "validate_source_platform",
 ]

@@ -7,17 +7,18 @@ from ..schemas import Contact, Job
 from .connection import DB_PATH, get_db_connection
 from .job_model import parse_job_row
 
+CONTACTED_PROFILES_TABLE = "contacted_profiles"
 
-def _load_all_jobs(db_path=None) -> list[Job]:
-    if db_path is None:
-        db_path = DB_PATH
-    conn = get_db_connection(db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM jobs ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return [parse_job_row(r) for r in rows]
-
+_CONTACTED_PROFILES_DDL = """
+    CREATE TABLE IF NOT EXISTS contacted_profiles (
+        profile_slug TEXT NOT NULL,
+        job_id INTEGER NOT NULL,
+        company TEXT NOT NULL,
+        title TEXT NOT NULL,
+        contacted_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (profile_slug, job_id)
+    )
+"""
 
 def _contact_profile_url(contact: Contact | dict) -> str:
     if isinstance(contact, Contact):
@@ -85,6 +86,53 @@ def _pick_most_recent(matches: list[dict]) -> dict | None:
     return max(matches, key=lambda item: (item.get("contactedAt") or "", item.get("jobId") or 0))
 
 
+def _lookup_slugs_for_jobs(jobs: list[Job]) -> set[str]:
+    slugs: set[str] = set()
+    for job in jobs:
+        if job.id is None:
+            continue
+        for contact in job.contacts or []:
+            raw = contact.model_dump() if isinstance(contact, Contact) else dict(contact)
+            if raw.get("contacted"):
+                continue
+            slug = normalize_linkedin_url(_contact_profile_url(raw))
+            if slug:
+                slugs.add(slug)
+    return slugs
+
+
+def load_contacted_index_for_slugs(slugs: set[str], db_path=None) -> dict[str, list[dict]]:
+    """Load contacted-profile index rows for the given LinkedIn slugs only."""
+    if not slugs:
+        return {}
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    placeholders = ",".join("?" * len(slugs))
+    cursor.execute(
+        f"""
+        SELECT profile_slug, job_id, company, title, contacted_at
+        FROM {CONTACTED_PROFILES_TABLE}
+        WHERE profile_slug IN ({placeholders})
+        """,
+        tuple(slugs),
+    )
+    index: dict[str, list[dict]] = {}
+    for row in cursor.fetchall():
+        slug = row["profile_slug"]
+        index.setdefault(slug, []).append(
+            {
+                "jobId": row["job_id"],
+                "company": row["company"],
+                "title": row["title"],
+                "contactedAt": row["contacted_at"] or "",
+            }
+        )
+    conn.close()
+    return index
+
+
 def contacted_elsewhere_for_contact(
     job_id: int,
     contact: Contact | dict,
@@ -113,13 +161,81 @@ def contacted_elsewhere_for_contact(
     }
 
 
+def _insert_contacted_profile_rows(
+    cursor,
+    job_id: int,
+    company: str,
+    title: str,
+    contacts: list,
+    activity_log: list[dict],
+) -> None:
+    for contact in contacts:
+        if isinstance(contact, Contact):
+            raw = contact.model_dump()
+        else:
+            raw = contact
+        if not raw.get("contacted"):
+            continue
+        slug = normalize_linkedin_url(_contact_profile_url(raw))
+        if not slug:
+            continue
+        cursor.execute(
+            f"""
+            INSERT OR REPLACE INTO {CONTACTED_PROFILES_TABLE}
+                (profile_slug, job_id, company, title, contacted_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                slug,
+                job_id,
+                company,
+                title,
+                contacted_timestamp(raw, activity_log),
+            ),
+        )
+
+
+def sync_job_contacted_profiles_index(
+    conn,
+    job_id: int,
+    company: str,
+    title: str,
+    contacts: list,
+    activity_log: list[dict] | None = None,
+) -> None:
+    """Replace index rows for one job after a contact or enrichment write."""
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM {CONTACTED_PROFILES_TABLE} WHERE job_id = ?", (job_id,))
+    _insert_contacted_profile_rows(
+        cursor,
+        job_id,
+        company,
+        title,
+        contacts,
+        activity_log or [],
+    )
+
+
+def sync_job_contacted_profiles_index_from_job(conn, job: Job) -> None:
+    """Replace index rows for one Job model after a contact or enrichment write."""
+    if job.id is None:
+        return
+    sync_job_contacted_profiles_index(
+        conn,
+        job.id,
+        job.company,
+        job.title,
+        job.contacts or [],
+        _activity_log_entries(job),
+    )
+
+
 def enrich_jobs_with_contacted_elsewhere(jobs: list[Job], db_path=None) -> list[Job]:
     """Attach contactedElsewhere metadata to each contact on the given jobs."""
     if not jobs:
         return jobs
 
-    all_jobs = _load_all_jobs(db_path=db_path)
-    index = build_contacted_index(all_jobs)
+    index = load_contacted_index_for_slugs(_lookup_slugs_for_jobs(jobs), db_path=db_path)
 
     enriched: list[Job] = []
     for job in jobs:
@@ -137,3 +253,81 @@ def enrich_jobs_with_contacted_elsewhere(jobs: list[Job], db_path=None) -> list[
             updated_contacts.append(Contact(**payload))
         enriched.append(job.model_copy(update={"contacts": updated_contacts}))
     return enriched
+
+
+def backfill_contacted_profiles_index(conn) -> None:
+    """Rebuild the contacted-profiles index from all jobs in the database."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM jobs ORDER BY id DESC")
+    jobs: list[Job] = []
+    for row in cursor.fetchall():
+        try:
+            jobs.append(parse_job_row(row))
+        except (KeyError, TypeError, ValueError):
+            continue
+    index = build_contacted_index(jobs)
+    cursor.execute(f"DELETE FROM {CONTACTED_PROFILES_TABLE}")
+    for slug, entries in index.items():
+        for entry in entries:
+            cursor.execute(
+                f"""
+                INSERT INTO {CONTACTED_PROFILES_TABLE}
+                    (profile_slug, job_id, company, title, contacted_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    slug,
+                    entry["jobId"],
+                    entry["company"],
+                    entry["title"],
+                    entry.get("contactedAt") or "",
+                ),
+            )
+    conn.commit()
+
+
+def ensure_contacted_profiles_index(conn) -> None:
+    """Create the index table and backfill once when missing or empty."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (CONTACTED_PROFILES_TABLE,),
+    )
+    existed_before = cursor.fetchone() is not None
+    cursor.execute(_CONTACTED_PROFILES_DDL)
+    conn.commit()
+
+    if not existed_before:
+        backfill_contacted_profiles_index(conn)
+        return
+
+    cursor.execute(f"SELECT COUNT(*) FROM {CONTACTED_PROFILES_TABLE}")
+    if cursor.fetchone()[0] == 0:
+        backfill_contacted_profiles_index(conn)
+
+
+def list_contacted_profile_rows(db_path=None) -> list[dict]:
+    """Return persisted contacted-profile index rows for tests and read paths."""
+    if db_path is None:
+        db_path = DB_PATH
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        f"""
+        SELECT profile_slug, job_id, company, title, contacted_at
+        FROM {CONTACTED_PROFILES_TABLE}
+        ORDER BY job_id
+        """
+    )
+    rows = [
+        {
+            "profile_slug": row["profile_slug"],
+            "job_id": row["job_id"],
+            "company": row["company"],
+            "title": row["title"],
+            "contacted_at": row["contacted_at"],
+        }
+        for row in cursor.fetchall()
+    ]
+    conn.close()
+    return rows

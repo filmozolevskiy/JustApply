@@ -1,12 +1,8 @@
 import json
 import os
-import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import src.core.enrichment.connection_note as connection_note_module
 from src.core.enrichment.connection_note import (
     COMPLETE_CANDIDATE_FIT_LINE,
@@ -35,31 +31,25 @@ def test_minimal_fallback_recruiter_has_correct_cta():
     result = minimal_fallback_template("recruiter")
     assert RECRUITER_CTA in result
 
-
 def test_minimal_fallback_russian_speaker_has_correct_cta():
     result = minimal_fallback_template("russian_speaker")
     assert RUSSIAN_SPEAKER_CTA in result
 
-
 def test_minimal_fallback_recruiter_within_200_chars():
     assert len(minimal_fallback_template("recruiter")) <= 200
 
-
 def test_minimal_fallback_russian_speaker_within_200_chars():
     assert len(minimal_fallback_template("russian_speaker")) <= 200
-
 
 def test_minimal_fallback_uses_hi_greeting():
     for audience in ("recruiter", "russian_speaker"):
         result = minimal_fallback_template(audience)
         assert result.startswith("Hi ______,")
 
-
 def test_minimal_fallback_contains_name_placeholder():
     for audience in ("recruiter", "russian_speaker"):
         result = minimal_fallback_template(audience)
         assert "______" in result.split("\n", 1)[0]
-
 
 def test_minimal_fallback_uses_job_company_and_title():
     job = {"title": "QA Lead", "company": "Acme"}
@@ -68,11 +58,9 @@ def test_minimal_fallback_uses_job_company_and_title():
     assert "______ is looking for a ______" not in result
     assert len(result) <= 200
 
-
 def test_minimal_fallback_contains_fit_line():
     for audience in ("recruiter", "russian_speaker"):
         assert FIT_LINE in minimal_fallback_template(audience)
-
 
 # --- Complete Outreach Fallback ---
 
@@ -85,18 +73,15 @@ def test_complete_outreach_fallback_uses_name_placeholder_and_profile_label():
     assert "QA Automator" in result
     assert len(result) > 200
 
-
 def test_complete_outreach_fallback_recruiter_cta():
     job = {"title": "Dev", "company": "Corp", "resumeUsed": "qa.md"}
     result = complete_outreach_fallback_template(job, "recruiter")
     assert RECRUITER_CTA in result
 
-
 def test_complete_outreach_fallback_russian_speaker_cta():
     job = {"title": "Dev", "company": "Corp", "resumeUsed": "qa.md"}
     result = complete_outreach_fallback_template(job, "russian_speaker")
     assert RUSSIAN_SPEAKER_CTA in result
-
 
 # --- Complete Outreach skeleton helpers ---
 
@@ -104,16 +89,13 @@ def test_complete_outreach_greeting_audience_specific():
     assert complete_outreach_greeting("recruiter") == "Hello ______,"
     assert complete_outreach_greeting("russian_speaker") == "Hi ______,"
 
-
 def test_parse_complete_outreach_json_strips_markdown_fence():
     raw = '```json\n{"adjustedPositionName": "QA Lead", "bullets": ["A"]}\n```'
     parsed = parse_complete_outreach_json(raw)
     assert parsed["adjustedPositionName"] == "QA Lead"
 
-
 def test_parse_complete_outreach_json_returns_none_for_invalid_json():
     assert parse_complete_outreach_json("not json") is None
-
 
 def test_normalize_complete_outreach_bullets_pads_from_strengths():
     bullets = normalize_complete_outreach_bullets(
@@ -122,7 +104,6 @@ def test_normalize_complete_outreach_bullets_pads_from_strengths():
     )
     assert bullets == ["Python skills", "CI/CD experience", "Selenium"]
 
-
 def test_normalize_complete_outreach_bullets_truncates_to_three():
     bullets = normalize_complete_outreach_bullets(
         ["A", "B", "C", "D"],
@@ -130,13 +111,11 @@ def test_normalize_complete_outreach_bullets_truncates_to_three():
     )
     assert bullets == ["A", "B", "C"]
 
-
 def test_extract_complete_outreach_slots_falls_back_to_job_title():
     job = {"title": "Senior QA Engineer", "company": "Acme", "strengths": []}
     slots = extract_complete_outreach_slots({}, job)
     assert slots["adjusted_position_name"] == "Senior QA Engineer"
     assert slots["bullets"] == []
-
 
 def test_normalize_complete_outreach_bullets_strips_trailing_justification():
     bullets = normalize_complete_outreach_bullets(
@@ -144,7 +123,6 @@ def test_normalize_complete_outreach_bullets_strips_trailing_justification():
         [],
     )
     assert bullets == ["Developed automated testing frameworks using Selenium and Java"]
-
 
 def test_assemble_complete_outreach_spacing_with_link_and_bullets():
     job = {
@@ -175,7 +153,6 @@ def test_assemble_complete_outreach_spacing_with_link_and_bullets():
     )
     assert expected_block in result
 
-
 def test_assemble_complete_outreach_recruiter_with_link_and_bullets():
     job = {
         "title": "Senior QA Engineer",
@@ -197,7 +174,6 @@ def test_assemble_complete_outreach_recruiter_with_link_and_bullets():
     assert COMPLETE_RECRUITER_CTA in result
     assert result.endswith(SIGN_OFF)
 
-
 def test_assemble_complete_outreach_russian_speaker_omits_link_when_missing():
     job = {"title": "QA Lead", "company": "Acme", "link": ""}
     slots = {"adjusted_position_name": "QA Lead", "bullets": ["Python"]}
@@ -207,7 +183,6 @@ def test_assemble_complete_outreach_russian_speaker_omits_link_when_missing():
     assert "http://" not in result
     assert complete_russian_speaker_cta("Acme") in result
 
-
 def test_assemble_complete_outreach_omits_bullet_block_when_empty():
     job = {"title": "QA Lead", "company": "Acme"}
     slots = {"adjusted_position_name": "QA Lead", "bullets": []}
@@ -216,17 +191,14 @@ def test_assemble_complete_outreach_omits_bullet_block_when_empty():
     assert "* " not in result
     assert COMPLETE_CANDIDATE_FIT_LINE in result
 
-
 # --- generate_complete_outreach_template ---
 
 @pytest.mark.asyncio
 async def test_generate_complete_outreach_falls_back_without_api_key():
     job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md", "link": "http://job.url", "description": ""}
-    with patch("src.core.enrichment.connection_note.load_dotenv"), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         result = await generate_complete_outreach_template(job, "recruiter")
     assert result == complete_outreach_fallback_template(job, "recruiter")
-
 
 @pytest.mark.asyncio
 async def test_generate_complete_outreach_assembles_from_llm_json(monkeypatch):
@@ -256,7 +228,6 @@ async def test_generate_complete_outreach_assembles_from_llm_json(monkeypatch):
     assert COMPLETE_RECRUITER_CTA in result
     assert result.endswith(SIGN_OFF)
 
-
 @pytest.mark.asyncio
 async def test_generate_complete_outreach_best_effort_on_partial_json(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -278,7 +249,6 @@ async def test_generate_complete_outreach_best_effort_on_partial_json(monkeypatc
     assert "* Only one bullet" in result
     assert "* Extra strength" in result
 
-
 @pytest.mark.asyncio
 async def test_generate_complete_outreach_falls_back_on_unparseable_json(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -295,17 +265,14 @@ async def test_generate_complete_outreach_falls_back_on_unparseable_json(monkeyp
         "recruiter",
     )
 
-
 # --- generate_connection_note_template ---
 
 @pytest.mark.asyncio
 async def test_generate_connection_note_falls_back_without_api_key():
     job = {"title": "QA Lead", "company": "Acme"}
-    with patch("src.core.enrichment.connection_note.load_dotenv"), \
-         patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
+    with patch.dict(os.environ, {"GEMINI_API_KEY": ""}):
         result = await generate_connection_note_template(job, "recruiter")
     assert result == minimal_fallback_template("recruiter", job)
-
 
 @pytest.mark.asyncio
 async def test_generate_connection_note_returns_short_llm_result(monkeypatch):
@@ -321,7 +288,6 @@ async def test_generate_connection_note_returns_short_llm_result(monkeypatch):
 
     assert result == short_note
     assert mock_generate.call_count == 1
-
 
 @pytest.mark.asyncio
 async def test_generate_connection_note_retries_when_first_result_too_long(monkeypatch):
@@ -341,7 +307,6 @@ async def test_generate_connection_note_retries_when_first_result_too_long(monke
     assert result == short_note
     assert mock_generate.call_count == 2
 
-
 @pytest.mark.asyncio
 async def test_generate_connection_note_falls_back_when_both_attempts_too_long(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -358,7 +323,6 @@ async def test_generate_connection_note_falls_back_when_both_attempts_too_long(m
     assert result == minimal_fallback_template("russian_speaker", {"title": "QA Lead", "company": "Acme"})
     assert len(result) <= 200
 
-
 @pytest.mark.asyncio
 async def test_generate_connection_note_falls_back_on_llm_exception(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
@@ -367,7 +331,6 @@ async def test_generate_connection_note_falls_back_on_llm_exception(monkeypatch)
         result = await generate_connection_note_template({"title": "QA Lead", "company": "Acme"}, "recruiter")
 
     assert result == minimal_fallback_template("recruiter", {"title": "QA Lead", "company": "Acme"})
-
 
 @pytest.mark.asyncio
 async def test_generate_connection_note_falls_back_on_llm_timeout(monkeypatch):
@@ -383,7 +346,6 @@ async def test_generate_connection_note_falls_back_on_llm_timeout(monkeypatch):
         result = await generate_connection_note_template({"title": "QA Lead", "company": "Acme"}, "recruiter")
 
     assert result == minimal_fallback_template("recruiter", {"title": "QA Lead", "company": "Acme"})
-
 
 # --- generate_outreach_templates ---
 
@@ -403,7 +365,6 @@ async def test_generate_outreach_templates_uses_complete_format_when_short_disab
     assert COMPLETE_OUTREACH_OPENER in result["recruiter"]
     assert result["russian_speaker"] == ""
 
-
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_complete_uses_single_llm_call_for_both_audiences():
     job = {"title": "QA Lead", "company": "Acme", "resumeUsed": "qa.md"}
@@ -421,7 +382,6 @@ async def test_generate_outreach_templates_complete_uses_single_llm_call_for_bot
     assert result["russian_speaker"].startswith("Hi ______,")
     assert COMPLETE_RECRUITER_CTA in result["recruiter"]
     assert complete_russian_speaker_cta("Acme") in result["russian_speaker"]
-
 
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_generates_both_on_empty_contacts():
@@ -444,7 +404,6 @@ async def test_generate_outreach_templates_generates_both_on_empty_contacts():
     assert result["recruiter"] == recruiter_note
     assert result["russian_speaker"] == russian_note
 
-
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_generates_only_recruiter_when_only_recruiter_contacts():
     job = {"title": "QA Lead", "company": "Acme"}
@@ -463,7 +422,6 @@ async def test_generate_outreach_templates_generates_only_recruiter_when_only_re
     assert "recruiter" in audiences_called
     assert "russian_speaker" not in audiences_called
 
-
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_generates_only_russian_when_only_russian_contacts():
     job = {"title": "QA Lead", "company": "Acme"}
@@ -481,7 +439,6 @@ async def test_generate_outreach_templates_generates_only_russian_when_only_russ
     audiences_called = [c.args[1] for c in mock_fn.call_args_list]
     assert "russian_speaker" in audiences_called
     assert "recruiter" not in audiences_called
-
 
 @pytest.mark.asyncio
 async def test_generate_outreach_templates_generates_both_for_mixed_contacts():

@@ -1,8 +1,11 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import asyncio
 import json
 import os
 import re
-import sys
 import time
 import uuid
 
@@ -12,29 +15,35 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from ..schemas import Job, OutreachSettings
-
-# Add project root to path so database module is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from ..core.batch_poller import poll_in_flight_batches
 from ..core.evaluation_lock import cancel_in_flight_batches, get_evaluation_lock_status
 from ..core.gemini_client import generate_text_from_pdf, get_api_key
+from ..core.source_platform import UnsupportedSourcePlatformError, validate_source_platform
 from ..db import (
+    add_job_comment,
     archive_job,
     archive_stale_rejected_jobs,
+    delete_job_comment,
     get_job,
     get_jobs,
     get_outreach_settings,
     init_db,
     log_activity,
     save_outreach_settings,
+    set_job_favorited,
     update_contact_status,
     update_job_comment,
     update_job_status,
     update_outreach_template,
 )
 from ..db import batch_jobs as batch_jobs_db
-from ..pipelines import run_load_more_contacts_pipeline, run_reclassify_pipeline
+from ..pipelines import (
+    run_company_research_pipeline,
+    run_company_research_repick_pipeline,
+    run_load_more_contacts_pipeline,
+    run_reclassify_pipeline,
+)
+from ..schemas import Job, OutreachSettings
 from ..service import (
     RateLimitError,
     acquire_scrape_slot,
@@ -43,9 +52,6 @@ from ..service import (
     parse_remote_types,
     search_jobs,
 )
-
-# Initialize SQLite database
-init_db()
 
 app = FastAPI(title="JustApply")
 
@@ -59,17 +65,21 @@ if os.path.isdir(STATIC_DIR):
 # In-memory storage for active scraping sessions
 active_tasks = {}
 
+# Grace period after the last SSE disconnect before pruning terminal tasks.
+TASK_PRUNE_TTL_SECONDS = float(os.environ.get("TASK_PRUNE_TTL_SECONDS", "60"))
+
 batch_poller_logs: list[dict] = []
-batch_poller_queue: asyncio.Queue | None = None
+batch_poller_subscribers: set[asyncio.Queue] = set()
 _batch_poller_task: asyncio.Task | None = None
 
 
 async def _emit_batch_poller_log(message: str, level: str = "info"):
-    global batch_poller_queue
     event = {"type": "log", "level": level, "message": message}
     batch_poller_logs.append({"level": level, "message": message})
-    if batch_poller_queue is not None:
-        await batch_poller_queue.put(event)
+    # Fan-out to every open SSE subscriber. A single shared queue only delivers
+    # each event to one consumer, so reconnects/extra tabs stole live lines.
+    for queue in list(batch_poller_subscribers):
+        await queue.put(event)
 
 
 async def run_batch_poller_loop():
@@ -89,17 +99,17 @@ async def run_batch_poller_loop():
 
 
 @app.on_event("startup")
-async def start_batch_poller():
-    global batch_poller_queue, _batch_poller_task
+async def start_application():
+    global _batch_poller_task
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
-    batch_poller_queue = asyncio.Queue()
+    init_db()
     _batch_poller_task = asyncio.create_task(run_batch_poller_loop())
 
 
 @app.on_event("shutdown")
 async def stop_batch_poller():
-    global batch_poller_queue, _batch_poller_task
+    global _batch_poller_task
     if _batch_poller_task is not None:
         _batch_poller_task.cancel()
         try:
@@ -107,7 +117,9 @@ async def stop_batch_poller():
         except asyncio.CancelledError:
             pass
         _batch_poller_task = None
-    batch_poller_queue = None
+    for queue in list(batch_poller_subscribers):
+        await queue.put(None)
+    batch_poller_subscribers.clear()
 
 
 @app.get("/api/health")
@@ -331,15 +343,46 @@ async def update_status(job_id: int, update: StatusUpdate):
     return updated
 
 
-class CommentUpdate(BaseModel):
-    comment: str
+class CommentCreate(BaseModel):
+    body: str
+    parentId: str | None = None
 
 
-@app.put("/api/jobs/{job_id}/comment", response_model=Job)
-async def update_comment(job_id: int, update: CommentUpdate):
-    updated = update_job_comment(job_id, update.comment)
+@app.post("/api/jobs/{job_id}/comments", response_model=Job)
+async def create_comment(job_id: int, payload: CommentCreate):
+    try:
+        updated = add_job_comment(job_id, payload.body, parent_id=payload.parentId)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
     if not updated:
         return JSONResponse(status_code=404, content={"message": "Job not found"})
+    return updated
+
+
+class CommentUpdate(BaseModel):
+    body: str
+
+
+@app.put("/api/jobs/{job_id}/comments/{comment_id}", response_model=Job)
+async def update_comment(job_id: int, comment_id: str, payload: CommentUpdate):
+    if not get_job(job_id):
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    try:
+        updated = update_job_comment(job_id, comment_id, payload.body)
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Comment not found"})
+    return updated
+
+
+@app.delete("/api/jobs/{job_id}/comments/{comment_id}", response_model=Job)
+async def delete_comment(job_id: int, comment_id: str):
+    if not get_job(job_id):
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    updated = delete_job_comment(job_id, comment_id)
+    if not updated:
+        return JSONResponse(status_code=404, content={"message": "Comment not found"})
     return updated
 
 
@@ -381,6 +424,18 @@ async def archive_job_endpoint(job_id: int):
         if job is None:
             return JSONResponse(status_code=404, content={"message": "Job not found"})
         return JSONResponse(status_code=422, content={"message": "Only Rejected jobs can be archived"})
+    return result
+
+
+class FavoriteUpdate(BaseModel):
+    favorited: bool
+
+
+@app.post("/api/jobs/{job_id}/favorite", response_model=Job)
+async def favorite_job_endpoint(job_id: int, update: FavoriteUpdate):
+    result = set_job_favorited(job_id, update.favorited)
+    if result is None:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
     return result
 
 
@@ -442,6 +497,74 @@ async def run_reclassify_task_with_logs(task_id: str, job_id: int):
         await state.queue.put(None)
 
 
+async def run_company_research_task_with_logs(
+    task_id: str,
+    job_id: int,
+    glassdoor_job_title: str,
+):
+    state = active_tasks.get(task_id)
+    if not state:
+        return
+
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        updated = await run_company_research_pipeline(
+            job_id,
+            glassdoor_job_title,
+            log_func=log_callback,
+        )
+        state.result = {"type": "result", "job": updated.model_dump()}
+        state.status = "completed"
+    except ValueError as e:
+        state.status = "failed"
+        await log_callback(f"Company research failed: {str(e)}", "error")
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Company research task failed: {str(e)}", "error")
+    finally:
+        await state.queue.put(None)
+
+
+async def run_company_research_repick_task_with_logs(
+    task_id: str,
+    job_id: int,
+    glassdoor_job_title: str,
+    glassdoor_company_id: str,
+    matched_name: str,
+):
+    state = active_tasks.get(task_id)
+    if not state:
+        return
+
+    async def log_callback(message: str, level: str = "info"):
+        event = {"level": level, "message": message}
+        state.logs.append(event)
+        await state.queue.put(event)
+
+    try:
+        updated = await run_company_research_repick_pipeline(
+            job_id,
+            glassdoor_job_title,
+            glassdoor_company_id,
+            matched_name,
+            log_func=log_callback,
+        )
+        state.result = {"type": "result", "job": updated.model_dump()}
+        state.status = "completed"
+    except ValueError as e:
+        state.status = "failed"
+        await log_callback(f"Company research repick failed: {str(e)}", "error")
+    except Exception as e:
+        state.status = "failed"
+        await log_callback(f"Company research repick task failed: {str(e)}", "error")
+    finally:
+        await state.queue.put(None)
+
+
 @app.post("/api/jobs/{job_id}/enrich")
 async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     updated = begin_enrichment(job_id)
@@ -455,6 +578,13 @@ async def enrich_job(job_id: int, background_tasks: BackgroundTasks):
     return {"task_id": task_id, "job_id": job_id, "job": updated}
 
 
+# Spend Confirmation — Apify per-run cost estimate (ADR 0007).
+# Preflight endpoints below multiply billable Apify runs by this constant for
+# estimated_cost in the Kanban modal (Enrich Job, Load More Contacts, Company
+# Research). $0.05/run is a conservative round figure for one actor start;
+# see docs/adr/0007-apify-spend-controls-and-accepted-lane.md and
+# docs/prd/company-research-glassdoor.md. Bright Data scrape ceilings use
+# SCRAPE_COST_PER_RECORD in static/js/spendConfirmation.js (ADR 0012).
 COST_PER_APIFY_RUN = 0.05
 
 
@@ -555,6 +685,221 @@ async def load_more_contacts(job_id: int):
     return updated
 
 
+class CompanyResearchRunRequest(BaseModel):
+    glassdoorJobTitle: str = ""
+
+
+@app.get("/api/jobs/{job_id}/company-research-preflight")
+async def company_research_preflight(
+    job_id: int,
+    glassdoorJobTitle: str = Query(default=""),
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+        resolve_company_research_slices,
+        slice_labels,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
+    resolved = resolve_company_research_slices(
+        job.company or "",
+        job.title or "",
+        glassdoor_job_title=title,
+    )
+    estimated_runs = resolved["estimated_runs"]
+    result = {
+        "will_call_apify": resolved["will_call_apify"],
+        "estimated_runs": estimated_runs,
+        "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
+        "cached_slices": slice_labels(resolved["cached_slices"]),
+        "billable_slices": slice_labels(resolved["billable_slices"]),
+        "default_glassdoor_job_title": resolved["default_glassdoor_job_title"],
+    }
+    preview = job.companyResearch or resolved.get("cache_row")
+    if preview:
+        result["cached_preview"] = preview
+    return result
+
+
+@app.post("/api/jobs/{job_id}/company-research")
+async def company_research_run(
+    job_id: int,
+    body: CompanyResearchRunRequest,
+    background_tasks: BackgroundTasks,
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=body.glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
+    background_tasks.add_task(
+        run_company_research_task_with_logs,
+        task_id,
+        job_id,
+        title,
+    )
+    return {"task_id": task_id, "job_id": job_id}
+
+
+class CompanyResearchRepickRequest(BaseModel):
+    glassdoorCompanyId: str
+    matchedName: str
+    glassdoorJobTitle: str = ""
+
+
+@app.post("/api/jobs/{job_id}/company-research/candidates")
+async def company_research_candidates(job_id: int):
+    from ..core.company_research.glassdoor_intel import fetch_glassdoor_company_candidates
+    from ..core.company_research.preflight import company_research_allowed
+    from ..db.company_research_cache import delete_company_research_cache, normalize_company_name
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+    if not job.companyResearch or not job.companyResearch.get("glassdoorCompanyId"):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research must be completed before repicking employer"},
+        )
+
+    company_key = normalize_company_name(job.company or "")
+    delete_company_research_cache(company_key)
+    try:
+        candidates = await fetch_glassdoor_company_candidates(job.company or "")
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"message": f"Glassdoor company search failed: {exc}"},
+        )
+    return {"candidates": candidates}
+
+
+@app.get("/api/jobs/{job_id}/company-research/repick-preflight")
+async def company_research_repick_preflight(
+    job_id: int,
+    glassdoorCompanyId: str = Query(...),
+    matchedName: str = Query(...),
+    glassdoorJobTitle: str = Query(default=""),
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+        resolve_repick_slices,
+        slice_labels,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
+    resolved = resolve_repick_slices(
+        job.company or "",
+        job.title or "",
+        title,
+        glassdoorCompanyId,
+        matchedName,
+    )
+    estimated_runs = resolved["estimated_runs"]
+    return {
+        "will_call_apify": resolved["will_call_apify"],
+        "estimated_runs": estimated_runs,
+        "estimated_cost": round(estimated_runs * COST_PER_APIFY_RUN, 2),
+        "cached_slices": slice_labels(resolved["cached_slices"]),
+        "billable_slices": slice_labels(resolved["billable_slices"]),
+        "default_glassdoor_job_title": resolved["default_glassdoor_job_title"],
+    }
+
+
+@app.post("/api/jobs/{job_id}/company-research/repick")
+async def company_research_repick(
+    job_id: int,
+    body: CompanyResearchRepickRequest,
+    background_tasks: BackgroundTasks,
+):
+    from ..core.company_research.preflight import (
+        company_research_allowed,
+        effective_glassdoor_job_title,
+    )
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"message": "Job not found"})
+    if not company_research_allowed(job.status, job.archived):
+        return JSONResponse(
+            status_code=422,
+            content={"message": "Company research is only available for Matched and later lanes"},
+        )
+    if not body.glassdoorCompanyId or not body.matchedName:
+        return JSONResponse(
+            status_code=422,
+            content={"message": "glassdoorCompanyId and matchedName are required"},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState({"job_id": job_id})
+    active_tasks[task_id] = state
+    title = effective_glassdoor_job_title(
+        job.title or "",
+        glassdoor_job_title=body.glassdoorJobTitle or None,
+        existing_research=job.companyResearch,
+    )
+    background_tasks.add_task(
+        run_company_research_repick_task_with_logs,
+        task_id,
+        job_id,
+        title,
+        body.glassdoorCompanyId,
+        body.matchedName,
+    )
+    return {"task_id": task_id, "job_id": job_id}
+
+
 @app.get("/")
 @app.get("/dashboard")
 async def get_dashboard():
@@ -571,6 +916,19 @@ class TaskState:
         self.jobs = []
         self.result = None  # Generic result payload for non-search tasks
         self.status = "running"
+        self.stream_count = 0
+
+
+async def _schedule_active_task_prune(task_id: str) -> None:
+    await asyncio.sleep(TASK_PRUNE_TTL_SECONDS)
+    state = active_tasks.get(task_id)
+    if state is None:
+        return
+    if state.status not in ("completed", "failed"):
+        return
+    if state.stream_count > 0:
+        return
+    active_tasks.pop(task_id, None)
 
 
 class SearchRegionItem(BaseModel):
@@ -592,6 +950,7 @@ class SearchRequest(BaseModel):
     seniority: str = "any"
     salary: str = ""
     company_size: str = "any"
+    employment_type: str = "any"
     countries: str = "us"
     time_range: str = "any"
 
@@ -628,8 +987,11 @@ async def run_scraping_task(task_id: str):
             allowed_remote_types=parse_remote_types(params.get("remote_type", "any")),
             seniorities=params.get("seniority", "any"),
             company_sizes=params.get("company_size", "any"),
+            employment_types=params.get("employment_type", "any"),
+            salary=params.get("salary", ""),
             countries=params.get("countries", "us"),
             time_range=params.get("time_range", "any"),
+            platform=params.get("platform"),
             log_func=log_callback,
             job_saved_func=job_saved_callback,
             rate_limit=False,
@@ -646,16 +1008,55 @@ async def run_scraping_task(task_id: str):
         await state.queue.put(None)
 
 
-@app.post("/api/search")
-async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
-    from ..core.regions import clamp_per_region_limit, validate_search_regions
-
+def _evaluation_lock_response() -> JSONResponse | None:
     lock_status = get_evaluation_lock_status()
     if lock_status["active"]:
         return JSONResponse(
             status_code=409,
-            content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
+            content={
+                "message": (
+                    f"Evaluation in progress: {lock_status['jobCount']} job(s) are being "
+                    "assessed. Wait for completion or cancel from the dashboard."
+                ),
+            },
         )
+    return None
+
+
+def _trigger_scrape_task(
+    params: dict,
+    background_tasks: BackgroundTasks,
+    *,
+    mock_eval: bool,
+    mock_scraper: bool | None,
+) -> dict | JSONResponse:
+    lock_response = _evaluation_lock_response()
+    if lock_response is not None:
+        return lock_response
+
+    try:
+        acquire_scrape_slot(mock_eval, mock_scraper)
+    except RateLimitError as e:
+        return JSONResponse(
+            status_code=429,
+            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."},
+        )
+
+    task_id = str(uuid.uuid4())
+    state = TaskState(params)
+    active_tasks[task_id] = state
+    background_tasks.add_task(run_scraping_task, task_id)
+    return {"status": "triggered", "task_id": task_id}
+
+
+@app.post("/api/search")
+async def trigger_search(request: SearchRequest, background_tasks: BackgroundTasks):
+    from ..core.regions import clamp_per_region_limit, validate_search_regions
+
+    try:
+        request.platform = validate_source_platform(request.platform)
+    except UnsupportedSourcePlatformError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
 
     country_list = [c.strip() for c in request.countries.split(",") if c.strip()]
     region_pairs = [(item.country, item.region) for item in request.search_regions]
@@ -664,27 +1065,23 @@ async def trigger_search(request: SearchRequest, background_tasks: BackgroundTas
     except ValueError as e:
         return JSONResponse(status_code=422, content={"message": str(e)})
 
-    clamped_limit = clamp_per_region_limit(request.per_region_limit)
-
-    try:
-        acquire_scrape_slot(request.mock_eval, request.mock_scraper)
-    except RateLimitError as e:
-        return JSONResponse(
-            status_code=429,
-            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
-        )
-
-    task_id = str(uuid.uuid4())
     params = request.model_dump()
     params["search_regions"] = normalized_regions
-    params["per_region_limit"] = clamped_limit
-    state = TaskState(params)
-    active_tasks[task_id] = state
-    background_tasks.add_task(run_scraping_task, task_id)
-    return {"status": "triggered", "task_id": task_id}
+    params["per_region_limit"] = clamp_per_region_limit(request.per_region_limit)
+    return _trigger_scrape_task(
+        params,
+        background_tasks,
+        mock_eval=request.mock_eval,
+        mock_scraper=request.mock_scraper,
+    )
 
 
-@app.post("/api/scrape")
+@app.post(
+    "/api/scrape",
+    deprecated=True,
+    summary="Trigger job scrape (deprecated)",
+    description="Deprecated alias for POST /api/search. Prefer POST /api/search with a JSON body.",
+)
 async def trigger_scrape(
     background_tasks: BackgroundTasks,
     query: str = Query("Senior QA Automation"),
@@ -700,22 +1097,11 @@ async def trigger_scrape(
     countries: str = Query("us"),
     time_range: str = Query("any"),
 ):
-    lock_status = get_evaluation_lock_status()
-    if lock_status["active"]:
-        return JSONResponse(
-            status_code=409,
-            content={"message": f"Evaluation in progress: {lock_status['jobCount']} job(s) are being assessed. Wait for completion or cancel from the dashboard."},
-        )
-
     try:
-        acquire_scrape_slot(mock_eval, mock_scraper)
-    except RateLimitError as e:
-        return JSONResponse(
-            status_code=429,
-            content={"message": f"Too many requests. Please wait {e.wait_seconds} seconds."}
-        )
+        platform = validate_source_platform(platform)
+    except UnsupportedSourcePlatformError as e:
+        return JSONResponse(status_code=422, content={"message": str(e)})
 
-    task_id = str(uuid.uuid4())
     params = {
         "query": query,
         "location": location,
@@ -730,10 +1116,12 @@ async def trigger_scrape(
         "countries": countries,
         "time_range": time_range,
     }
-    state = TaskState(params)
-    active_tasks[task_id] = state
-    background_tasks.add_task(run_scraping_task, task_id)
-    return {"status": "triggered", "task_id": task_id}
+    return _trigger_scrape_task(
+        params,
+        background_tasks,
+        mock_eval=mock_eval,
+        mock_scraper=mock_scraper,
+    )
 
 
 @app.get("/api/logs/{task_id}")
@@ -758,6 +1146,7 @@ async def logs_stream(task_id: str, skip: int = 0):
         def _yield_result(item: dict):
             return {"data": json.dumps(item)}
 
+        state.stream_count += 1
         try:
             for log in state.logs[skip:]:
                 yield _yield_log(log["level"], log["message"])
@@ -781,7 +1170,12 @@ async def logs_stream(task_id: str, skip: int = 0):
                 yield _yield_result(item)
 
             while True:
-                item = await state.queue.get()
+                try:
+                    item = state.queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    if state.status in ("completed", "failed"):
+                        break
+                    item = await state.queue.get()
                 if item is None:
                     break
                 if item.get("type") == "result":
@@ -805,8 +1199,13 @@ async def logs_stream(task_id: str, skip: int = 0):
 
         except asyncio.CancelledError:
             pass
+        finally:
+            state.stream_count -= 1
+            if state.status in ("completed", "failed"):
+                asyncio.create_task(_schedule_active_task_prune(task_id))
 
-    return EventSourceResponse(event_generator())
+    # Built-in ping keeps proxies/EventSource alive during long Apify Actor waits.
+    return EventSourceResponse(event_generator(), ping=15)
 
 
 @app.get("/api/batch-poller/logs")
@@ -815,7 +1214,21 @@ async def batch_poller_logs_stream(skip: int = 0):
         skip = 0
 
     async def event_generator():
-        for log in batch_poller_logs[skip:]:
+        # Slice copies the buffer so later appends are not double-delivered via
+        # replay; those arrive only through this connection's subscriber queue.
+        buffer_len = len(batch_poller_logs)
+        # localStorage skip can outlive an in-memory buffer reset (uvicorn
+        # reload). A skip past the current buffer would replay nothing.
+        effective_skip = 0 if skip > buffer_len else skip
+        buffered = batch_poller_logs[effective_skip:]
+        yield {
+            "data": json.dumps({
+                "type": "hello",
+                "bufferLength": buffer_len,
+                "effectiveSkip": effective_skip,
+            })
+        }
+        for log in buffered:
             yield {
                 "data": json.dumps({
                     "type": "log",
@@ -824,14 +1237,18 @@ async def batch_poller_logs_stream(skip: int = 0):
                 })
             }
 
-        queue = batch_poller_queue
-        if queue is None:
-            return
+        queue: asyncio.Queue = asyncio.Queue()
+        batch_poller_subscribers.add(queue)
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield {"data": json.dumps(item)}
+        except asyncio.CancelledError:
+            raise
+        finally:
+            batch_poller_subscribers.discard(queue)
 
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            yield {"data": json.dumps(item)}
-
-    return EventSourceResponse(event_generator())
+    # Built-in ping keeps proxies/EventSource alive and cancels on disconnect.
+    return EventSourceResponse(event_generator(), ping=15)

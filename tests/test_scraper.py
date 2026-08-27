@@ -1,15 +1,11 @@
 import json
-import os
-import sys
 
 import pytest
-from fastapi.testclient import TestClient
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import src.db.connection as _db_connection
+from fastapi.testclient import TestClient
 from src import db as database
 from src.core.scraper import (
+    _build_brightdata_trigger_payload,
     is_eastern_timezone,
     match_company_size,
     matches_position_keywords,
@@ -88,6 +84,219 @@ def test_normalize_brightdata_job_preserves_company_url():
     )
 
 
+def test_normalize_brightdata_job_maps_employment_type():
+    """Bright Data job_employment_type becomes stored Employment Type."""
+    raw_job = {
+        "job_title": "Senior QA",
+        "company_name": "Acme",
+        "url": "https://linkedin.com/jobs/et-1",
+        "job_location": "Remote",
+        "is_remote": True,
+        "job_employment_type": "Full-time",
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert result["employmentType"] == "Full-time"
+
+
+def test_normalize_brightdata_job_missing_employment_type_is_blank():
+    """Blank/missing Employment Type stays unknown — no fake value."""
+    raw_job = {
+        "job_title": "Senior QA",
+        "company_name": "Acme",
+        "url": "https://linkedin.com/jobs/et-2",
+        "job_location": "Remote",
+        "is_remote": True,
+    }
+    result = normalize_brightdata_job(raw_job)
+    assert result["employmentType"] == ""
+
+
+def test_trigger_payload_includes_job_type_for_single_employment_type():
+    """Exactly one Employment Type preference sets Bright Data job_type."""
+    payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("CA", "Ontario, Canada")],
+        time_range="any",
+        employment_types=["Full-time"],
+    )
+    assert len(payload) == 1
+    assert payload[0]["job_type"] == "Full-time"
+    assert payload[0]["keyword"] == "QA"
+    assert payload[0]["location"] == "Ontario, Canada"
+
+
+def test_trigger_payload_omits_job_type_for_any_and_multi_employment_types():
+    """Any / multi-select omit Bright Data job_type (post-filter handles multi)."""
+    any_payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("US", "Remote")],
+        time_range="any",
+        employment_types=["any"],
+    )
+    assert "job_type" not in any_payload[0]
+
+    none_payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("US", "Remote")],
+        time_range="any",
+        employment_types=None,
+    )
+    assert "job_type" not in none_payload[0]
+
+    multi_payload = _build_brightdata_trigger_payload(
+        query="QA",
+        search_regions=[("US", "Remote")],
+        time_range="any",
+        employment_types=["Full-time", "Contract"],
+    )
+    assert "job_type" not in multi_payload[0]
+
+
+@pytest.mark.asyncio
+async def test_scrape_post_filters_employment_types_and_drops_unknown(monkeypatch):
+    """Active Employment Type prefs keep selected types and drop blank/unknown."""
+
+    async def fake_mock(query, location, log):
+        return [
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-ft",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Full-time listing",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Full-time",
+                "is_remote": True,
+            },
+            {
+                "job_title": f"Contract {query}",
+                "company_name": "BrightFlow Co.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-ct",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Contract listing",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Contract",
+                "is_remote": True,
+            },
+            {
+                "job_title": f"Unknown {query}",
+                "company_name": "Mystery LLC",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-blank",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "No employment type",
+                "job_seniority_level": "senior",
+                "is_remote": True,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "src.core.scraper._scrape_linkedin_jobs_mock",
+        fake_mock,
+    )
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="Toronto",
+        company_sizes="any",
+        employment_types="Full-time,Contract",
+        log_func=print,
+    )
+    types = {j["employmentType"] for j in jobs}
+    assert types == {"Full-time", "Contract"}
+    assert all(j["employmentType"] for j in jobs)
+
+
+@pytest.mark.asyncio
+async def test_scrape_any_employment_type_does_not_post_filter(monkeypatch):
+    """“Any” keeps all Employment Types including blank/unknown."""
+
+    async def fake_mock(query, location, log):
+        return [
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-any-ft",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Full-time",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Full-time",
+                "is_remote": True,
+            },
+            {
+                "job_title": f"Blank {query}",
+                "company_name": "Mystery LLC",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-any-blank",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Unknown type",
+                "job_seniority_level": "senior",
+                "is_remote": True,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "src.core.scraper._scrape_linkedin_jobs_mock",
+        fake_mock,
+    )
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="Toronto",
+        company_sizes="any",
+        employment_types="any",
+        log_func=print,
+    )
+    assert len(jobs) == 2
+    assert {j["employmentType"] for j in jobs} == {"Full-time", ""}
+
+
+@pytest.mark.asyncio
+async def test_scrape_skips_error_only_snapshot_rows(monkeypatch):
+    """Bright Data mismatch/error rows are not treated as jobs."""
+
+    async def fake_mock(query, location, log):
+        return [
+            {
+                "error": "The value of `job_type` is invalid for this input",
+                "error_code": "validation_error",
+                "input": {"job_type": "Internship"},
+            },
+            {
+                "job_title": f"Senior {query}",
+                "company_name": "ScaleLabs Inc.",
+                "company_size": "750",
+                "url": "https://linkedin.com/jobs/mock-et-ok",
+                "date_posted": "2026-06-07",
+                "job_location": location,
+                "job_summary": "Valid listing",
+                "job_seniority_level": "senior",
+                "job_employment_type": "Contract",
+                "salary": "$145k - $175k",
+                "is_remote": True,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "src.core.scraper._scrape_linkedin_jobs_mock",
+        fake_mock,
+    )
+    jobs = await scrape_linkedin_jobs(
+        query="QA Engineer",
+        location="Toronto",
+        company_sizes="large",
+        log_func=print,
+    )
+    assert len(jobs) == 1
+    assert jobs[0]["company"] == "ScaleLabs Inc."
+    assert jobs[0]["employmentType"] == "Contract"
+
 def test_normalize_brightdata_job_sets_is_job_poster_flag():
     raw_job = {
         "job_title": "Senior QA",
@@ -107,7 +316,6 @@ def test_normalize_brightdata_job_sets_is_job_poster_flag():
     assert contact["is_job_poster"] is True
     assert contact["name"] == "Sarah Jenkins"
 
-
 def test_normalize_brightdata_job_no_poster_yields_empty_contacts():
     raw_job = {
         "job_title": "Senior QA",
@@ -118,7 +326,6 @@ def test_normalize_brightdata_job_no_poster_yields_empty_contacts():
     }
     result = normalize_brightdata_job(raw_job)
     assert result["contacts"] == []
-
 
 def test_company_size_matching():
     assert match_company_size("1-50", ["small"]) is True
@@ -181,7 +388,6 @@ def test_api_search_and_sse_logs():
     # so we should get multiple matching jobs.
     assert len(db_jobs) > 6
 
-
 def test_api_logs_replay_reconnection():
     # Create a task state manually in active_tasks
     task_id = "test-reconnect-task-id"
@@ -220,7 +426,6 @@ def test_api_logs_replay_reconnection():
         # Clean up
         active_tasks.pop(task_id, None)
 
-
 @pytest.mark.asyncio
 async def test_scraper_trigger_fails_immediately(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -248,7 +453,6 @@ async def test_scraper_trigger_fails_immediately(monkeypatch):
         assert call_kwargs["params"]["type"] == "discover_new"
         assert call_kwargs["params"]["discover_by"] == "keyword"
         assert call_kwargs["json"][0]["keyword"] == "QA Engineer"
-
 
 @pytest.mark.asyncio
 async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
@@ -319,7 +523,6 @@ async def test_scraper_polling_retry_on_transient_failure(monkeypatch):
         # Verify sleep was called for backoff and for polling wait.
         assert mock_sleep.call_count >= 2
 
-
 @pytest.mark.asyncio
 async def test_scraper_polling_fails_persistently(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -353,7 +556,6 @@ async def test_scraper_polling_fails_persistently(monkeypatch):
         assert mock_get_patched.call_count == 3
         # Verify sleep was called for backoff retries and polling waits
         assert mock_sleep.call_count >= 3
-
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
@@ -419,7 +621,6 @@ async def test_scraper_snapshot_fetch_retry_on_transient_failure(monkeypatch):
         # Verify get was called 3 times: 1 for progress, 2 for snapshot
         assert len(get_calls) == 3
 
-
 @pytest.mark.asyncio
 async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -465,7 +666,6 @@ async def test_scraper_snapshot_fetch_fails_persistently(monkeypatch):
         assert "Failed to fetch snapshot results after 3 attempts: HTTP 500" in str(excinfo.value)
         # Verify get was called 4 times: 1 for progress, 3 for snapshot
         assert len(get_calls) == 4
-
 
 @pytest.mark.asyncio
 async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
@@ -526,7 +726,6 @@ async def test_scraper_snapshot_polls_on_http_202(monkeypatch):
     assert len(get_calls) == 4  # 1 progress + 3 snapshot (2×202, then 200)
     assert mock_sleep.call_count >= 2
 
-
 @pytest.mark.asyncio
 async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
     """'running' repeated three times before 'ready' — 'Scraper status: running' logged once."""
@@ -574,7 +773,6 @@ async def test_scraper_poll_logs_status_once_when_repeated(monkeypatch):
     assert sum(1 for m in status_logs if "ready" in m) == 1
     assert len(status_logs) == 2
 
-
 @pytest.mark.asyncio
 async def test_scraper_poll_logs_failed_status_once(monkeypatch):
     """'failed' scraper status is logged once when status transitions to failed."""
@@ -617,7 +815,4 @@ async def test_scraper_poll_logs_failed_status_once(monkeypatch):
     status_logs = [m for m in logged if m.startswith("Scraper status:")]
     assert sum(1 for m in status_logs if "running" in m) == 1
     assert sum(1 for m in status_logs if "failed" in m) == 1
-
-
-
 

@@ -1,0 +1,49 @@
+# Ralph Loop Progress — PRD #170
+
+
+## 2026-07-26 — #172 Persist Employment Type from scrape → API → drawer
+
+- Added `employmentType` on Job schema + migration 011 (empty default for legacy rows).
+- Scrape normalize maps Bright Data `job_employment_type`; error-only snapshot rows skipped.
+- Mock scrape + post-seed Employment Type values for local demos; GET `/api/jobs` exposes field.
+- Drawer Job Info shows Employment Type when known (omitted when blank); no Kanban card badge.
+- Tests: `tests/test_employment_type.py`, scraper normalize/error-skip, migrations column check.
+- Quality: ruff, mypy, pytest --cov (960 passed, ≥84% coverage).
+
+## 2026-07-26 — #173 Board Controls multi-select Employment Type refine
+
+- Refine board: five Employment Type checkboxes (Full-time, Contract, Part-time, Temporary, Volunteer).
+- `filterJobs` ANDs selected types; none checked = no refine (unknowns visible); any checked hides unknowns/non-matches.
+- Persists in `boardFilterEmploymentTypes` localStorage; Reset filters clears to none; empty hint when refine yields zero cards.
+- Drawer prev/next follows filtered set via existing `getBoardJobOrder` + `getBoardFiltersFromDom`.
+- Tests: `filterJobs` / `getBoardJobOrder` seams + panel chrome checkboxes/reset/hint wiring.
+- Quality: ruff, mypy, pytest --cov (964 passed, ≥84% coverage).
+
+## 2026-07-26 — #174 Job Search Settings + Bright Data Employment Type scrape rules
+
+- Job Search Settings: five Employment Type checkboxes (default/Reset = none = “any”).
+- Search POST carries `employment_type`; pipeline forwards prefs to scrape.
+- Bright Data trigger sets `job_type` only for exactly one selected type; multi/any omit it.
+- Scrape post-filter enforces selected types when prefs active; drops blank/unknown and error rows; “any” does not filter by type.
+- Tests: trigger payload, post-filter, API/pipeline wire, panel chrome settings UI.
+- Quality: ruff, mypy, pytest --cov (971 passed, ≥84% coverage).
+
+
+## 2026-07-26 — #175 Resume Matcher Employment Type + attribute gate on search/backfill
+
+- Matcher prompt/JSON includes Employment Type; merge prefers matcher over scrape (per-field scraper fallback on Unclassified).
+- Migration 012: `searchEmploymentTypes` on Batch Evaluation Job; search/backfill submit persist prefs from Job Search Settings (CLI stays “any”).
+- Batch Poller attribute-gates Employment Type when prefs are not “any”; mismatch → Rejected (attribute-filtered); “any” skips that dimension.
+- `update_job_evaluation` persists Employment Type; evaluation summaries count Employment Type rejects in attribute-filtered totals.
+- Tests: `test_attribute_gating`, `test_batch_poller`, batch prefs persistence, search/backfill wire.
+- Quality: ruff, mypy, pytest --cov (978 passed, ≥84% coverage).
+
+
+## 2026-07-26 — #176 Reassess gates Employment Type with Scraped/Matched-only Reject
+
+- Reassess pipeline applies attribute gate (remote/seniority/Employment Type) from caller prefs; defaults “any” for CLI.
+- Gate failure: Scraped/Matched → Rejected; Accepted/Applied/Interviewing/Rejected keep lane while matcher fields (incl. Employment Type) update.
+- Service `reassess_job` / `reassess_all_jobs` forward Job Search Settings prefs for dashboard path.
+- Tests: `tests/test_reassess.py` lane rules, any-skip, service forward.
+- Quality: ruff, mypy, pytest --cov (986 passed, ≥84% coverage).
+

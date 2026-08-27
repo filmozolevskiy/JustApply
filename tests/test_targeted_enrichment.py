@@ -1,11 +1,7 @@
-import os
-import sys
 import unittest
 from unittest.mock import patch
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from src.core.enrichment.contact_sample import company_cache_slug
 from src.core.enrichment.source import source_contacts
 from src.schemas import Job, OutreachSettings
@@ -122,7 +118,6 @@ class TestTargetedEnrichmentCaching(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mock_apify.call_args[1]["locations"], ["United States"])
         args, _ = mock_set_cache.call_args
         self.assertEqual(args[0], "testco-united-states")
-
 
 if __name__ == "__main__":
     unittest.main()

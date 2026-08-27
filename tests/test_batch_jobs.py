@@ -1,10 +1,5 @@
-import os
-import sys
 
 import pytest
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from src import db as database
 from src.db import batch_jobs
 
@@ -15,7 +10,6 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
     database.init_db(str(db_path))
     return db_path
-
 
 def test_create_and_get_batch_job_round_trip(tmp_db):
     row = batch_jobs.create_batch_job(
@@ -43,6 +37,53 @@ def test_create_and_get_batch_job_round_trip(tmp_db):
     assert by_name == row
 
 
+def test_create_batch_job_persists_employment_type_prefs(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/emp-prefs",
+        display_name="emp",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        search_remote_types=["remote"],
+        search_seniorities="senior",
+        search_employment_types="Full-time,Contract",
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchEmploymentTypes"] == "Full-time,Contract"
+    fetched = batch_jobs.get_batch_job(row["id"], db_path=str(tmp_db))
+    assert fetched["searchEmploymentTypes"] == "Full-time,Contract"
+    assert fetched["searchSeniorities"] == "senior"
+
+
+def test_create_batch_job_persists_salary_min_pref(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/salary-min",
+        display_name="salary",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        search_salary_min=120000,
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchSalaryMin"] == 120000
+    fetched = batch_jobs.get_batch_job(row["id"], db_path=str(tmp_db))
+    assert fetched["searchSalaryMin"] == 120000
+
+
+def test_create_batch_job_null_salary_min_when_unset(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/no-salary-min",
+        display_name="none",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchSalaryMin"] is None
+
 def test_batch_name_uniqueness_enforced(tmp_db):
     batch_jobs.create_batch_job(
         batch_name="batches/dup",
@@ -62,7 +103,6 @@ def test_batch_name_uniqueness_enforced(tmp_db):
             job_ids=[2],
             db_path=str(tmp_db),
         )
-
 
 def test_update_batch_job_persists_fields(tmp_db):
     row = batch_jobs.create_batch_job(
@@ -89,7 +129,6 @@ def test_update_batch_job_persists_fields(tmp_db):
     assert updated["lastPolledAt"] == "2026-06-26T12:00:00+00:00"
     assert updated["resultFileName"] == "files/result.jsonl"
     assert updated["jobIds"] == [10, 11]
-
 
 def test_in_flight_job_ids_exclude_terminal_states(tmp_db):
     batch_jobs.create_batch_job(

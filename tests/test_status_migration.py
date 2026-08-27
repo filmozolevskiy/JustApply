@@ -12,21 +12,15 @@ Covers:
 
 import os
 import sqlite3
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.db import VALID_STATUSES, add_job, get_jobs, init_db, update_job_status
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
-
 def _read_html():
     with open(HTML_PATH, encoding="utf-8") as f:
         return f.read()
-
 
 # ── Status enum ──────────────────────────────────────────────────────────────
 
@@ -34,18 +28,15 @@ def test_valid_statuses_contains_scraped_and_matched():
     assert "scraped" in VALID_STATUSES
     assert "matched" in VALID_STATUSES
 
-
 def test_valid_statuses_excludes_legacy_values():
     assert "found" not in VALID_STATUSES
     assert "sourced" not in VALID_STATUSES
-
 
 def test_update_job_status_rejects_found(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
     with pytest.raises(ValueError, match="Invalid status"):
         update_job_status(1, "found", db_str)
-
 
 def test_update_job_status_accepts_scraped(tmp_path):
     db_str = str(tmp_path / "test.db")
@@ -55,7 +46,6 @@ def test_update_job_status_accepts_scraped(tmp_path):
     assert updated is not None
     assert updated.status == "scraped"
 
-
 def test_update_job_status_accepts_matched(tmp_path):
     db_str = str(tmp_path / "test.db")
     init_db(db_str)
@@ -63,7 +53,6 @@ def test_update_job_status_accepts_matched(tmp_path):
     updated = update_job_status(job_id, "matched", db_str)
     assert updated is not None
     assert updated.status == "matched"
-
 
 # ── Seed data ────────────────────────────────────────────────────────────────
 
@@ -75,7 +64,6 @@ def test_seed_jobs_use_scraped_status(tmp_path):
     assert len(scraped_or_other) == len(jobs), (
         f"All seeded jobs must use new statuses; got {[j.status for j in jobs]}"
     )
-
 
 # ── DB migration ─────────────────────────────────────────────────────────────
 
@@ -113,16 +101,13 @@ def test_migration_found_to_scraped_and_matched(tmp_path):
     assert rows["Job C"] == "scraped"
     assert rows["Job D"] == "rejected"
 
-
 def test_kanban_has_scraped_lane():
     content = _read_html()
     assert 'data-lane="scraped"' in content, "Kanban must have a Scraped lane"
 
-
 def test_kanban_has_matched_lane():
     content = _read_html()
     assert 'data-lane="matched"' in content, "Kanban must have a Matched lane"
-
 
 def test_kanban_no_found_lane():
     content = _read_html()

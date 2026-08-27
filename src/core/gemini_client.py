@@ -3,7 +3,6 @@
 import asyncio
 import os
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
@@ -13,7 +12,6 @@ PDF_TIMEOUT_SECONDS = 60.0
 
 
 def get_api_key() -> str | None:
-    load_dotenv(override=True)
     return os.getenv("GEMINI_API_KEY")
 
 

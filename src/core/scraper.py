@@ -1,15 +1,12 @@
 import asyncio
+import inspect
 import json
 import os
 import re
 
 import httpx
-from dotenv import load_dotenv
 
 from .pre_evaluation import normalize_remote_type
-
-# Load environment variables
-load_dotenv()
 
 # Timezone filtering constants
 EASTERN_STATES = {
@@ -111,6 +108,17 @@ def match_company_size(job_size_str: str, allowed_sizes: list) -> bool:
         matched = True
     return matched
 
+def is_brightdata_error_row(job: dict) -> bool:
+    """True for Bright Data snapshot rows that are errors, not listings."""
+    if not isinstance(job, dict):
+        return True
+    if job.get("error") or job.get("error_code"):
+        title = job.get("job_title") or job.get("title") or ""
+        company = job.get("company_name") or job.get("company") or ""
+        return not (str(title).strip() or str(company).strip())
+    return False
+
+
 def normalize_brightdata_job(job: dict) -> dict:
     """Normalize a Bright Data job object into the standard database schema."""
     title = job.get("job_title") or job.get("title") or ""
@@ -144,7 +152,14 @@ def normalize_brightdata_job(job: dict) -> dict:
         
     salary = job.get("salary") or job.get("salary_formatted") or ""
     description = job.get("job_summary") or job.get("description") or ""
-    
+    employment_type = (
+        job.get("job_employment_type") or job.get("employmentType") or ""
+    )
+    if isinstance(employment_type, str):
+        employment_type = employment_type.strip()
+    else:
+        employment_type = ""
+
     # Preserve job_poster if it exists
     contacts = []
     job_poster = job.get("job_poster")
@@ -168,6 +183,7 @@ def normalize_brightdata_job(job: dict) -> dict:
         "location": location,
         "remoteType": remote_type,
         "seniority": seniority,
+        "employmentType": employment_type,
         "salary": salary,
         "description": description,
         "status": "scraped",
@@ -199,6 +215,7 @@ async def _scrape_linkedin_jobs_mock(
             "job_location": location,
             "job_summary": f"We are seeking a senior practitioner in {query} to lead our automation pipelines and delivery patterns. The ideal candidate will work remote or hybrid.",
             "job_seniority_level": "senior",
+            "job_employment_type": "Full-time",
             "salary": "$145k - $175k",
             "is_remote": True,
             "job_poster": {
@@ -216,6 +233,7 @@ async def _scrape_linkedin_jobs_mock(
             "job_location": location,
             "job_summary": f"Lead development and QA integrations for our data processing streams. High proficiency in {query} required.",
             "job_seniority_level": "senior",
+            "job_employment_type": "Contract",
             "is_hybrid": True,
             "salary": "$160k - $190k"
         },
@@ -228,27 +246,80 @@ async def _scrape_linkedin_jobs_mock(
             "job_location": "San Francisco, CA",
             "job_summary": f"Help our engineering team with entry level tasks regarding {query}. Work in PST timezone only.",
             "job_seniority_level": "junior",
+            "job_employment_type": "Part-time",
             "salary": "$70k - $90k"
         }
     ]
 
+ALLOWED_EMPLOYMENT_TYPES = (
+    "Full-time",
+    "Contract",
+    "Part-time",
+    "Temporary",
+    "Volunteer",
+)
+_EMPLOYMENT_TYPE_BY_LOWER = {t.lower(): t for t in ALLOWED_EMPLOYMENT_TYPES}
+
+
+def parse_employment_types(employment_types) -> list[str]:
+    """Normalize Employment Type prefs to canonical labels, or ``["any"]``."""
+    if employment_types is None:
+        return ["any"]
+    if isinstance(employment_types, str):
+        parts = [p.strip() for p in employment_types.split(",") if p.strip()]
+    elif isinstance(employment_types, list):
+        parts = [str(p).strip() for p in employment_types if p]
+    else:
+        return ["any"]
+    if not parts or any(p.lower() == "any" for p in parts):
+        return ["any"]
+    result: list[str] = []
+    for part in parts:
+        canonical = _EMPLOYMENT_TYPE_BY_LOWER.get(part.lower())
+        if canonical and canonical not in result:
+            result.append(canonical)
+    return result or ["any"]
+
+
+def match_employment_type(job_employment_type: str, allowed_types: list) -> bool:
+    """Return True when job Employment Type is allowed (or prefs are any).
+
+    Blank/unknown types fail when any preference is active.
+    """
+    if not allowed_types or "any" in allowed_types:
+        return True
+    if not job_employment_type or not str(job_employment_type).strip():
+        return False
+    canonical = _EMPLOYMENT_TYPE_BY_LOWER.get(str(job_employment_type).strip().lower())
+    return canonical in allowed_types if canonical else False
+
+
 def _build_brightdata_trigger_payload(
     query: str,
     search_regions: list[tuple[str, str]],
-    per_region_limit: int,
     time_range: str,
+    employment_types: list | None = None,
 ) -> list[dict]:
-    """Build one Bright Data input item per (country, Search Region)."""
-    from .regions import clamp_per_region_limit
+    """Build one Bright Data input item per (country, Search Region).
 
-    limit = clamp_per_region_limit(per_region_limit)
+    Sets ``job_type`` only when exactly one Employment Type preference is
+    selected (Bright Data accepts a single value). Multi-select / any omit it.
+    """
+    job_type = None
+    if (
+        employment_types
+        and len(employment_types) == 1
+        and employment_types[0]
+        and str(employment_types[0]).lower() != "any"
+    ):
+        job_type = employment_types[0]
+
     payload = []
     for country, region in search_regions:
         item = {
             "keyword": query,
             "location": region,
             "country": country.upper(),
-            "limit_per_input": limit,
         }
         if time_range and time_range.lower() not in ["any", "anytime"]:
             time_range_mapping = {
@@ -258,6 +329,8 @@ def _build_brightdata_trigger_payload(
             }
             normalized_key = time_range.lower().replace("_", " ")
             item["time_range"] = time_range_mapping.get(normalized_key, time_range)
+        if job_type:
+            item["job_type"] = job_type
         payload.append(item)
     return payload
 
@@ -270,6 +343,7 @@ async def _scrape_linkedin_jobs_real(
     api_key: str,
     scraper_id: str,
     log: callable,
+    employment_types: list | None = None,
 ) -> list:
     """Trigger and poll the Bright Data LinkedIn scraper API to retrieve job listings."""
     region_summary = ", ".join(f"{r} ({c})" for c, r in search_regions)
@@ -278,19 +352,22 @@ async def _scrape_linkedin_jobs_real(
         "info",
     )
 
+    from .regions import clamp_per_region_limit
+
     trigger_url = "https://api.brightdata.com/datasets/v3/trigger"
     params = {
         "dataset_id": scraper_id,
         "include_errors": "true",
         "type": "discover_new",
         "discover_by": "keyword",
+        "limit_per_input": clamp_per_region_limit(per_region_limit),
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     payload = _build_brightdata_trigger_payload(
-        query, search_regions, per_region_limit, time_range
+        query, search_regions, time_range, employment_types=employment_types
     )
 
     await log("Establishing secure connection to proxy nodes via Bright Data client...", "info")
@@ -444,6 +521,7 @@ async def scrape_linkedin_jobs(
     remote_types: list = None,
     seniorities: list = None,
     company_sizes: list = None,
+    employment_types: list = None,
     countries: list = None,
     time_range: str = "any",
     log_func = None,
@@ -451,11 +529,11 @@ async def scrape_linkedin_jobs(
 ) -> list:
     """
     Search and retrieve job listings from LinkedIn using Bright Data or simulated fallback.
-    Applies post-filtering for company size, keyword matching, and timezone.
+    Applies post-filtering for company size and Employment Type.
     """
     async def log(msg: str, level: str = "info"):
         if log_func:
-            if asyncio.iscoroutinefunction(log_func):
+            if inspect.iscoroutinefunction(log_func):
                 await log_func(msg, level)
             else:
                 log_func(msg, level)
@@ -477,6 +555,7 @@ async def scrape_linkedin_jobs(
     remote_types = remote_types or ["any"]
     seniorities = seniorities or ["any"]
     company_sizes = company_sizes or ["any"]
+    employment_types = parse_employment_types(employment_types)
     
     if countries and isinstance(countries, str):
         countries = [c.strip().lower() for c in countries.split(",") if c.strip()]
@@ -502,31 +581,31 @@ async def scrape_linkedin_jobs(
             api_key=api_key,
             scraper_id=scraper_id,
             log=log,
+            employment_types=employment_types,
         )
 
     # Post-filtering phase
     await log(f"Processing and filtering {len(raw_jobs)} raw results...", "info")
-    
-    get_keywords_for_position(query)
+
     filtered_jobs = []
 
     for raw_job in raw_jobs:
-        normalized = normalize_brightdata_job(raw_job)
-        
-        # 1. Title/Keyword filter
-        # if not matches_position_keywords(normalized["title"], keywords):
-        #     await log(f"Skipping '{normalized['title']}': Title does not match keywords {keywords}", "info")
-        #     continue
-            
-        # 2. Timezone filter
-        # is_remote = normalized["remoteType"] == "remote"
-        # if not is_eastern_timezone(normalized["location"], normalized["description"], is_remote):
-        #     await log(f"Skipping '{normalized['title']}': Timezone restrictions detected", "info")
-        #     continue
+        if is_brightdata_error_row(raw_job):
+            await log("Skipping Bright Data error/mismatch snapshot row.", "info")
+            continue
 
-        # 3. Settings Filter - Company Size
+        normalized = normalize_brightdata_job(raw_job)
+
         if "any" not in company_sizes and not match_company_size(normalized["size"], company_sizes):
             await log(f"Skipping '{normalized['title']}': Company Size '{normalized['size']}' does not match {company_sizes}", "info")
+            continue
+
+        if not match_employment_type(normalized.get("employmentType", ""), employment_types):
+            await log(
+                f"Skipping '{normalized['title']}': Employment Type "
+                f"'{normalized.get('employmentType') or 'unknown'}' does not match {employment_types}",
+                "info",
+            )
             continue
 
         filtered_jobs.append(normalized)

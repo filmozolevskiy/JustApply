@@ -1,11 +1,12 @@
 import os
 
+from tests.kanban_js import load_dashboard_js, read_dashboard_css, read_dashboard_html
+
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "web", "dashboard.html")
 
 
 def _read_html():
-    with open(HTML_PATH, encoding="utf-8") as f:
-        return f.read()
+    return read_dashboard_html()
 
 
 def test_panel_order():
@@ -61,7 +62,12 @@ def test_board_controls_refine_drawer_layout():
     top_block = block[top_start:top_end]
     refine_block = block[block.index('class="board-controls-refine"'):]
     assert 'id="board-filter-search"' in top_block
+    assert 'id="board-favorites-filter"' in top_block
     assert 'id="board-sort-by"' in top_block
+    search_idx = top_block.index('id="board-filter-search"')
+    fav_idx = top_block.index('id="board-favorites-filter"')
+    sort_idx = top_block.index('id="board-sort-by"')
+    assert search_idx < fav_idx < sort_idx
     assert 'id="board-controls-reset"' not in top_block
     assert 'id="board-filter-remote"' in refine_block
     assert 'id="board-filter-size"' in refine_block
@@ -70,17 +76,92 @@ def test_board_controls_refine_drawer_layout():
     assert 'id="board-controls-reset"' in refine_block
 
 
+def test_board_controls_employment_type_refine_checkboxes():
+    """Refine board exposes Employment Type multi-select with five allowed values."""
+    content = _read_html()
+    dashboard_js = load_dashboard_js()
+    bc_start = content.index('id="board-controls-panel"')
+    bc_end = content.index('id="board-search-empty-hint"', bc_start)
+    refine_block = content[content.index('class="board-controls-refine"', bc_start):bc_end]
+    assert "Employment Type" in refine_block
+    assert 'name="board-filter-employment"' in refine_block
+    for value in ("Full-time", "Contract", "Part-time", "Temporary", "Volunteer"):
+        assert f'value="{value}"' in refine_block
+    assert refine_block.count('name="board-filter-employment"') == 5
+    assert "boardFilterEmploymentTypes" in dashboard_js
+    assert "employmentTypes" in dashboard_js
+    reset_fn = dashboard_js[
+        dashboard_js.find("function resetBoardControls") : dashboard_js.find(
+            "function toggleFavoritesFilter"
+        )
+    ]
+    assert "board-filter-employment" in reset_fn
+    assert "boardFilterEmploymentTypes" in reset_fn
+    hint_fn = dashboard_js[
+        dashboard_js.find("function updateBoardSearchEmptyHint") : dashboard_js.find(
+            "function persistBoardSearch"
+        )
+    ]
+    assert "hasEmploymentRefine" in hint_fn
+    assert "employmentTypes" in hint_fn
+
+
+def test_job_search_settings_employment_type_checkboxes():
+    """Job Search Settings has Employment Type checkboxes; default none; reset clears."""
+    content = _read_html()
+    dashboard_js = load_dashboard_js()
+    settings_start = content.index('id="job-search-settings-body"')
+    settings_end = content.index('id="contact-search-settings-section"', settings_start)
+    settings_block = content[settings_start:settings_end]
+    assert "Employment Type" in settings_block
+    assert 'name="kb-filter-employment"' in settings_block
+    for value in ("Full-time", "Contract", "Part-time", "Temporary", "Volunteer"):
+        assert f'value="{value}"' in settings_block
+    assert settings_block.count('name="kb-filter-employment"') == 5
+    for chunk in settings_block.split('name="kb-filter-employment"')[1:]:
+        input_tail = chunk.split(">", 1)[0]
+        assert "checked" not in input_tail
+
+    trigger_idx = dashboard_js.find("async function triggerScrapeRun")
+    if trigger_idx < 0:
+        trigger_idx = dashboard_js.find("function triggerScrapeRun")
+    assert trigger_idx >= 0
+    trigger_fn = dashboard_js[trigger_idx : trigger_idx + 6000]
+    assert "kb-filter-employment" in trigger_fn
+    assert "employment_type" in trigger_fn
+
+    reset_idx = dashboard_js.find("function resetKbFilters")
+    assert reset_idx >= 0
+    reset_fn = dashboard_js[reset_idx : reset_idx + 2000]
+    assert "kb-filter-employment" in reset_fn
+
+
 def test_board_controls_has_search_reset_and_empty_hint():
     """Board Controls exposes search, reset-all, clear, and zero-results hint."""
     content = _read_html()
+    dashboard_js = load_dashboard_js()
     assert 'id="board-filter-search"' in content
     assert 'placeholder="Search jobs…"' in content
     assert 'id="board-filter-search-clear"' in content
     assert 'id="board-controls-reset"' in content
-    assert "resetBoardControls" in content
+    assert "resetBoardControls" in dashboard_js
     assert "Reset filters" in content
     assert 'id="board-search-empty-hint"' in content
-    assert "No jobs match your search." in content
+    assert "No jobs match your filters." in content
+
+
+def test_board_controls_favorites_filter_wiring():
+    """Favorites Filter star button, localStorage key, and toggle handler are wired."""
+    content = _read_html()
+    dashboard_js = load_dashboard_js()
+    css = read_dashboard_css()
+    assert 'id="board-favorites-filter"' in content
+    assert 'class="board-favorites-filter"' in content
+    assert 'aria-pressed="false"' in content
+    assert "toggleFavoritesFilter" in dashboard_js
+    assert "boardFilterFavorites" in dashboard_js
+    assert "favoritesOnly" in dashboard_js
+    assert '.board-favorites-filter[aria-pressed="true"]' in css
 
 
 def test_shared_panel_header_class():
@@ -128,7 +209,8 @@ def test_job_search_settings_collapsed_by_default():
 def test_job_search_settings_show_hide_toggle():
     """Job Search Settings uses a Show/Hide toggle instead of a Scraper Settings label."""
     content = _read_html()
-    assert "toggleJobSearchSettings" in content
+    dashboard_js = load_dashboard_js()
+    assert "toggleJobSearchSettings" in dashboard_js
     assert 'id="job-search-settings-toggle"' in content
     assert "Scraper Settings" not in content
     assert "> Show" in content or "> Show<" in content
@@ -136,9 +218,9 @@ def test_job_search_settings_show_hide_toggle():
 
 def test_job_search_settings_init_restores_state():
     """Job Search Settings collapse state is restored on page load."""
-    content = _read_html()
-    assert "initJobSearchSettingsState" in content
-    assert "initJobSearchSettingsState()" in content
+    dashboard_js = load_dashboard_js()
+    assert "initJobSearchSettingsState" in dashboard_js
+    assert "initJobSearchSettingsState()" in dashboard_js
 
 
 def test_contact_search_settings_no_cyan_tint():

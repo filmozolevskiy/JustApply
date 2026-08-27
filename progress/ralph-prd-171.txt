@@ -1,0 +1,38 @@
+# Ralph Loop Progress — PRD #171
+
+## 2026-07-26 — #178 Annual Posted Salary writeback + Matched card
+- Added yearly-only `annualize_posted_salary` and schema fields `annualMin` / `annualMax` / `annualCurrency` (migration 13).
+- Batch Poller writeback stores raw salary plus annual band when evaluation includes yearly `postedSalary` facts.
+- Matched Kanban cards prefer the annual band (with currency); equal min/max collapse to one figure.
+- Tests: annualizer, schema/migration, poller writeback, card display helpers.
+- Quality: ruff, mypy, full pytest (996 passed, cov ≥84%).
+
+## 2026-07-26 — #179 Structured matcher Posted Salary + full annualizer
+- Extended Resume Matcher JSON contract with structured `postedSalary` facts (period, amounts, currency, hoursPerWeek, multi-location `bands`) while keeping raw `salary` string.
+- Full annualizer: hourly (2080 or hoursPerWeek×52), monthly ×12, daily ×260; location pick by job.location else first band.
+- Batch Poller writeback passes job location into annualizer so hourly and multi-location evaluations persist correct annual bands.
+- Tests: period conversion, hours override, location pick/fallback, matcher mock + prompt contract, poller hourly/multi-location writeback.
+- Quality: ruff, mypy, full pytest (1006 passed, cov 85.67%).
+
+## 2026-07-26 — #181 Salary Min attribute gate
+- Added `parse_salary_min` for Job Search Settings free text (`$120k`, commas, empty/invalid → gate off).
+- Extended attribute gate + mismatch reasons for Salary Min on `annualMax` (ADR 0014); unknown/missing band still passes.
+- Migration 14: `batch_jobs.searchSalaryMin`; search/backfill submit persist parsed Min; Batch Poller writeback rejects underpaid jobs as Attribute-filtered.
+- Dashboard search request salary flows through service → pipeline → batch (scrape still ignores salary).
+- Tests: parser, gate cases, batch persistence, poller Rejected vs Matched, search/backfill wiring.
+- Quality: ruff, mypy, full pytest (1022 passed, cov 85.70%).
+
+## 2026-07-26 — #182 Drawer + Scraped salary display
+- Scraped / no-band cards omit salary line (`cardSalaryDisplay` annual-only; no raw fallback).
+- Drawer Job Info uses `drawerSalaryDisplay`: annual band matches card (equal min/max collapse); no band → "Not specified" (raw string not primary).
+- Glassdoor Company Research salary row unchanged.
+- Tests: scraped omit, drawer band/point, drawer no-band, drawer helper wiring.
+- Quality: ruff, mypy, full pytest (1026 passed, cov 85.72%).
+
+## 2026-07-26 — #183 Reassess applies annual salary path
+- `--reassess` / `--reassess-all` write Annual Posted Salary via the same annualizer as batch writeback (location-aware).
+- Attribute gate on reassess includes Salary Min (annualMax rule + unknown-pay pass); Scraped/Matched demote, Accepted+ keep lane.
+- Service parses Job Search Settings salary free text (`salary="$120k"`) into `salary_min` for single and all reassess.
+- Tests: annual band writeback, reject/pass/unknown-pay, Accepted keep-lane, service parse, reassess-all gate path.
+- Quality: ruff, mypy, full pytest (1030 passed, cov 85.73%).
+- Remaining ready-for-agent for PRD #171: HITL #184 only (left open for human QA; not COMPLETE).

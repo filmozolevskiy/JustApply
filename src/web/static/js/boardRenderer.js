@@ -11,12 +11,12 @@ export function parseBoardSearchTerms(query) {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
-export function resolveJobsArchivedFetchParam(archivedVisibility, searchQuery) {
+export function resolveJobsArchivedFetchParam(archivedVisibility, searchQuery, favoritesOnly = false) {
   const visibility = archivedVisibility || 'active';
   if (visibility !== 'active') {
     return visibility;
   }
-  if (parseBoardSearchTerms(searchQuery).length > 0) {
+  if (parseBoardSearchTerms(searchQuery).length > 0 || favoritesOnly) {
     return 'all';
   }
   return 'active';
@@ -88,30 +88,36 @@ export function filterJobs(jobs, filters) {
   const recruiterFilter = filters.recruiter || 'all';
   const searchQuery = filters.search ?? '';
   const archivedVisibility = filters.archivedVisibility || 'active';
+  const favoritesOnly = Boolean(filters.favoritesOnly);
+  const employmentTypes = Array.isArray(filters.employmentTypes)
+    ? filters.employmentTypes.filter(Boolean)
+    : [];
   const hasSearch = parseBoardSearchTerms(searchQuery).length > 0;
-  const activeWithContactBypass = archivedVisibility === 'active' && hasSearch;
 
   return jobs.filter((job) => {
     const isArchived = Boolean(job.archived);
+    const isFavorited = Boolean(job.favorited);
 
-    if (activeWithContactBypass) {
-      if (isArchived) {
-        if (!jobContactsMatchBoardSearch(job, searchQuery)) {
-          return false;
-        }
-      } else if (!jobMatchesBoardSearch(job, searchQuery)) {
+    if (archivedVisibility === 'active' && isArchived) {
+      const contactBypass = hasSearch && jobContactsMatchBoardSearch(job, searchQuery);
+      const favoritesBypass = favoritesOnly && isFavorited;
+      if (!contactBypass && !favoritesBypass) {
+        return false;
+      }
+      if (!contactBypass && !jobMatchesBoardSearch(job, searchQuery)) {
         return false;
       }
     } else {
-      if (archivedVisibility === 'active' && isArchived) {
-        return false;
-      }
       if (archivedVisibility === 'archived' && !isArchived) {
         return false;
       }
       if (!jobMatchesBoardSearch(job, searchQuery)) {
         return false;
       }
+    }
+
+    if (favoritesOnly && !isFavorited) {
+      return false;
     }
 
     if (remoteFilter !== 'all') {
@@ -135,6 +141,13 @@ export function filterJobs(jobs, filters) {
       }
     } else if (recruiterFilter === 'only') {
       if (!job.isRecruiter) {
+        return false;
+      }
+    }
+
+    if (employmentTypes.length > 0) {
+      const jobType = (job.employmentType || '').trim();
+      if (!jobType || !employmentTypes.includes(jobType)) {
         return false;
       }
     }
@@ -173,7 +186,14 @@ export function sortJobs(jobs, sortBy) {
   return sorted;
 }
 
+export function getSelectedEmploymentTypesFromDom() {
+  return Array.from(
+    document.querySelectorAll('input[name="board-filter-employment"]:checked'),
+  ).map((el) => el.value);
+}
+
 export function getBoardFiltersFromDom() {
+  const favoritesBtn = document.getElementById('board-favorites-filter');
   return {
     remote: document.getElementById('board-filter-remote')?.value || 'all',
     size: document.getElementById('board-filter-size')?.value || 'all',
@@ -184,6 +204,10 @@ export function getBoardFiltersFromDom() {
       document.getElementById('board-filter-archived')?.value ||
       localStorage.getItem('boardFilterArchived') ||
       'active',
+    favoritesOnly: favoritesBtn
+      ? favoritesBtn.getAttribute('aria-pressed') === 'true'
+      : localStorage.getItem('boardFilterFavorites') === 'true',
+    employmentTypes: getSelectedEmploymentTypesFromDom(),
   };
 }
 
@@ -222,6 +246,40 @@ export function cardReclassifyBadge(jobId, reclassifyJobIds) {
   return '';
 }
 
+export function formatAnnualPostedSalary(job) {
+  if (!job || job.annualMin == null || job.annualMax == null || !job.annualCurrency) {
+    return '';
+  }
+  const min = Number(job.annualMin);
+  const max = Number(job.annualMax);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return '';
+  }
+  const currency = String(job.annualCurrency).trim();
+  if (!currency) {
+    return '';
+  }
+  const fmt = (n) => n.toLocaleString('en-US');
+  if (min === max) {
+    return `${currency} ${fmt(min)}`;
+  }
+  return `${currency} ${fmt(min)}–${fmt(max)}`;
+}
+
+export function cardSalaryDisplay(job) {
+  // Annual band only — Scraped / legacy rows without a band omit the salary line.
+  return formatAnnualPostedSalary(job);
+}
+
+export function cardCommentRootCountChip(job) {
+  const comments = Array.isArray(job?.comments) ? job.comments : [];
+  const rootCount = comments.filter((c) => c && (c.parentId == null || c.parentId === '')).length;
+  if (rootCount < 1) {
+    return '';
+  }
+  return `<span class="comment-root-count-chip" aria-label="${rootCount} comment${rootCount === 1 ? '' : 's'}"><i class="fa-regular fa-comment-dots" aria-hidden="true"></i> ${rootCount}</span>`;
+}
+
 export function getKanbanCardMovementButtons(job) {
   if (job.archived) {
     return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
@@ -249,7 +307,10 @@ export function renderBoard(jobs, filters = {}) {
 
     jobsInLane.forEach((job) => {
       const card = document.createElement('div');
-      card.className = 'kanban-card' + (job.archived ? ' kanban-card--archived' : '');
+      card.className =
+        'kanban-card' +
+        (job.archived ? ' kanban-card--archived' : '') +
+        (job.favorited ? ' kanban-card--favorited' : '');
       card.setAttribute('onclick', `openJobDetailsDrawer(${job.id})`);
       card.setAttribute('draggable', 'true');
       card.addEventListener('dragstart', (e) => {
@@ -281,6 +342,11 @@ export function renderBoard(jobs, filters = {}) {
       const badgesHtml = badgeParts.length
         ? `<div class="kanban-card-badges">${badgeParts.join('')}</div>`
         : '';
+      const favoriteChip = job.favorited
+        ? `<span class="favorite-header-chip" aria-hidden="true"><i class="fa-solid fa-star"></i> Favorite</span>`
+        : '';
+      const commentChip = cardCommentRootCountChip(job);
+      const salaryDisplay = cardSalaryDisplay(job);
 
       card.innerHTML = `
             <div class="kanban-card-header">
@@ -291,6 +357,8 @@ export function renderBoard(jobs, filters = {}) {
                 ` : ''}
               </div>
               <div class="kanban-card-header-actions">
+                ${commentChip}
+                ${favoriteChip}
                 <span class="match-pill ${matchClass}">${job.matchScore}%</span>
               </div>
             </div>
@@ -303,13 +371,8 @@ export function renderBoard(jobs, filters = {}) {
                 <span><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
                 <span class="kanban-card-meta-remote">${job.remoteType}</span>
               </div>
-              ${job.salary ? `<div class="kanban-card-meta-salary"><i class="fa-solid fa-dollar-sign"></i> ${job.salary}</div>` : ''}
+              ${salaryDisplay ? `<div class="kanban-card-meta-salary"><i class="fa-solid fa-dollar-sign"></i> ${salaryDisplay}</div>` : ''}
             </div>
-            ${job.comment ? `
-              <div style="font-size: 0.72rem; color: #a78bfa; font-style: italic; background: rgba(139, 92, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <i class="fa-regular fa-comment-dots"></i> ${job.comment}
-              </div>
-            ` : ''}
             <div class="kanban-card-footer">
               <span style="font-size:0.7rem; color:var(--text-muted); font-family:var(--font-mono);">${job.resumeUsed}</span>
               <div class="kanban-card-actions" onclick="event.stopPropagation()">

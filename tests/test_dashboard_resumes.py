@@ -1,15 +1,10 @@
-import os
-import sys
 from unittest.mock import AsyncMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import src.web.server as server_module
 from fastapi.testclient import TestClient
 from src.web.server import app
 
 client = TestClient(app)
-
 
 def test_get_resumes_returns_list_of_markdown_resumes(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
@@ -40,13 +35,11 @@ def test_get_resumes_returns_list_of_markdown_resumes(tmp_path, monkeypatch):
     qa_item = next(r for r in data if r["name"] == "qa.md")
     assert qa_item["content"] == "# QA Resume\nContent here"
 
-
 def test_get_resumes_returns_empty_when_directory_does_not_exist(monkeypatch):
     monkeypatch.setattr(server_module, "RESUMES_DIR", "/nonexistent_directory_for_resumes")
     response = client.get("/api/resumes")
     assert response.status_code == 200
     assert response.json() == []
-
 
 def test_save_resume_updates_existing_verbatim(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
@@ -67,7 +60,6 @@ def test_save_resume_updates_existing_verbatim(tmp_path, monkeypatch):
     assert data["content"] == new_content
     assert qa_file.read_text() == new_content
 
-
 def test_save_resume_creates_new_with_sanitized_name(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
     resumes_dir.mkdir()
@@ -85,7 +77,6 @@ def test_save_resume_creates_new_with_sanitized_name(tmp_path, monkeypatch):
     created = resumes_dir / "senior_qa_engineer.md"
     assert created.exists()
     assert created.read_text() == content
-
 
 def test_save_resume_collision_appends_timestamp_suffix(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
@@ -106,7 +97,6 @@ def test_save_resume_collision_appends_timestamp_suffix(tmp_path, monkeypatch):
     assert data["name"] != "qa.md"
     assert existing.read_text() == "original"
     assert (resumes_dir / data["name"]).read_text() == "new copy"
-
 
 def test_delete_resume_removes_file(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
@@ -131,7 +121,6 @@ def test_delete_resume_removes_file(tmp_path, monkeypatch):
     assert "project_manager.md" not in names
     assert "qa.md" in names
 
-
 def test_delete_active_resume_rejected(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
     resumes_dir.mkdir()
@@ -151,7 +140,6 @@ def test_delete_active_resume_rejected(tmp_path, monkeypatch):
     assert qa_file.exists()
     assert pm_file.exists()
 
-
 def test_delete_last_remaining_resume_rejected(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
     resumes_dir.mkdir()
@@ -167,7 +155,6 @@ def test_delete_last_remaining_resume_rejected(tmp_path, monkeypatch):
     assert response.status_code == 409
     assert "last remaining" in response.json()["detail"].lower()
     assert only_file.exists()
-
 
 def test_convert_resume_pdf_returns_markdown_without_writing(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
@@ -193,7 +180,6 @@ def test_convert_resume_pdf_returns_markdown_without_writing(tmp_path, monkeypat
     mock_convert.assert_awaited_once()
     assert mock_convert.await_args.args[0] == pdf_bytes
 
-
 def test_convert_resume_pdf_rejects_missing_api_key(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
     resumes_dir.mkdir()
@@ -208,7 +194,6 @@ def test_convert_resume_pdf_rejects_missing_api_key(tmp_path, monkeypatch):
     assert response.status_code == 503
     assert "GEMINI_API_KEY" in response.json()["detail"]
     assert list(resumes_dir.iterdir()) == []
-
 
 def test_convert_resume_pdf_rejects_llm_failure(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
@@ -228,7 +213,6 @@ def test_convert_resume_pdf_rejects_llm_failure(tmp_path, monkeypatch):
     assert response.status_code == 503
     assert "Gemini API error" in response.json()["detail"]
     assert list(resumes_dir.iterdir()) == []
-
 
 def test_convert_resume_pdf_rejects_non_pdf(tmp_path, monkeypatch):
     resumes_dir = tmp_path / "resumes"
