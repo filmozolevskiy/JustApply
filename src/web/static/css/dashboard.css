@@ -239,22 +239,19 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
-      font-size: 1.5rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #22d3ee, #818cf8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
     }
 
-    .brand i {
-      background: linear-gradient(135deg, #22d3ee, #818cf8);
-      -webkit-background-clip: border-box;
-      -webkit-text-fill-color: initial;
-      color: white;
-      padding: 8px;
-      border-radius: 8px;
-      font-size: 1.1rem;
+    .brand-link {
+      display: flex;
+      align-items: center;
+      line-height: 0;
+      text-decoration: none;
+    }
+
+    .brand-link img {
+      display: block;
+      height: 38px;
+      width: auto;
     }
 
     .nav-actions {

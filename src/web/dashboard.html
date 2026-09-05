@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JustApply</title>
-  
+  <link rel="icon" href="/static/img/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="/static/img/justapply-mark.png">
+  <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+
   <!-- Premium Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,8 +24,9 @@
   <!-- Top Navbar -->
   <header class="top-navbar">
     <div class="brand">
-      <i class="fa-solid fa-crosshairs"></i>
-      <span>JustApply</span>
+      <a href="/" class="brand-link" aria-label="JustApply">
+        <img src="/static/img/justapply-logo.png" alt="JustApply" width="220" height="38">
+      </a>
     </div>
     <div class="nav-actions">
       <button class="btn btn-cyan" id="manage-profiles-btn" onclick="openProfileManager()"><i class="fa-regular fa-id-badge"></i> Manage Profiles</button>

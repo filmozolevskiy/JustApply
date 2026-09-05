@@ -1,4 +1,8 @@
-# JustApply 🚀
+<p align="center">
+  <img src="images/justapply-logo.png" alt="JustApply" width="420">
+</p>
+
+# JustApply
 
 ### Overview
 JustApply is an AI-powered job search and application pipeline that automates the "manual" parts of hunting for roles. It scrapes LinkedIn job listings, scores them against your resume using Gemini, and enriches leads with recruiter contacts. Stop wasting time on low-match roles and start applying where it counts.
