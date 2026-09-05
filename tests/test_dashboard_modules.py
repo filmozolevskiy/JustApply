@@ -1023,6 +1023,28 @@ def test_dashboard_links_stylesheet():
     assert "/static/css/dashboard.css" in content
     assert "<style" not in content
 
+
+def test_dashboard_uses_justapply_logo():
+    """Kanban Dashboard header shows the JustApply wordmark, not the old icon+text brand."""
+    with open(HTML_PATH, encoding="utf-8") as f:
+        content = f.read()
+    assert "/static/img/justapply-logo.png" in content
+    assert 'alt="JustApply"' in content
+    assert "/static/img/favicon.ico" in content
+    assert "fa-crosshairs" not in content
+
+
+def test_server_serves_justapply_logo():
+    """FastAPI serves the JustApply logo and favicon from the static mount."""
+    client = TestClient(app)
+    logo = client.get("/static/img/justapply-logo.png")
+    assert logo.status_code == 200
+    assert logo.headers["content-type"].startswith("image/")
+    mark = client.get("/static/img/justapply-mark.png")
+    assert mark.status_code == 200
+    ico = client.get("/static/img/favicon.ico")
+    assert ico.status_code == 200
+
 def test_server_serves_dashboard_stylesheet():
     """FastAPI serves extracted dashboard CSS."""
     client = TestClient(app)
