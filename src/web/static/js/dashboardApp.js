@@ -10,6 +10,8 @@ import {
   dismissSpendModalFromOverlay,
 } from './spendConfirmation.js';
 import { createDrawerController } from './drawerController.js';
+import { parseJobLinkPath } from './jobLinks.js';
+import { findJob } from './jobStore.js';
 import { createTaskLogClient } from './taskLogClient.js';
 
 export function bootstrapDashboard() {
@@ -305,5 +307,9 @@ export function bootstrapDashboard() {
     board.restoreActiveScrapeTask();
     board.restoreActiveEnrichTask();
     board.restoreActiveReclassifyTasks();
+    const link = parseJobLinkPath(location.pathname);
+    if (link.type === 'job' && findJob(link.id)) {
+      void board.openJobDetailsDrawer(link.id);
+    }
   });
 }

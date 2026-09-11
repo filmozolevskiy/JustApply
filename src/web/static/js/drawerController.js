@@ -7,6 +7,7 @@ import {
   getBoardJobOrder,
   resolveJobsArchivedFetchParam,
 } from './boardRenderer.js';
+import { pushBoardRootHistory, pushJobLinkHistory } from './jobLinks.js';
 
 export const NAME_PLACEHOLDER = '______';
 
@@ -703,6 +704,7 @@ export function createDrawerController({
   function closeDrawerImmediate() {
     document.getElementById('kanban-drawer')?.classList.remove('active');
     drawerJobId = null;
+    pushBoardRootHistory();
   }
 
   async function selectActiveContact(jobId, contactIdx) {
@@ -786,6 +788,7 @@ export function createDrawerController({
     if (!job) return;
 
     drawerJobId = id;
+    pushJobLinkHistory(id);
     showAllCommentRoots = false;
     editingCommentId = null;
     replyingToCommentId = null;

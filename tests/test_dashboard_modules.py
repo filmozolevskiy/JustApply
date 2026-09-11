@@ -1060,6 +1060,7 @@ def test_server_serves_kanban_static_modules():
         "/static/js/jobStore.js",
         "/static/js/boardRenderer.js",
         "/static/js/drawerController.js",
+        "/static/js/jobLinks.js",
         "/static/js/taskLogClient.js",
         "/static/js/boardOrchestration.js",
         "/static/js/jobSearchSettings.js",

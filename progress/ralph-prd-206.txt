@@ -1,0 +1,12 @@
+# Ralph Loop Progress — PRD #206
+
+Started: Job Links PRD with TDD composition.
+Queue frontier: #209 → #210 → #211 (parent #206).
+Approved seams (from PRD): HTTP TestClient for `GET /jobs/{id}`; pure Job Link path helpers; prior-art wiring/source tests. Do not re-quiz seams.
+
+## #209 Job Link happy path — open, close, reload (closed)
+- Added pure `jobLinks.js` helpers: parse/build `/jobs/{id}`, board root, push history when path changes.
+- `GET /jobs/{id}` serves the same dashboard HTML as `/` without shadowing `/api` or `/static`.
+- Opening a drawer pushes `/jobs/{id}`; closing pushes `/`; boot after `loadJobs` reopens when the job is already on the board.
+- Tests: `tests/test_job_links.py` (helpers + HTTP + wiring); quality gates green (ruff, mypy, pytest cov).
+- Next frontier: #210 (blocked by #209 until close).

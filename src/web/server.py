@@ -908,6 +908,13 @@ async def get_dashboard():
     return JSONResponse(status_code=404, content={"message": "Dashboard HTML file not found"})
 
 
+@app.get("/jobs/{job_id:int}")
+async def get_job_link_dashboard(job_id: int):
+    """Serve the Kanban Dashboard SPA for hard navigation to a Job Link."""
+    _ = job_id
+    return await get_dashboard()
+
+
 class TaskState:
     def __init__(self, params):
         self.params = params
