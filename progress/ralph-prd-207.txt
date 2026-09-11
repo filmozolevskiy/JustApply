@@ -47,3 +47,15 @@ Quality gate: ruff, mypy, pytest 1185 passed, coverage 86%. Browser check on the
 Next frontier: #214 Reassess uses current search query.
 
 ---
+
+## Iteration — #214 Reassess uses current search query (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/214
+
+Reassess and Reassess-all apply Role Relevance with the current Job Search Settings query (passed into `evaluate_job` and the gate). Scraped/Matched jobs with `roleRelevant: false` move to Rejected as Role-filtered Jobs. Accepted+ keep their lane and do not persist the flag. A later passing reassess clears the flag. Blank query and unsure/omitted `roleRelevant` do not demote for role.
+
+Quality gate: ruff, mypy, pytest 1197 passed, coverage 86%.
+
+No further ready-for-agent children remain for PRD #207.
+
+---
