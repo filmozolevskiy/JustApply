@@ -258,6 +258,7 @@ export function createBoardOrchestrator({
     getBoardFilters: getBoardFiltersFromDom,
   });
   const {
+    applyJobLinkPath,
     cancelEditJobComment,
     cancelJobComment,
     cancelOutreachTemplate,
@@ -1071,6 +1072,7 @@ export function createBoardOrchestrator({
   }
 
   return {
+    applyJobLinkPath,
     archiveJob,
     cancelJobComment,
     cancelOutreachTemplate,

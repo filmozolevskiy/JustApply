@@ -10,3 +10,10 @@ Approved seams (from PRD): HTTP TestClient for `GET /jobs/{id}`; pure Job Link p
 - Opening a drawer pushes `/jobs/{id}`; closing pushes `/`; boot after `loadJobs` reopens when the job is already on the board.
 - Tests: `tests/test_job_links.py` (helpers + HTTP + wiring); quality gates green (ruff, mypy, pytest cov).
 - Next frontier: #210 (blocked by #209 until close).
+
+## #210 Job Link history, navigation sync, and cold open (closed)
+- Added `ensureJobLoaded` + `applyJobLinkPath` in drawer: cold-fetch via `GET /api/jobs/{id}`, upsert, open; missing id closes drawer, `pushBoardRootHistory`, Task Log error.
+- Boot and `popstate` call `applyJobLinkPath` (no extra history push when path already matches).
+- Prev/next and Contacted Elsewhere keep URL sync through `openJobDetailsDrawer` / shared cold-load helper.
+- Tests: `tests/test_job_links.py` (#210 wiring); quality gates green (ruff, mypy, pytest cov).
+- Next frontier: #211 (Unsaved Draft Warning on Job Link URL leave; blocked by #210 until close).

@@ -7,7 +7,11 @@ import {
   getBoardJobOrder,
   resolveJobsArchivedFetchParam,
 } from './boardRenderer.js';
-import { pushBoardRootHistory, pushJobLinkHistory } from './jobLinks.js';
+import {
+  parseJobLinkPath,
+  pushBoardRootHistory,
+  pushJobLinkHistory,
+} from './jobLinks.js';
 
 export const NAME_PLACEHOLDER = '______';
 
@@ -701,10 +705,39 @@ export function createDrawerController({
     updateDraftButtonStates();
   }
 
-  function closeDrawerImmediate() {
+  function closeDrawerImmediate(options = {}) {
+    const syncUrl = options.syncUrl ?? true;
     document.getElementById('kanban-drawer')?.classList.remove('active');
     drawerJobId = null;
-    pushBoardRootHistory();
+    if (syncUrl) pushBoardRootHistory();
+  }
+
+  async function ensureJobLoaded(jobId) {
+    if (findJob(jobId)) return true;
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      upsertJob(await resp.json());
+      return true;
+    } catch (err) {
+      addLogLine(`Could not open job #${jobId}: ${err.message}`, 'error');
+      return false;
+    }
+  }
+
+  async function applyJobLinkPath(pathname) {
+    const link = parseJobLinkPath(pathname);
+    if (link.type !== 'job') {
+      closeDrawerImmediate({ syncUrl: false });
+      return;
+    }
+    const loaded = await ensureJobLoaded(link.id);
+    if (!loaded) {
+      closeDrawerImmediate({ syncUrl: false });
+      pushBoardRootHistory();
+      return;
+    }
+    await openJobDetailsDrawer(link.id, { syncUrl: false });
   }
 
   async function selectActiveContact(jobId, contactIdx) {
@@ -776,7 +809,8 @@ export function createDrawerController({
     document.querySelector('.drawer-content')?.scrollTo(0, 0);
   }
 
-  async function openJobDetailsDrawer(id) {
+  async function openJobDetailsDrawer(id, options = {}) {
+    const syncUrl = options.syncUrl ?? true;
     const overlay = document.getElementById('kanban-drawer');
     const switching =
       overlay?.classList.contains('active') &&
@@ -788,7 +822,7 @@ export function createDrawerController({
     if (!job) return;
 
     drawerJobId = id;
-    pushJobLinkHistory(id);
+    if (syncUrl) pushJobLinkHistory(id);
     showAllCommentRoots = false;
     editingCommentId = null;
     replyingToCommentId = null;
@@ -1049,16 +1083,7 @@ export function createDrawerController({
   async function openContactedElsewhereJob(sourceJobId, event) {
     event?.stopPropagation?.();
     event?.preventDefault?.();
-    if (!findJob(sourceJobId)) {
-      try {
-        const resp = await fetch(`/api/jobs/${sourceJobId}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        upsertJob(await resp.json());
-      } catch (err) {
-        addLogLine(`Could not open job #${sourceJobId}: ${err.message}`, 'error');
-        return;
-      }
-    }
+    if (!(await ensureJobLoaded(sourceJobId))) return;
     await openJobDetailsDrawer(sourceJobId);
     onJobMutated();
   }
@@ -1212,6 +1237,7 @@ export function createDrawerController({
   return {
     cancelEditJobComment,
     cancelJobComment,
+    applyJobLinkPath,
     cancelOutreachTemplate,
     cancelReplyJobComment,
     closeDrawer,

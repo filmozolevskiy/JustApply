@@ -1,4 +1,4 @@
-"""PRD #206 / #209: Job Link happy path — helpers, dashboard HTML route, open/close/boot sync."""
+"""PRD #206: Job Links — helpers, HTTP route, open/close/boot, history, cold open."""
 
 import subprocess
 from pathlib import Path
@@ -145,17 +145,12 @@ def test_close_drawer_pushes_board_root():
 
 
 def test_dashboard_boot_opens_job_link_when_on_board():
-    """After loadJobs, a valid Job Link path opens the drawer if the job is loaded."""
+    """After loadJobs, boot applies the Job Link path (open or cold-open)."""
     app_js = read_dashboard_module("dashboardApp.js")
-    assert "parseJobLinkPath" in app_js
-    assert "findJob" in app_js
-    # Boot runs after jobs load so the in-memory board set is ready.
     load_idx = app_js.find("board.loadJobs()")
     assert load_idx != -1
     after_load = app_js[load_idx : load_idx + 900]
-    assert "parseJobLinkPath" in after_load
-    assert "openJobDetailsDrawer" in after_load
-    assert "findJob" in after_load
+    assert "applyJobLinkPath" in after_load
     assert ".then(" in after_load or ".finally(" in after_load
 
 
@@ -191,3 +186,75 @@ def test_push_helpers_update_history_when_path_changes():
         """
     )
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+# --- #210: history, nav sync, cold open ---
+
+
+def test_popstate_applies_job_link_path():
+    """Browser Back / Forward syncs the drawer via popstate → applyJobLinkPath."""
+    app_js = read_dashboard_module("dashboardApp.js")
+    assert "popstate" in app_js
+    assert "applyJobLinkPath" in app_js
+    pop_idx = app_js.find("popstate")
+    assert pop_idx != -1
+    window = app_js[max(0, pop_idx - 80) : pop_idx + 200]
+    assert "addEventListener" in window
+    assert "applyJobLinkPath" in window
+
+
+def test_navigate_drawer_job_opens_neighbor_job_link():
+    """Drawer prev/next switches jobs through openJobDetailsDrawer (URL push)."""
+    drawer = read_drawer_controller()
+    start = drawer.find("async function navigateDrawerJob(")
+    assert start != -1
+    body = drawer[start : start + 500]
+    assert "openJobDetailsDrawer" in body
+
+
+def test_contacted_elsewhere_opens_target_job_link():
+    """Contacted Elsewhere navigation opens the target via openJobDetailsDrawer."""
+    drawer = read_drawer_controller()
+    start = drawer.find("async function openContactedElsewhereJob(")
+    assert start != -1
+    body = drawer[start : start + 700]
+    assert "openJobDetailsDrawer" in body
+    assert "ensureJobLoaded" in body
+
+
+def test_apply_job_link_cold_opens_when_not_on_board():
+    """Job Link for a job not in the board set fetches single-job API then opens."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 900]
+    assert "ensureJobLoaded" in body
+    assert "openJobDetailsDrawer" in body
+
+    ensure_start = drawer.find("async function ensureJobLoaded(")
+    assert ensure_start != -1
+    ensure_body = drawer[ensure_start : ensure_start + 600]
+    assert "findJob" in ensure_body
+    assert "/api/jobs/" in ensure_body
+    assert "upsertJob" in ensure_body
+
+
+def test_apply_job_link_missing_id_recovers_to_board_root():
+    """Missing/deleted Job Link id leaves drawer closed, path `/`, short error."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 1200]
+    assert "pushBoardRootHistory" in body
+    assert "closeDrawerImmediate" in body
+    assert "ensureJobLoaded" in body
+
+    ensure_start = drawer.find("async function ensureJobLoaded(")
+    assert ensure_start != -1
+    ensure_body = drawer[ensure_start : ensure_start + 600]
+    assert "addLogLine" in ensure_body
+    assert "error" in ensure_body
