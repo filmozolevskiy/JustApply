@@ -431,7 +431,7 @@ async def test_collect_batch_results_writes_back_and_updates_batch_row(tmp_db):
     assert level == "summary"
     assert msg == (
         "Batch chunk completed: 1 matched, 0 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
     )
     assert not any("Attribute mismatch" in msg for _level, msg in logs)
 
@@ -476,7 +476,7 @@ async def test_collect_batch_results_attribute_reject(tmp_db):
     summary = next(msg for level, msg in logs if level == "summary")
     assert summary == (
         "Batch chunk completed: 0 matched, 1 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
     )
     assert not any("Attribute mismatch" in msg for _level, msg in logs)
 
@@ -517,7 +517,7 @@ async def test_collect_batch_results_fallback_reject_increments_fallback_rejecte
     summary = next(msg for level, msg in logs if level == "summary")
     assert summary == (
         "Batch chunk completed: 0 matched, 0 attribute-filtered, "
-        "1 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 1 fallback-rejected, 0 failed, 0 unclassified"
     )
     assert not any("Attribute mismatch" in msg for _level, msg in logs)
 
@@ -783,7 +783,7 @@ async def test_round_summary_aggregates_multi_chunk_search(tmp_db, monkeypatch):
     assert level == "summary"
     assert msg == (
         "Evaluation round complete (search): 2 matched, 1 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
     )
 
 
@@ -848,7 +848,7 @@ async def test_round_summary_waits_until_last_chunk(tmp_db, monkeypatch):
     round_logs = [msg for _level, msg in logs if "Evaluation round complete" in msg]
     assert round_logs == [
         "Evaluation round complete (search): 2 matched, 0 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
     ]
 
 
@@ -929,7 +929,7 @@ async def test_wait_collect_emits_round_summary_after_chunks(tmp_db, monkeypatch
     assert chunk_idx < round_idx
     assert logs[round_idx] == (
         "Evaluation round complete (search): 1 matched, 0 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
     )
 
 
@@ -947,6 +947,7 @@ async def test_round_clear_auto_retries_poison_failed_jobs(tmp_db, tmp_path, mon
         search_seniorities="mid",
         search_employment_types="Full-time",
         search_salary_min=100000,
+        search_query="QA",
         submitted_at=datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
         db_path=str(tmp_db),
     )
@@ -995,6 +996,7 @@ async def test_round_clear_auto_retries_poison_failed_jobs(tmp_db, tmp_path, mon
     assert retry_batches[0]["searchSeniorities"] == "mid"
     assert retry_batches[0]["searchEmploymentTypes"] == "Full-time"
     assert retry_batches[0]["searchSalaryMin"] == 100000
+    assert retry_batches[0]["searchQuery"] == "QA"
 
 
 @pytest.mark.asyncio

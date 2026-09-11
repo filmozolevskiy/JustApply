@@ -85,6 +85,8 @@ class Job(BaseModel):
     comments: list[JobComment] = []
     isRecruiter: bool = False
     unclassified: bool = False
+    roleFiltered: bool = False
+    roleFilteredReason: str = ""
     batchAttempts: int = 0
     enrichmentNote: str = ""
     enrichmentNoteKind: str = ""

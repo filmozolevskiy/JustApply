@@ -269,14 +269,14 @@ def test_batch_poller_logs_replay_buffered_entries(reset_batch_poller_logs):
                 "level": "summary",
                 "message": (
                     "Batch chunk completed: 2 matched, 1 attribute-filtered, "
-                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                    "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
                 ),
             },
             {
                 "level": "summary",
                 "message": (
                     "Evaluation round complete (search): 2 matched, 1 attribute-filtered, "
-                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                    "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
                 ),
             },
         ]
@@ -323,14 +323,14 @@ def test_batch_poller_logs_stale_skip_after_buffer_reset_replays_current(reset_b
                 "level": "summary",
                 "message": (
                     "Batch chunk completed: 0 matched, 12 attribute-filtered, "
-                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                    "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
                 ),
             },
             {
                 "level": "summary",
                 "message": (
                     "Evaluation round complete (search): 0 matched, 12 attribute-filtered, "
-                    "0 fallback-rejected, 0 failed, 0 unclassified"
+                    "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
                 ),
             },
         ]
@@ -368,7 +368,7 @@ async def test_batch_poller_emit_fans_out_to_all_subscribers(reset_batch_poller_
 
     await server._emit_batch_poller_log(
         "Evaluation round complete (search): 0 matched, 12 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified",
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified",
         "summary",
     )
 

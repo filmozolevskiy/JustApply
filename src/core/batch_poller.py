@@ -19,6 +19,12 @@ from .attribute_gating import (
 from .batch_evaluation import submit_batch_evaluation
 from .gemini_client import get_client
 from .matcher import check_recruiter_by_name, load_resume
+from .role_relevance import (
+    has_role_relevance_query,
+    parse_role_relevant,
+    passes_role_relevance,
+    role_filtered_reason,
+)
 
 TERMINAL_FAILURE_STATES = frozenset({
     "JOB_STATE_FAILED",
@@ -184,6 +190,7 @@ class CollectResult:
     state: str
     matched: int = 0
     attribute_filtered: int = 0
+    role_filtered: int = 0
     fallback_rejected: int = 0
     failed: int = 0
     unclassified: int = 0
@@ -193,6 +200,7 @@ class CollectResult:
 def _chunk_summary_line(
     matched: int,
     attribute_filtered: int,
+    role_filtered: int,
     fallback_rejected: int,
     failed: int,
     unclassified: int,
@@ -200,6 +208,7 @@ def _chunk_summary_line(
     return (
         f"Batch chunk completed: {matched} matched, "
         f"{attribute_filtered} attribute-filtered, "
+        f"{role_filtered} role-filtered, "
         f"{fallback_rejected} fallback-rejected, "
         f"{failed} failed, {unclassified} unclassified"
     )
@@ -209,6 +218,7 @@ def _round_summary_line(
     kind: str,
     matched: int,
     attribute_filtered: int,
+    role_filtered: int,
     fallback_rejected: int,
     failed: int,
     unclassified: int,
@@ -216,6 +226,7 @@ def _round_summary_line(
     return (
         f"Evaluation round complete ({kind}): {matched} matched, "
         f"{attribute_filtered} attribute-filtered, "
+        f"{role_filtered} role-filtered, "
         f"{fallback_rejected} fallback-rejected, "
         f"{failed} failed, {unclassified} unclassified"
     )
@@ -225,6 +236,7 @@ def _round_summary_line(
 class _RoundAccumulator:
     matched: int = 0
     attribute_filtered: int = 0
+    role_filtered: int = 0
     fallback_rejected: int = 0
     failed: int = 0
     unclassified: int = 0
@@ -234,6 +246,7 @@ class _RoundAccumulator:
     gate_seniorities: str = "any"
     gate_employment_types: str = "any"
     gate_salary_min: int | None = None
+    search_query: str = ""
 
     def add(
         self,
@@ -244,11 +257,13 @@ class _RoundAccumulator:
         gate_seniorities: str = "any",
         gate_employment_types: str = "any",
         gate_salary_min: int | None = None,
+        search_query: str | None = None,
     ) -> None:
         if not result.terminal:
             return
         self.matched += result.matched
         self.attribute_filtered += result.attribute_filtered
+        self.role_filtered += result.role_filtered
         self.fallback_rejected += result.fallback_rejected
         self.failed += result.failed
         self.unclassified += result.unclassified
@@ -259,10 +274,13 @@ class _RoundAccumulator:
         self.gate_seniorities = gate_seniorities or "any"
         self.gate_employment_types = gate_employment_types or "any"
         self.gate_salary_min = gate_salary_min
+        if search_query is not None:
+            self.search_query = search_query
 
     def clear(self) -> None:
         self.matched = 0
         self.attribute_filtered = 0
+        self.role_filtered = 0
         self.fallback_rejected = 0
         self.failed = 0
         self.unclassified = 0
@@ -272,6 +290,7 @@ class _RoundAccumulator:
         self.gate_seniorities = "any"
         self.gate_employment_types = "any"
         self.gate_salary_min = None
+        self.search_query = ""
 
     def gate_prefs(self) -> dict:
         return {
@@ -279,6 +298,7 @@ class _RoundAccumulator:
             "seniorities": self.gate_seniorities,
             "employment_types": self.gate_employment_types,
             "salary_min": self.gate_salary_min,
+            "search_query": self.search_query,
         }
 
 
@@ -301,6 +321,7 @@ def _accumulate_terminal_result(result: CollectResult, batch_row: dict) -> None:
         gate_seniorities=seniorities,
         gate_employment_types=employment_types,
         gate_salary_min=salary_min,
+        search_query=batch_row.get("searchQuery") or "",
     )
 
 
@@ -325,6 +346,7 @@ async def _emit_round_summary_if_ready(*, log_func=None) -> dict | None:
             _round_accumulator.kind,
             _round_accumulator.matched,
             _round_accumulator.attribute_filtered,
+            _round_accumulator.role_filtered,
             _round_accumulator.fallback_rejected,
             _round_accumulator.failed,
             _round_accumulator.unclassified,
@@ -383,6 +405,7 @@ async def _auto_retry_failed_scraped_jobs(
         seniorities=gate_prefs.get("seniorities") or "any",
         employment_types=gate_prefs.get("employment_types") or "any",
         salary_min=gate_prefs.get("salary_min"),
+        search_query=gate_prefs.get("search_query") or "",
     )
 
 
@@ -421,6 +444,8 @@ def apply_unclassified_fallback(
         "seniority": seniority,
         "employmentType": employment_type,
         "unclassified": True,
+        "roleFiltered": False,
+        "roleFilteredReason": "",
     }
     database.update_job_evaluation(job_id, fields, db_path=db_path)
 
@@ -474,9 +499,11 @@ def write_back_job_evaluation(
     seniorities: str,
     employment_types: str = "any",
     salary_min: int | None = None,
+    search_query: str | None = None,
+    skip_role_relevance: bool = False,
     db_path=None,
 ) -> str:
-    """Persist evaluation and move lane. Returns 'matched', 'rejected', or 'skipped'."""
+    """Persist evaluation and move lane. Returns matched, rejected, role_filtered, or skipped."""
     job = database.get_job(job_id, db_path=db_path)
     if not job:
         return "skipped"
@@ -509,8 +536,22 @@ def write_back_job_evaluation(
         "seniority": merged["seniority"],
         "employmentType": merged["employmentType"],
         "unclassified": is_unclassified(evaluation),
+        "roleFiltered": False,
+        "roleFilteredReason": "",
     }
+    apply_role = not skip_role_relevance and has_role_relevance_query(search_query)
+    role_relevant, _note = parse_role_relevant(evaluation) if apply_role else (None, "skipped")
+    role_failed = apply_role and not passes_role_relevance(role_relevant)
+    if role_failed:
+        fields["roleFiltered"] = True
+        fields["roleFilteredReason"] = role_filtered_reason(
+            search_query or "", job_dict.get("title") or ""
+        )
     database.update_job_evaluation(job_id, fields, db_path=db_path)
+
+    if role_failed:
+        database.update_job_status(job_id, "rejected", db_path=db_path)
+        return "role_filtered"
 
     if passes_attribute_gate(
         merged["remoteType"],
@@ -568,6 +609,7 @@ async def collect_batch_results(
         employment_types if employment_types is not None else batch_employment_types
     )
     gate_salary_min = salary_min if salary_min is not None else batch_salary_min
+    search_query = batch_row.get("searchQuery") or ""
 
     batch_job = await asyncio.to_thread(gemini_client.batches.get, name=batch_name)
     state = _batch_state_name(batch_job)
@@ -593,7 +635,7 @@ async def collect_batch_results(
 
         raw_content = await asyncio.to_thread(gemini_client.files.download, file=result_file)
         result_lines = _parse_result_jsonl(raw_content)
-        matched = attribute_filtered = fallback_rejected = failed = unclassified = 0
+        matched = attribute_filtered = role_filtered = fallback_rejected = failed = unclassified = 0
         handled_job_ids: set[int] = set()
 
         for line in result_lines:
@@ -664,10 +706,13 @@ async def collect_batch_results(
                 seniorities=gate_seniorities,
                 employment_types=gate_employment_types,
                 salary_min=gate_salary_min,
+                search_query=search_query,
                 db_path=db_path,
             )
             if outcome == "matched":
                 matched += 1
+            elif outcome == "role_filtered":
+                role_filtered += 1
             elif outcome == "rejected":
                 attribute_filtered += 1
             else:
@@ -706,6 +751,7 @@ async def collect_batch_results(
             _chunk_summary_line(
                 matched,
                 attribute_filtered,
+                role_filtered,
                 fallback_rejected,
                 failed,
                 unclassified,
@@ -716,6 +762,7 @@ async def collect_batch_results(
             state=state,
             matched=matched,
             attribute_filtered=attribute_filtered,
+            role_filtered=role_filtered,
             fallback_rejected=fallback_rejected,
             failed=failed,
             unclassified=unclassified,
@@ -724,7 +771,7 @@ async def collect_batch_results(
 
     if state in TERMINAL_FAILURE_STATES:
         await log(f"Batch {batch_name} ended with state {state}.", "warning")
-        matched = attribute_filtered = fallback_rejected = failed = unclassified = 0
+        matched = attribute_filtered = role_filtered = fallback_rejected = failed = unclassified = 0
         for job_id in batch_row.get("jobIds") or []:
             job = database.get_job(job_id, db_path=db_path)
             if not job:
@@ -761,6 +808,7 @@ async def collect_batch_results(
             state=state,
             matched=matched,
             attribute_filtered=attribute_filtered,
+            role_filtered=role_filtered,
             fallback_rejected=fallback_rejected,
             failed=failed,
             unclassified=unclassified,
@@ -851,6 +899,7 @@ def _summarize_collect_results(
         "batches_polled": len(results),
         "matched": sum(result.matched for result in results),
         "attribute_filtered": sum(result.attribute_filtered for result in results),
+        "role_filtered": sum(result.role_filtered for result in results),
         "fallback_rejected": sum(result.fallback_rejected for result in results),
         "failed": sum(result.failed for result in results),
         "unclassified": sum(result.unclassified for result in results),

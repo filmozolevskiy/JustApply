@@ -68,6 +68,7 @@ async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
         allowed_remote_types=["remote"],
         employment_types="Full-time,Contract",
         salary_min=120000,
+        search_query="QA",
         log_func=None,
         db_path=str(tmp_db),
     )
@@ -81,6 +82,7 @@ async def test_backfill_submits_batch_jobs(tmp_db, monkeypatch):
     assert batches[0]["jobIds"] == [job_id]
     assert batches[0]["searchEmploymentTypes"] == "Full-time,Contract"
     assert batches[0]["searchSalaryMin"] == 120000
+    assert batches[0]["searchQuery"] == "QA"
     job = database.get_job(job_id, db_path=str(tmp_db))
     assert job.matchType == ""
     assert job.status == "scraped"

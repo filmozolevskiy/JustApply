@@ -138,6 +138,7 @@ async def run_search_pipeline(
 
     if mock_eval:
         await log("mock_eval: attribute gating skipped.", "info")
+        await log("mock_eval: Role Relevance skipped.", "info")
 
     database.init_db()
     
@@ -204,6 +205,7 @@ async def run_search_pipeline(
             seniorities=seniorities,
             employment_types=employment_types,
             salary_min=salary_min,
+            search_query=query,
         )
         batches_submitted = len(created_batches)
 
@@ -222,6 +224,7 @@ async def run_backfill_pipeline(
     seniorities: str = "any",
     employment_types: str = "any",
     salary_min: int | None = None,
+    search_query: str | None = None,
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -274,6 +277,7 @@ async def run_backfill_pipeline(
         seniorities=seniorities,
         employment_types=employment_types,
         salary_min=salary_min,
+        search_query=search_query,
     )
 
     await log(

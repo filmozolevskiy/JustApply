@@ -1,0 +1,25 @@
+# Ralph Loop Progress — PRD #207
+
+Started: 2026-09-10
+Mode: TDD
+Parent: https://github.com/filmozolevskiy/JustApply/issues/207
+
+Queue (respect blockers):
+- #208 Role Relevance on evaluation write-back (frontier)
+- #212 Resume Matcher classifies Role Relevance (blocked by #208)
+- #213 Role-filtered pill and drawer row (blocked by #208)
+- #214 Reassess uses current search query (blocked by #208 and #212)
+
+---
+
+## Iteration — #208 Role Relevance on evaluation write-back (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/208
+
+Honor matcher JSON `roleRelevant` in evaluation write-back. Reject only on JSON `false`. Persist Role-filtered flag/reason on the job and the search query on each Batch Evaluation Job (search, backfill, retry). Task Logs / CollectResult / CLI `--collect` now count `role-filtered` separately. Unclassified fallback, blank query, and `mock_eval` skip Role Relevance. Dual-fail counts only as role-filtered.
+
+Quality gate: ruff, mypy, pytest 1177 passed, coverage 86%.
+
+Next frontier: #212 Resume Matcher classifies Role Relevance.
+
+---
