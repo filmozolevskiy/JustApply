@@ -5,10 +5,10 @@ Mode: TDD
 Parent: https://github.com/filmozolevskiy/JustApply/issues/207
 
 Queue (respect blockers):
-- #208 Role Relevance on evaluation write-back (frontier)
-- #212 Resume Matcher classifies Role Relevance (blocked by #208)
-- #213 Role-filtered pill and drawer row (blocked by #208)
-- #214 Reassess uses current search query (blocked by #208 and #212)
+- #208 Role Relevance on evaluation write-back (closed)
+- #212 Resume Matcher classifies Role Relevance (closed)
+- #213 Role-filtered pill and drawer row (frontier; blocked by #208 closed)
+- #214 Reassess uses current search query (blocked by #208 closed and #212 closed)
 
 ---
 
@@ -21,5 +21,17 @@ Honor matcher JSON `roleRelevant` in evaluation write-back. Reject only on JSON 
 Quality gate: ruff, mypy, pytest 1177 passed, coverage 86%.
 
 Next frontier: #212 Resume Matcher classifies Role Relevance.
+
+---
+
+## Iteration — #212 Resume Matcher classifies Role Relevance (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/212
+
+Matcher JSON contract now includes `roleRelevant` (`true` / `false` / `null`). The shared `_build_prompt` adds the search query plus Role Relevance rules (same family / adjacent titles, clear no only, unsure → null, no resume fit, French/bilingual translate, no keyword list). Live `evaluate_job` and batch JSONL both use that prompt. Search/backfill/retry batch requests pass the Batch Evaluation Job query snapshot into JSONL.
+
+Quality gate: ruff, mypy, pytest 1180 passed, coverage 86%.
+
+Next frontier: #213 Role-filtered pill and drawer row.
 
 ---

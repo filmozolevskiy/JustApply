@@ -20,13 +20,19 @@ MAX_IN_FLIGHT_BATCHES = 15
 BACKFILL_POLL_SLEEP_SECONDS = 30
 
 
-def build_batch_request_line(job_id: int, resume_content: str, job: dict) -> dict:
+def build_batch_request_line(
+    job_id: int,
+    resume_content: str,
+    job: dict,
+    search_query: str = "",
+) -> dict:
     """Build one JSONL line keyed by job_id with JSON output requested."""
     prompt = _build_prompt(
         resume_content,
         job.get("title", ""),
         job.get("company", ""),
         job.get("description", ""),
+        search_query=search_query,
     )
     return {
         "key": str(job_id),
@@ -39,13 +45,19 @@ def build_batch_request_line(job_id: int, resume_content: str, job: dict) -> dic
     }
 
 
-def build_batch_jsonl(jobs: list[dict], resume_content: str) -> str:
+def build_batch_jsonl(jobs: list[dict], resume_content: str, search_query: str = "") -> str:
     lines = []
     for job in jobs:
         job_id = job.get("id")
         if job_id is None:
             continue
-        lines.append(json.dumps(build_batch_request_line(job_id, resume_content, job)))
+        lines.append(
+            json.dumps(
+                build_batch_request_line(
+                    job_id, resume_content, job, search_query=search_query
+                )
+            )
+        )
     return "\n".join(lines) + ("\n" if lines else "")
 
 
@@ -103,7 +115,7 @@ async def _create_batch_job_for_chunk(
     search_query: str | None = None,
 ) -> dict:
     job_ids = [job["id"] for job in chunk]
-    jsonl_content = build_batch_jsonl(chunk, resume_content)
+    jsonl_content = build_batch_jsonl(chunk, resume_content, search_query=search_query or "")
     display_name = (
         f"justapply-{kind}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{display_suffix}"
     )

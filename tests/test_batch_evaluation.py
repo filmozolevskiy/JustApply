@@ -16,12 +16,16 @@ def test_build_batch_request_line_uses_job_id_key_and_json_mime():
         42,
         "# Resume",
         {"title": "QA", "company": "Acme", "description": "Test role"},
+        search_query="QA",
     )
 
     assert line["key"] == "42"
     assert line["request"]["generation_config"]["response_mime_type"] == "application/json"
     assert "QA" in line["request"]["contents"][0]["parts"][0]["text"]
     assert "Acme" in line["request"]["contents"][0]["parts"][0]["text"]
+    prompt = line["request"]["contents"][0]["parts"][0]["text"]
+    assert "Search query: QA" in prompt
+    assert '"roleRelevant"' in prompt
 
 def test_build_batch_jsonl_one_line_per_job():
     jobs = [
@@ -73,6 +77,40 @@ async def test_submit_batch_evaluation_persists_rows(tmp_path, monkeypatch):
     assert created[0]["searchEmploymentTypes"] == "Full-time"
     assert created[0]["searchSalaryMin"] == 120000
     assert created[0]["searchQuery"] == "QA"
+
+@pytest.mark.asyncio
+async def test_submit_batch_evaluation_jsonl_uses_snapshotted_search_query(
+    tmp_path, monkeypatch
+):
+    db_path = tmp_path / "test.db"
+    captured: dict[str, str] = {}
+
+    def capture_jsonl(jsonl_content, *_args, **_kwargs):
+        captured["jsonl"] = jsonl_content
+        return ("batches/test-query", "JOB_STATE_PENDING")
+
+    monkeypatch.setattr("src.core.batch_evaluation.get_client", lambda: MagicMock())
+    monkeypatch.setattr("src.core.batch_evaluation._submit_jsonl_batch", capture_jsonl)
+
+    from src import db as database
+
+    monkeypatch.setattr(database.connection, "DB_PATH", str(db_path))
+    database.init_db(str(db_path))
+
+    jobs = [{"id": 1, "title": "SDET", "company": "Co", "description": "Test role"}]
+    await submit_batch_evaluation(
+        jobs,
+        "# Resume",
+        kind="search",
+        db_path=str(db_path),
+        search_query="QA",
+    )
+
+    assert "jsonl" in captured
+    line = json.loads(captured["jsonl"].strip().splitlines()[0])
+    prompt = line["request"]["contents"][0]["parts"][0]["text"]
+    assert "Search query: QA" in prompt
+    assert '"roleRelevant"' in prompt
 
 @pytest.mark.asyncio
 async def test_submit_batch_evaluation_skips_in_flight_job_ids(tmp_path, monkeypatch):
