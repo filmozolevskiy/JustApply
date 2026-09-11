@@ -7,8 +7,8 @@ Parent: https://github.com/filmozolevskiy/JustApply/issues/207
 Queue (respect blockers):
 - #208 Role Relevance on evaluation write-back (closed)
 - #212 Resume Matcher classifies Role Relevance (closed)
-- #213 Role-filtered pill and drawer row (frontier; blocked by #208 closed)
-- #214 Reassess uses current search query (blocked by #208 closed and #212 closed)
+- #213 Role-filtered pill and drawer row (closed)
+- #214 Reassess uses current search query (frontier; blocked by #208 closed and #212 closed)
 
 ---
 
@@ -33,5 +33,17 @@ Matcher JSON contract now includes `roleRelevant` (`true` / `false` / `null`). T
 Quality gate: ruff, mypy, pytest 1180 passed, coverage 86%.
 
 Next frontier: #213 Role-filtered pill and drawer row.
+
+---
+
+## Iteration — #213 Role-filtered pill and drawer row (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/213
+
+Rejected cards with the Role-filtered flag show a `Role-filtered` pill in the badge row (hover shows the stored reason). The drawer Job Info grid adds `Role Relevance: Role-filtered` plus that reason. No title strip and no recruiter-style banner. Attribute-filtered rejects without the flag stay unchanged. Throwaway `/prototype/role-reject-copy` is not a product route.
+
+Quality gate: ruff, mypy, pytest 1185 passed, coverage 86%. Browser check on the seeded Rejected card confirmed the pill and drawer row.
+
+Next frontier: #214 Reassess uses current search query.
 
 ---

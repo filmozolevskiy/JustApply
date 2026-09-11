@@ -49,6 +49,15 @@ export function buildDrawerCompanyRowHtml(company, companyUrl) {
   return `Company: <strong>${company}</strong>${badgeHtml}`;
 }
 
+export function drawerRoleRelevanceRow(job) {
+  if (!job?.roleFiltered) {
+    return '';
+  }
+  const reason = String(job.roleFilteredReason || '').trim();
+  const reasonHtml = reason ? ` — ${reason}` : '';
+  return `<div class="drawer-job-info-full">Role Relevance: Role-filtered${reasonHtml}</div>`;
+}
+
 /** Accepted jobs after enrichment — show Re-classify / Load More even with zero matching contacts. */
 export function hasContactSampleActions(job, contacts = job.contacts || []) {
   if (job.status !== 'accepted') return false;
@@ -870,6 +879,7 @@ export function createDrawerController({
               ${job.employmentType ? `<div>Employment Type: <span>${job.employmentType}</span></div>` : ''}
               <div>Salary: <span class="drawer-salary">${drawerSalaryDisplay(job)}</span></div>
               <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
+              ${drawerRoleRelevanceRow(job)}
             </div>
           </div>
 
