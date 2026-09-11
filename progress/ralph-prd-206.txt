@@ -17,3 +17,10 @@ Approved seams (from PRD): HTTP TestClient for `GET /jobs/{id}`; pure Job Link p
 - Prev/next and Contacted Elsewhere keep URL sync through `openJobDetailsDrawer` / shared cold-load helper.
 - Tests: `tests/test_job_links.py` (#210 wiring); quality gates green (ruff, mypy, pytest cov).
 - Next frontier: #211 (Unsaved Draft Warning on Job Link URL leave; blocked by #210 until close).
+
+## #211 Unsaved Draft Warning on Job Link URL leave (closed)
+- `applyJobLinkPath` runs `confirmDiscardIfNeeded` before URL leave/switch (Back/Forward/path change).
+- Cancel restores the still-open Job Link via `restoreJobLinkHistory` (replaceState); Discard clears drafts and completes navigation.
+- Widened `get_drawer_body` window so outreach `/200` counter tests still see drawer HTML after Job Link growth.
+- Tests: `tests/test_job_links.py` (#211 wiring + restore helper); quality gates green (ruff, mypy, pytest cov).
+- Queue for PRD #206: no further ready-for-agent child slices.

@@ -48,3 +48,11 @@ export function pushBoardRootHistory() {
   if (location.pathname === BOARD_ROOT_PATH) return;
   history.pushState({ jobLink: null }, '', BOARD_ROOT_PATH);
 }
+
+/** Restore `/jobs/{id}` after Cancel on URL leave (replace, do not push). */
+export function restoreJobLinkHistory(jobId) {
+  if (typeof history === 'undefined' || typeof location === 'undefined') return;
+  const path = buildJobLinkPath(jobId);
+  if (location.pathname === path) return;
+  history.replaceState({ jobLink: jobId }, '', path);
+}

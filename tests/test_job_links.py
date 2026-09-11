@@ -258,3 +258,63 @@ def test_apply_job_link_missing_id_recovers_to_board_root():
     ensure_body = drawer[ensure_start : ensure_start + 600]
     assert "addLogLine" in ensure_body
     assert "error" in ensure_body
+
+
+# --- #211: Unsaved Draft Warning on Job Link URL leave ---
+
+
+def test_apply_job_link_path_guards_url_leave_with_discard():
+    """URL leave/switch via applyJobLinkPath uses the same discard guard as close/nav."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 1600]
+    assert "confirmDiscardIfNeeded" in body
+    discard_idx = body.find("confirmDiscardIfNeeded")
+    close_idx = body.find("closeDrawerImmediate")
+    open_idx = body.find("openJobDetailsDrawer")
+    assert discard_idx != -1
+    assert close_idx == -1 or discard_idx < close_idx
+    assert open_idx == -1 or discard_idx < open_idx
+
+
+def test_apply_job_link_cancel_restores_current_job_link():
+    """Cancel on Unsaved Draft Warning restores the still-open job's Job Link URL."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 1600]
+    assert "confirmDiscardIfNeeded" in body
+    assert "restoreJobLinkHistory" in body
+
+
+def test_restore_job_link_history_replaces_path():
+    """restoreJobLinkHistory replaceStates `/jobs/{id}` when the path differs."""
+    result = _run_node(
+        """
+        import { restoreJobLinkHistory } from './src/web/static/js/jobLinks.js';
+
+        const replaces = [];
+        globalThis.location = { pathname: '/' };
+        globalThis.history = {
+          replaceState(state, _title, url) {
+            replaces.push({ state, url });
+            globalThis.location.pathname = url;
+          },
+          pushState() {
+            process.exit(9);
+          },
+        };
+
+        restoreJobLinkHistory(42);
+        if (replaces.length !== 1 || replaces[0].url !== '/jobs/42') process.exit(1);
+        restoreJobLinkHistory(42);
+        if (replaces.length !== 1) process.exit(2);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout

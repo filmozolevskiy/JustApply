@@ -79,4 +79,4 @@ def get_drawer_body() -> str:
     if start == -1:
         start = content.find("function openJobDetailsDrawer(")
     assert start != -1, "Drawer function (or buildContactGroupsHtml) not found"
-    return content[start : start + 20000]
+    return content[start : start + 22000]

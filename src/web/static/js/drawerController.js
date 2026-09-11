@@ -11,6 +11,7 @@ import {
   parseJobLinkPath,
   pushBoardRootHistory,
   pushJobLinkHistory,
+  restoreJobLinkHistory,
 } from './jobLinks.js';
 
 export const NAME_PLACEHOLDER = '______';
@@ -725,8 +726,23 @@ export function createDrawerController({
     }
   }
 
+  function wouldUrlPathLeaveOrSwitch(link) {
+    const overlay = document.getElementById('kanban-drawer');
+    const drawerOpen =
+      Boolean(overlay?.classList.contains('active')) && drawerJobId != null;
+    if (!drawerOpen) return false;
+    if (link.type !== 'job') return true;
+    return link.id !== drawerJobId;
+  }
+
   async function applyJobLinkPath(pathname) {
     const link = parseJobLinkPath(pathname);
+    if (wouldUrlPathLeaveOrSwitch(link)) {
+      if (!(await confirmDiscardIfNeeded())) {
+        restoreJobLinkHistory(drawerJobId);
+        return;
+      }
+    }
     if (link.type !== 'job') {
       closeDrawerImmediate({ syncUrl: false });
       return;
