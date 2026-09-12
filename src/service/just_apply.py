@@ -138,13 +138,14 @@ async def reassess_job(
     seniorities: str = "any",
     employment_types: str = "any",
     salary: str = "",
+    search_query: str = "",
     log_func=None,
 ) -> Job:
     """Re-run Resume Matcher on a single existing job.
 
-    Gate prefs default to “any” (CLI v1). Dashboard callers pass current
-    Job Search Settings so Employment Type / remote / seniority / Salary Min
-    gate apply.
+    Gate prefs default to “any” / blank query (CLI v1). Dashboard callers pass
+    current Job Search Settings so Employment Type / remote / seniority /
+    Salary Min / Role Relevance query apply.
     """
     init_db()
     return await run_reassess_pipeline(
@@ -154,6 +155,7 @@ async def reassess_job(
         seniorities=seniorities,
         employment_types=employment_types,
         salary_min=parse_salary_min(salary),
+        search_query=search_query,
         log_func=log_func,
     )
 
@@ -166,6 +168,7 @@ async def reassess_all_jobs(
     seniorities: str = "any",
     employment_types: str = "any",
     salary: str = "",
+    search_query: str = "",
     log_func=None,
 ) -> list[Job]:
     """Re-run Resume Matcher on every job in the given archive filter."""
@@ -182,6 +185,7 @@ async def reassess_all_jobs(
                 seniorities=seniorities,
                 employment_types=employment_types,
                 salary_min=salary_min,
+                search_query=search_query,
                 log_func=log_func,
             )
             updated.append(result)
@@ -217,6 +221,7 @@ async def backfill_unevaluated_jobs(
     seniorities: str = "any",
     employment_types: str = "any",
     salary: str = "",
+    search_query: str | None = None,
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -231,6 +236,7 @@ async def backfill_unevaluated_jobs(
         seniorities=seniorities,
         employment_types=employment_types,
         salary_min=parse_salary_min(salary),
+        search_query=search_query,
         wait=wait,
         log_func=log_func,
         db_path=db_path,

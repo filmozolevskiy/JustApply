@@ -378,3 +378,155 @@ async def test_reassess_all_applies_annualizer_and_salary_gate(tmp_db):
     assert by_id[keep_id].annualMax == 130000
     assert by_id[reject_id].status == "rejected"
     assert by_id[reject_id].annualMax == 110000
+
+
+@pytest.mark.asyncio
+async def test_reassess_role_relevant_false_rejects_matched_job(tmp_db):
+    """Current search query + roleRelevant false demotes Matched as Role-filtered."""
+    job_id = _seed_job(tmp_db, status="matched", title="Software Engineer")
+    evaluation = _matcher_evaluation(roleRelevant=False)
+    mock_eval = AsyncMock(return_value=evaluation)
+    with patch("src.pipelines.evaluate_job", new=mock_eval):
+        updated = await run_reassess_pipeline(job_id, search_query="QA")
+
+    assert mock_eval.await_args.kwargs["search_query"] == "QA"
+    assert updated.status == "rejected"
+    assert updated.roleFiltered is True
+    assert updated.roleFilteredReason == "Searched QA vs Software Engineer"
+    assert updated.matchScore == 82
+    activity = [entry.message for entry in updated.activityLog]
+    assert not any("Role Relevance" in message for message in activity)
+
+
+@pytest.mark.asyncio
+async def test_reassess_role_relevant_false_rejects_scraped_job(tmp_db):
+    """Scraped + roleRelevant false → Rejected Role-filtered Job."""
+    job_id = _seed_job(tmp_db, status="scraped", title="Software Engineer")
+    evaluation = _matcher_evaluation(roleRelevant=False)
+    with patch(
+        "src.pipelines.evaluate_job",
+        new=AsyncMock(return_value=evaluation),
+    ):
+        updated = await run_reassess_pipeline(job_id, search_query="QA")
+
+    assert updated.status == "rejected"
+    assert updated.roleFiltered is True
+    assert updated.roleFilteredReason == "Searched QA vs Software Engineer"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "lane",
+    ["accepted", "applied", "interviewing"],
+)
+async def test_reassess_role_relevant_false_keeps_downstream_lane(tmp_db, lane):
+    """Accepted+ keep lane on Role Relevance fail; flag is not persisted."""
+    job_id = _seed_job(tmp_db, status=lane, title="Software Engineer")
+    evaluation = _matcher_evaluation(roleRelevant=False)
+    with patch(
+        "src.pipelines.evaluate_job",
+        new=AsyncMock(return_value=evaluation),
+    ):
+        updated = await run_reassess_pipeline(job_id, search_query="QA")
+
+    assert updated.status == lane
+    assert updated.roleFiltered is False
+    assert updated.roleFilteredReason == ""
+    assert updated.matchScore == 82
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role_relevant", [True, None, "omitted"])
+async def test_reassess_unsure_role_relevant_does_not_demote(tmp_db, role_relevant):
+    """true / null / omitted roleRelevant does not demote for Role Relevance."""
+    job_id = _seed_job(tmp_db, status="matched", title="Software Engineer")
+    evaluation = _matcher_evaluation()
+    if role_relevant != "omitted":
+        evaluation["roleRelevant"] = role_relevant
+    with patch(
+        "src.pipelines.evaluate_job",
+        new=AsyncMock(return_value=evaluation),
+    ):
+        updated = await run_reassess_pipeline(job_id, search_query="QA")
+
+    assert updated.status == "matched"
+    assert updated.roleFiltered is False
+
+
+@pytest.mark.asyncio
+async def test_reassess_blank_query_skips_role_relevance(tmp_db):
+    """Blank current query skips Role Relevance even when JSON says false."""
+    job_id = _seed_job(tmp_db, status="matched", title="Software Engineer")
+    evaluation = _matcher_evaluation(roleRelevant=False)
+    with patch(
+        "src.pipelines.evaluate_job",
+        new=AsyncMock(return_value=evaluation),
+    ):
+        updated = await run_reassess_pipeline(job_id, search_query="  ")
+
+    assert updated.status == "matched"
+    assert updated.roleFiltered is False
+
+
+@pytest.mark.asyncio
+async def test_reassess_passing_role_clears_role_filtered_flag(tmp_db):
+    """A later reassess that passes Role Relevance clears the Role-filtered flag."""
+    job_id = _seed_job(
+        tmp_db,
+        status="rejected",
+        title="Software Engineer",
+        roleFiltered=True,
+        roleFilteredReason="Searched QA vs Software Engineer",
+    )
+    evaluation = _matcher_evaluation(roleRelevant=True)
+    with patch(
+        "src.pipelines.evaluate_job",
+        new=AsyncMock(return_value=evaluation),
+    ):
+        updated = await run_reassess_pipeline(job_id, search_query="Software Engineer")
+
+    assert updated.status == "rejected"
+    assert updated.roleFiltered is False
+    assert updated.roleFilteredReason == ""
+
+
+@pytest.mark.asyncio
+async def test_reassess_job_service_forwards_search_query(tmp_db):
+    """Dashboard path: service forwards current Job Search Settings query."""
+    job_id = _seed_job(tmp_db, status="matched", title="Software Engineer")
+    evaluation = _matcher_evaluation(roleRelevant=False)
+    with patch(
+        "src.pipelines.evaluate_job",
+        new=AsyncMock(return_value=evaluation),
+    ):
+        updated = await reassess_job(job_id, search_query="QA")
+
+    assert updated.status == "rejected"
+    assert updated.roleFiltered is True
+    assert updated.roleFilteredReason == "Searched QA vs Software Engineer"
+
+
+@pytest.mark.asyncio
+async def test_reassess_all_uses_current_search_query(tmp_db):
+    """Reassess-all applies Role Relevance with the same current query."""
+    keep_id = _seed_job(tmp_db, title="QA Engineer", company="Alpha")
+    reject_id = _seed_job(tmp_db, title="Software Engineer", company="Beta")
+
+    async def fake_evaluate(job_dict, *_args, **kwargs):
+        assert kwargs.get("search_query") == "QA"
+        title = job_dict.get("title") or ""
+        if title == "Software Engineer":
+            return _matcher_evaluation(roleRelevant=False)
+        return _matcher_evaluation(roleRelevant=True)
+
+    with patch("src.pipelines.evaluate_job", new=AsyncMock(side_effect=fake_evaluate)):
+        updated = await reassess_all_jobs(
+            search_query="QA",
+            log_func=lambda m, level="info": None,
+        )
+
+    by_id = {j.id: j for j in updated}
+    assert by_id[keep_id].status == "matched"
+    assert by_id[keep_id].roleFiltered is False
+    assert by_id[reject_id].status == "rejected"
+    assert by_id[reject_id].roleFiltered is True

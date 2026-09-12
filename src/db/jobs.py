@@ -638,9 +638,9 @@ def add_job(job, db_path=None):
             title, company, size, link, date, location, remoteType, seniority, employmentType,
             salary, description, matchScore, matchType, shouldProceed, status, resumeUsed,
             strengths, gaps, contacts, outreachMessage, comments, isRecruiter, companyUrl,
-            unclassified
+            unclassified, roleFiltered, roleFilteredReason
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         title,
@@ -670,6 +670,8 @@ def add_job(job, db_path=None):
         1 if fields["isRecruiter"] else 0,
         fields["companyUrl"],
         1 if fields["unclassified"] else 0,
+        1 if fields["roleFiltered"] else 0,
+        fields["roleFilteredReason"],
     ))
     new_id = cursor.lastrowid
     _append_activity_log(cursor, new_id, "Found")
@@ -740,7 +742,9 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
             remoteType = ?,
             seniority = ?,
             employmentType = ?,
-            unclassified = ?
+            unclassified = ?,
+            roleFiltered = ?,
+            roleFilteredReason = ?
         WHERE id = ?
     """, (
         fields.get("matchScore", 0),
@@ -759,6 +763,8 @@ def update_job_evaluation(job_id: int, fields: dict, db_path=None):
         fields.get("seniority") or "",
         employment_type or "",
         1 if fields.get("unclassified") else 0,
+        1 if fields.get("roleFiltered") else 0,
+        fields.get("roleFilteredReason") or "",
         job_id,
     ))
     _append_activity_log(

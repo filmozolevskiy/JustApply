@@ -34,8 +34,17 @@ def load_resume(name: str) -> str:
         return f.read()
 
 
-def _build_prompt(resume: str, job_title: str, company: str, description: str) -> str:
+def _build_prompt(
+    resume: str,
+    job_title: str,
+    company: str,
+    description: str,
+    search_query: str = "",
+) -> str:
+    query = (search_query or "").strip()
     return f"""You are a resume matcher. Compare the candidate's resume to the job listing and evaluate compatibility.
+
+Search query: {query}
 
 RESUME:
 {resume}
@@ -58,7 +67,8 @@ Respond with a JSON object (no markdown, no extra text) in this exact format:
   "summary": "<concise 2-3 sentence summary of the job listing, including key tech stack/responsibilities>",
   "isRecruiter": <true|false>,
   "salary": "<human-readable Posted Salary string or empty string>",
-  "postedSalary": <null or object — structured Posted Salary facts; see rules>
+  "postedSalary": <null or object — structured Posted Salary facts; see rules>,
+  "roleRelevant": <true|false|null>
 }}
 
 Rules:
@@ -92,23 +102,43 @@ Rules:
   * Include "hoursPerWeek" only when the listing states hours per week for hourly pay.
   * "amountMin"/"amountMax" are numeric amounts in that period's unit (not annualized). For a single figure, set amountMin only (or equal min/max).
   * "currency" is the listing currency code when known (default USD if "$" with no other cue).
+- Role Relevance ("roleRelevant") classifies role family against the search query only — not resume fit.
+  * true if the listing is the queried role or an adjacent title in the same family.
+    For query QA that includes QA Engineer, SDET, Software Engineer in Test, and test-automation roles.
+  * false only when the listing is clearly a different role (example: a product/feature software engineer or developer vs QA).
+  * null if the title and description are too thin or mixed to tell.
+  * Do not use resume fit. Do not score skills for this field.
+  * Read the listing in the language it is written in, including French or bilingual titles. Translate as needed before setting roleRelevant. Do not rely on a keyword list.
 """
 
 
-async def evaluate_jobs_batch(jobs: list[dict], resume_content: str, log_func=None) -> list[dict]:
+async def evaluate_jobs_batch(
+    jobs: list[dict],
+    resume_content: str,
+    log_func=None,
+    search_query: str = "",
+) -> list[dict]:
     """Evaluate jobs sequentially (legacy helper; search/backfill use Batch API)."""
     if not jobs:
         return []
     results = []
     for job in jobs:
-        results.append(await evaluate_job(job, resume_content, log_func))
+        results.append(
+            await evaluate_job(job, resume_content, log_func, search_query=search_query)
+        )
     return results
 
 
-async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:
+async def evaluate_job(
+    job: dict,
+    resume_content: str,
+    log_func=None,
+    search_query: str = "",
+) -> dict:
     """
     Evaluate a job against a resume using the Gemini API.
-    Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, seniority, employmentType, summary, isRecruiter, salary, postedSalary.
+    Returns dict with matchScore, matchType, strengths, gaps, shouldProceed, remoteType, seniority, employmentType, summary, isRecruiter, salary, postedSalary, roleRelevant.
+    search_query is the Role Relevance target (batch snapshot or live settings query).
     Implements exponential backoff on rate limit (429) errors.
     Returns {} if no API key is configured or on unrecoverable error.
     """
@@ -132,6 +162,7 @@ async def evaluate_job(job: dict, resume_content: str, log_func=None) -> dict:
         job.get("title", ""),
         company_name,
         job.get("description", ""),
+        search_query=search_query,
     )
 
     max_retries = 4

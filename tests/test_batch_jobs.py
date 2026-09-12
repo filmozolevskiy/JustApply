@@ -84,6 +84,36 @@ def test_create_batch_job_null_salary_min_when_unset(tmp_db):
 
     assert row["searchSalaryMin"] is None
 
+
+def test_create_batch_job_persists_search_query(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/search-query",
+        display_name="query",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        search_query="QA Engineer",
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchQuery"] == "QA Engineer"
+    fetched = batch_jobs.get_batch_job(row["id"], db_path=str(tmp_db))
+    assert fetched["searchQuery"] == "QA Engineer"
+
+
+def test_create_batch_job_blank_search_query_when_unset(tmp_db):
+    row = batch_jobs.create_batch_job(
+        batch_name="batches/no-query",
+        display_name="none",
+        state="JOB_STATE_PENDING",
+        kind="search",
+        job_ids=[1],
+        db_path=str(tmp_db),
+    )
+
+    assert row["searchQuery"] == ""
+
+
 def test_batch_name_uniqueness_enforced(tmp_db):
     batch_jobs.create_batch_job(
         batch_name="batches/dup",

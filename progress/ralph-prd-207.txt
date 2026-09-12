@@ -1,0 +1,61 @@
+# Ralph Loop Progress — PRD #207
+
+Started: 2026-09-10
+Mode: TDD
+Parent: https://github.com/filmozolevskiy/JustApply/issues/207
+
+Queue (respect blockers):
+- #208 Role Relevance on evaluation write-back (closed)
+- #212 Resume Matcher classifies Role Relevance (closed)
+- #213 Role-filtered pill and drawer row (closed)
+- #214 Reassess uses current search query (frontier; blocked by #208 closed and #212 closed)
+
+---
+
+## Iteration — #208 Role Relevance on evaluation write-back (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/208
+
+Honor matcher JSON `roleRelevant` in evaluation write-back. Reject only on JSON `false`. Persist Role-filtered flag/reason on the job and the search query on each Batch Evaluation Job (search, backfill, retry). Task Logs / CollectResult / CLI `--collect` now count `role-filtered` separately. Unclassified fallback, blank query, and `mock_eval` skip Role Relevance. Dual-fail counts only as role-filtered.
+
+Quality gate: ruff, mypy, pytest 1177 passed, coverage 86%.
+
+Next frontier: #212 Resume Matcher classifies Role Relevance.
+
+---
+
+## Iteration — #212 Resume Matcher classifies Role Relevance (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/212
+
+Matcher JSON contract now includes `roleRelevant` (`true` / `false` / `null`). The shared `_build_prompt` adds the search query plus Role Relevance rules (same family / adjacent titles, clear no only, unsure → null, no resume fit, French/bilingual translate, no keyword list). Live `evaluate_job` and batch JSONL both use that prompt. Search/backfill/retry batch requests pass the Batch Evaluation Job query snapshot into JSONL.
+
+Quality gate: ruff, mypy, pytest 1180 passed, coverage 86%.
+
+Next frontier: #213 Role-filtered pill and drawer row.
+
+---
+
+## Iteration — #213 Role-filtered pill and drawer row (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/213
+
+Rejected cards with the Role-filtered flag show a `Role-filtered` pill in the badge row (hover shows the stored reason). The drawer Job Info grid adds `Role Relevance: Role-filtered` plus that reason. No title strip and no recruiter-style banner. Attribute-filtered rejects without the flag stay unchanged. Throwaway `/prototype/role-reject-copy` is not a product route.
+
+Quality gate: ruff, mypy, pytest 1185 passed, coverage 86%. Browser check on the seeded Rejected card confirmed the pill and drawer row.
+
+Next frontier: #214 Reassess uses current search query.
+
+---
+
+## Iteration — #214 Reassess uses current search query (2026-09-10)
+
+Closed: https://github.com/filmozolevskiy/JustApply/issues/214
+
+Reassess and Reassess-all apply Role Relevance with the current Job Search Settings query (passed into `evaluate_job` and the gate). Scraped/Matched jobs with `roleRelevant: false` move to Rejected as Role-filtered Jobs. Accepted+ keep their lane and do not persist the flag. A later passing reassess clears the flag. Blank query and unsure/omitted `roleRelevant` do not demote for role.
+
+Quality gate: ruff, mypy, pytest 1197 passed, coverage 86%.
+
+No further ready-for-agent children remain for PRD #207.
+
+---

@@ -139,6 +139,51 @@ def test_build_prompt_formatting():
     assert "amountMin" in prompt
     assert '"salary"' in prompt
 
+
+def test_build_prompt_includes_role_relevance_contract():
+    from src.core.matcher import _build_prompt
+
+    prompt = _build_prompt(
+        resume="My Resume",
+        job_title="Ingénieur QA",
+        company="Google",
+        description="Rôle bilingue",
+        search_query="QA",
+    )
+    assert '"roleRelevant"' in prompt
+    assert "true | false | null" in prompt or "true|false|null" in prompt
+    assert "Search query: QA" in prompt
+    assert "SDET" in prompt
+    assert "Software Engineer in Test" in prompt
+    assert "product/feature" in prompt
+    assert "null" in prompt
+    assert "resume fit" in prompt.lower() or "Do not use resume fit" in prompt
+    assert "French" in prompt or "bilingual" in prompt.lower()
+    assert "translat" in prompt.lower()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_job_prompt_includes_search_query(sample_job):
+    captured: list[str] = []
+
+    async def fake_generate(prompt: str):
+        captured.append(prompt)
+        return json.dumps({"matchScore": 80, "matchType": "match", "roleRelevant": True})
+
+    with patch("src.core.matcher.gemini_generate_text", new=fake_generate):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}):
+            result = await evaluate_job(
+                sample_job,
+                "resume content",
+                search_query="QA Engineer",
+            )
+
+    assert result["roleRelevant"] is True
+    assert captured
+    assert "Search query: QA Engineer" in captured[0]
+    assert '"roleRelevant"' in captured[0]
+
+
 def test_recruiter_company_detection_local():
     from src.core.matcher import check_recruiter_by_name
     assert check_recruiter_by_name("Fuze HR Solutions") is True
