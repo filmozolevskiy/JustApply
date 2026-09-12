@@ -105,6 +105,7 @@ async def run_collect(wait: bool = False) -> dict:
         f"Batches polled: {result['batches_polled']} | "
         f"Matched: {result['matched']} | "
         f"Attribute-filtered: {result['attribute_filtered']} | "
+        f"Role-filtered: {result['role_filtered']} | "
         f"Fallback-rejected: {result['fallback_rejected']} | "
         f"Failed: {result['failed']} | Unclassified: {result['unclassified']} | "
         f"In-flight remaining: {result['in_flight_remaining']}"

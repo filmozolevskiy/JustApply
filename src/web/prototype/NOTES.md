@@ -68,3 +68,27 @@
 - Inactive: outline star (`fa-regular fa-star`), neutral circular pill.
 - Active: filled star (`fa-solid fa-star`), amber background tint, amber border, subtle glow.
 - Shipped in `dashboard.html` + `boardOrchestration.js` + `dashboard.css`.
+
+---
+
+# Role-filtered Job copy — prototype notes
+
+**Question:** How should a Role-filtered Job look on the Rejected Kanban card and in the job drawer?
+
+**Status:** Production (PRD #207 / #213). Runnable `/prototype/role-reject-copy` page was never shipped.
+
+## Variants
+
+| Key | Name | Card | Drawer |
+|-----|------|------|--------|
+| A | Badge row + Job Info line *(chosen)* | `Role-filtered` pill in the badge row | Extra Job Info row |
+| B | Title strip + banner | Title chrome | Recruiter-style banner |
+| C | Header chip + activity-log hero | Header chip | Activity log hero |
+
+## Verdict — Role-filtered copy
+
+**A — Badge row + Job Info line** (2026-09-05).
+
+- Card: `Role-filtered` pill in `kanban-card-badges`, same row as Unclassified / Recruiter. Hover may show the stored reason.
+- Drawer: extra Job Info row `Role Relevance: Role-filtered` plus the short reason. No title strip and no recruiter-style banner.
+- Shipped in `boardRenderer.js` + `drawerController.js`.

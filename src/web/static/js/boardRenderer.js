@@ -280,6 +280,15 @@ export function cardCommentRootCountChip(job) {
   return `<span class="comment-root-count-chip" aria-label="${rootCount} comment${rootCount === 1 ? '' : 's'}"><i class="fa-regular fa-comment-dots" aria-hidden="true"></i> ${rootCount}</span>`;
 }
 
+export function cardRoleFilteredBadge(job) {
+  if (!job?.roleFiltered) {
+    return '';
+  }
+  const reason = String(job.roleFilteredReason || '').replace(/"/g, '&quot;');
+  const titleAttr = reason ? ` title="${reason}"` : '';
+  return `<span class="role-filtered-badge" style="font-size:0.6rem; background:rgba(139, 92, 246, 0.15); color:#a78bfa; border:1px solid rgba(139, 92, 246, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;"${titleAttr}>Role-filtered</span>`;
+}
+
 export function getKanbanCardMovementButtons(job) {
   if (job.archived) {
     return `<button class="kanban-action-btn unarchive-btn hover-reject" onclick="archiveJob(${job.id})" title="Un-archive Job"><i class="fa-solid fa-box-open"></i></button>`;
@@ -332,6 +341,7 @@ export function renderBoard(jobs, filters = {}) {
         job.unclassified
           ? `<span style="font-size:0.6rem; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;" title="Remote type and seniority were not classified by the Resume Matcher; scraper values were used instead.">Unclassified</span>`
           : '',
+        cardRoleFilteredBadge(job),
         job.isRecruiter
           ? `<span style="font-size:0.6rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:1px 5px; border-radius:4px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em;">Recruiter</span>`
           : '',

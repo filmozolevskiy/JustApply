@@ -69,6 +69,8 @@ def test_legacy_minimal_jobs_schema_upgrades_in_place(tmp_path):
         assert "annualMax" in cols
         assert "annualCurrency" in cols
         assert "comments" in cols
+        assert "roleFiltered" in cols
+        assert "roleFilteredReason" in cols
         tables = {
             row[0]
             for row in conn2.execute(

@@ -34,6 +34,12 @@ from .core.enrichment.contact_sample import (
 )
 from .core.enrichment.coordinator import clear_enrichment_prior
 from .core.matcher import check_recruiter_by_name, evaluate_job, load_resume
+from .core.role_relevance import (
+    has_role_relevance_query,
+    parse_role_relevant,
+    passes_role_relevance,
+    role_filtered_reason,
+)
 from .core.scraper import scrape_linkedin_jobs
 from .core.source_platform import (
     APIFY_LINKEDIN,
@@ -138,6 +144,7 @@ async def run_search_pipeline(
 
     if mock_eval:
         await log("mock_eval: attribute gating skipped.", "info")
+        await log("mock_eval: Role Relevance skipped.", "info")
 
     database.init_db()
     
@@ -204,6 +211,7 @@ async def run_search_pipeline(
             seniorities=seniorities,
             employment_types=employment_types,
             salary_min=salary_min,
+            search_query=query,
         )
         batches_submitted = len(created_batches)
 
@@ -222,6 +230,7 @@ async def run_backfill_pipeline(
     seniorities: str = "any",
     employment_types: str = "any",
     salary_min: int | None = None,
+    search_query: str | None = None,
     wait: bool = False,
     log_func=None,
     db_path=None,
@@ -274,6 +283,7 @@ async def run_backfill_pipeline(
         seniorities=seniorities,
         employment_types=employment_types,
         salary_min=salary_min,
+        search_query=search_query,
     )
 
     await log(
@@ -296,13 +306,15 @@ async def run_reassess_pipeline(
     seniorities: str = "any",
     employment_types: str = "any",
     salary_min: int | None = None,
+    search_query: str = "",
     log_func=None,
 ) -> Job:
     """Re-run Resume Matcher on an existing job and persist updated scores.
 
-    Applies the attribute gate from the caller's Job Search Settings (defaults
-    are “any” — CLI v1). On gate failure, only Scraped/Matched jobs move to
-    Rejected; Accepted+ keep their lane while matcher fields still update.
+    Applies Role Relevance then the attribute gate from the caller's Job
+    Search Settings (defaults are “any” / blank query — CLI v1). On Role
+    Relevance or gate failure, only Scraped/Matched jobs move to Rejected;
+    Accepted+ keep their lane while matcher fields still update.
     """
     job = database.get_job(job_id)
     if not job:
@@ -334,7 +346,9 @@ async def run_reassess_pipeline(
 
     job_dict = job.model_dump()
     original_status = (job_dict.get("status") or "").strip().lower()
-    evaluation = await evaluate_job(job_dict, resume_content, log_func)
+    evaluation = await evaluate_job(
+        job_dict, resume_content, log_func, search_query=search_query
+    )
     if not evaluation:
         await log("Resume Matcher returned no result; job unchanged.", "warning")
         raise ValueError("Resume Matcher failed — no evaluation returned")
@@ -344,6 +358,11 @@ async def run_reassess_pipeline(
         evaluation.get("postedSalary"),
         job_location=job_dict.get("location") or "",
     )
+    apply_role = has_role_relevance_query(search_query)
+    role_relevant, _note = parse_role_relevant(evaluation) if apply_role else (None, "skipped")
+    role_failed = apply_role and not passes_role_relevance(role_relevant)
+    demote = original_status in _REASSESS_DEMOTE_STATUSES
+    persist_role_filtered = role_failed and (demote or original_status == "rejected")
     fields = {
         "matchScore": evaluation.get("matchScore", 0),
         "matchType": evaluation.get("matchType", ""),
@@ -361,11 +380,28 @@ async def run_reassess_pipeline(
         "seniority": merged["seniority"],
         "employmentType": merged["employmentType"],
         "unclassified": False,
+        "roleFiltered": persist_role_filtered,
+        "roleFilteredReason": (
+            role_filtered_reason(search_query, job_dict.get("title") or "")
+            if persist_role_filtered
+            else ""
+        ),
     }
 
     updated = database.update_job_evaluation(job_id, fields)
     if not updated:
         raise ValueError("Failed to persist reassessed job")
+
+    if role_failed and demote:
+        demoted = database.update_job_status(job_id, "rejected")
+        if demoted:
+            updated = demoted
+        await log(
+            f"Re-assessed: score {fields['matchScore']}, "
+            f"{fields['matchType']}, shouldProceed={fields['shouldProceed']}",
+            "success",
+        )
+        return updated
 
     gate_ok = passes_attribute_gate(
         merged["remoteType"],

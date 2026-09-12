@@ -84,6 +84,8 @@ def parse_job_row(row) -> Job:
     job["shouldProceed"] = bool(job["shouldProceed"])
     job["isRecruiter"] = bool(job.get("isRecruiter", 0))
     job["unclassified"] = bool(job.get("unclassified", 0))
+    job["roleFiltered"] = bool(job.get("roleFiltered", 0))
+    job["roleFilteredReason"] = job.get("roleFilteredReason") or ""
     job["batchAttempts"] = int(job.get("batchAttempts") or 0)
     job["enrichmentNote"] = job.get("enrichmentNote") or ""
     job["enrichmentNoteKind"] = job.get("enrichmentNoteKind") or ""
@@ -161,5 +163,7 @@ def normalize_add_job_input(job: dict) -> dict:
         "outreachMessage": job.get("outreachMessage") or "",
         "isRecruiter": bool(job.get("isRecruiter")),
         "unclassified": bool(job.get("unclassified")),
+        "roleFiltered": bool(job.get("roleFiltered")),
+        "roleFilteredReason": job.get("roleFilteredReason") or "",
         "companyUrl": job.get("companyUrl") or "",
     }

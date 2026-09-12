@@ -1,0 +1,320 @@
+"""PRD #206: Job Links — helpers, HTTP route, open/close/boot, history, cold open."""
+
+import subprocess
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from src.web.server import app
+
+from kanban_js import read_dashboard_module, read_drawer_controller
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_node(script: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+# --- Pure Job Link path helpers ---
+
+
+def test_parse_job_link_path_numeric_id():
+    """`/jobs/{id}` parses to that numeric job id."""
+    result = _run_node(
+        """
+        import { parseJobLinkPath } from './src/web/static/js/jobLinks.js';
+
+        const r = parseJobLinkPath('/jobs/42');
+        if (r.type !== 'job' || r.id !== 42) process.exit(1);
+        if (parseJobLinkPath('/jobs/7').id !== 7) process.exit(2);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_parse_job_link_path_board_root():
+    """`/`, `/dashboard`, and bare `/jobs` are board root (not a Job Link)."""
+    result = _run_node(
+        """
+        import { parseJobLinkPath } from './src/web/static/js/jobLinks.js';
+
+        for (const path of ['/', '/dashboard', '/jobs', '/jobs/']) {
+          const r = parseJobLinkPath(path);
+          if (r.type !== 'board') {
+            console.error('expected board for', path, r);
+            process.exit(1);
+          }
+        }
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_parse_job_link_path_rejects_non_numeric():
+    """Non-numeric `/jobs/...` segments are invalid Job Links."""
+    result = _run_node(
+        """
+        import { parseJobLinkPath } from './src/web/static/js/jobLinks.js';
+
+        for (const path of ['/jobs/abc', '/jobs/12x', '/jobs/3.14', '/jobs/-1']) {
+          const r = parseJobLinkPath(path);
+          if (r.type !== 'invalid') {
+            console.error('expected invalid for', path, r);
+            process.exit(1);
+          }
+        }
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_build_job_link_path():
+    """buildJobLinkPath maps a numeric id to `/jobs/{id}`."""
+    result = _run_node(
+        """
+        import { buildJobLinkPath, BOARD_ROOT_PATH } from './src/web/static/js/jobLinks.js';
+
+        if (buildJobLinkPath(42) !== '/jobs/42') process.exit(1);
+        if (buildJobLinkPath(7) !== '/jobs/7') process.exit(2);
+        if (BOARD_ROOT_PATH !== '/') process.exit(3);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+# --- HTTP seam: GET /jobs/{id} serves dashboard HTML ---
+
+
+def test_get_jobs_id_serves_dashboard_html():
+    """Hard navigation to a Job Link boots the same Kanban Dashboard HTML as `/`."""
+    client = TestClient(app)
+    root = client.get("/")
+    assert root.status_code == 200
+    job_link = client.get("/jobs/42")
+    assert job_link.status_code == 200
+    assert "text/html" in job_link.headers.get("content-type", "")
+    assert job_link.text == root.text
+    dash = client.get("/dashboard")
+    assert dash.status_code == 200
+    assert dash.text == root.text
+
+
+def test_job_link_route_does_not_shadow_api_or_static():
+    """`/api/*` and `/static/*` stay available when Job Link routes exist."""
+    client = TestClient(app)
+    api = client.get("/api/health")
+    assert api.status_code == 200
+    css = client.get("/static/css/dashboard.css")
+    assert css.status_code == 200
+    assert ":root" in css.text
+    js = client.get("/static/js/jobLinks.js")
+    assert js.status_code == 200
+    assert "export " in js.text
+
+
+# --- Wiring: open / close / boot URL sync ---
+
+
+def test_open_drawer_pushes_job_link():
+    """Opening a job from the drawer pushes `/jobs/{id}` in browser history."""
+    drawer = read_drawer_controller()
+    assert "from './jobLinks.js'" in drawer or 'from "./jobLinks.js"' in drawer
+    start = drawer.find("async function openJobDetailsDrawer(")
+    assert start != -1
+    body = drawer[start : start + 900]
+    assert "pushJobLinkHistory" in body
+
+
+def test_close_drawer_pushes_board_root():
+    """Closing the drawer pushes board root `/` in browser history."""
+    drawer = read_drawer_controller()
+    start = drawer.find("function closeDrawerImmediate(")
+    assert start != -1
+    body = drawer[start : start + 400]
+    assert "pushBoardRootHistory" in body
+
+
+def test_dashboard_boot_opens_job_link_when_on_board():
+    """After loadJobs, boot applies the Job Link path (open or cold-open)."""
+    app_js = read_dashboard_module("dashboardApp.js")
+    load_idx = app_js.find("board.loadJobs()")
+    assert load_idx != -1
+    after_load = app_js[load_idx : load_idx + 900]
+    assert "applyJobLinkPath" in after_load
+    assert ".then(" in after_load or ".finally(" in after_load
+
+
+def test_push_helpers_update_history_when_path_changes():
+    """pushJobLinkHistory / pushBoardRootHistory push only when the path differs."""
+    result = _run_node(
+        """
+        import {
+          pushJobLinkHistory,
+          pushBoardRootHistory,
+          BOARD_ROOT_PATH,
+        } from './src/web/static/js/jobLinks.js';
+
+        const pushes = [];
+        globalThis.location = { pathname: '/' };
+        globalThis.history = {
+          pushState(state, _title, url) {
+            pushes.push({ state, url });
+            globalThis.location.pathname = url;
+          },
+        };
+
+        pushJobLinkHistory(42);
+        if (pushes.length !== 1 || pushes[0].url !== '/jobs/42') process.exit(1);
+        pushJobLinkHistory(42);
+        if (pushes.length !== 1) process.exit(2);
+
+        pushBoardRootHistory();
+        if (pushes.length !== 2 || pushes[1].url !== BOARD_ROOT_PATH) process.exit(3);
+        pushBoardRootHistory();
+        if (pushes.length !== 2) process.exit(4);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+# --- #210: history, nav sync, cold open ---
+
+
+def test_popstate_applies_job_link_path():
+    """Browser Back / Forward syncs the drawer via popstate → applyJobLinkPath."""
+    app_js = read_dashboard_module("dashboardApp.js")
+    assert "popstate" in app_js
+    assert "applyJobLinkPath" in app_js
+    pop_idx = app_js.find("popstate")
+    assert pop_idx != -1
+    window = app_js[max(0, pop_idx - 80) : pop_idx + 200]
+    assert "addEventListener" in window
+    assert "applyJobLinkPath" in window
+
+
+def test_navigate_drawer_job_opens_neighbor_job_link():
+    """Drawer prev/next switches jobs through openJobDetailsDrawer (URL push)."""
+    drawer = read_drawer_controller()
+    start = drawer.find("async function navigateDrawerJob(")
+    assert start != -1
+    body = drawer[start : start + 500]
+    assert "openJobDetailsDrawer" in body
+
+
+def test_contacted_elsewhere_opens_target_job_link():
+    """Contacted Elsewhere navigation opens the target via openJobDetailsDrawer."""
+    drawer = read_drawer_controller()
+    start = drawer.find("async function openContactedElsewhereJob(")
+    assert start != -1
+    body = drawer[start : start + 700]
+    assert "openJobDetailsDrawer" in body
+    assert "ensureJobLoaded" in body
+
+
+def test_apply_job_link_cold_opens_when_not_on_board():
+    """Job Link for a job not in the board set fetches single-job API then opens."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 900]
+    assert "ensureJobLoaded" in body
+    assert "openJobDetailsDrawer" in body
+
+    ensure_start = drawer.find("async function ensureJobLoaded(")
+    assert ensure_start != -1
+    ensure_body = drawer[ensure_start : ensure_start + 600]
+    assert "findJob" in ensure_body
+    assert "/api/jobs/" in ensure_body
+    assert "upsertJob" in ensure_body
+
+
+def test_apply_job_link_missing_id_recovers_to_board_root():
+    """Missing/deleted Job Link id leaves drawer closed, path `/`, short error."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 1200]
+    assert "pushBoardRootHistory" in body
+    assert "closeDrawerImmediate" in body
+    assert "ensureJobLoaded" in body
+
+    ensure_start = drawer.find("async function ensureJobLoaded(")
+    assert ensure_start != -1
+    ensure_body = drawer[ensure_start : ensure_start + 600]
+    assert "addLogLine" in ensure_body
+    assert "error" in ensure_body
+
+
+# --- #211: Unsaved Draft Warning on Job Link URL leave ---
+
+
+def test_apply_job_link_path_guards_url_leave_with_discard():
+    """URL leave/switch via applyJobLinkPath uses the same discard guard as close/nav."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 1600]
+    assert "confirmDiscardIfNeeded" in body
+    discard_idx = body.find("confirmDiscardIfNeeded")
+    close_idx = body.find("closeDrawerImmediate")
+    open_idx = body.find("openJobDetailsDrawer")
+    assert discard_idx != -1
+    assert close_idx == -1 or discard_idx < close_idx
+    assert open_idx == -1 or discard_idx < open_idx
+
+
+def test_apply_job_link_cancel_restores_current_job_link():
+    """Cancel on Unsaved Draft Warning restores the still-open job's Job Link URL."""
+    drawer = read_drawer_controller()
+    def_start = drawer.find("async function applyJobLinkPath(")
+    if def_start == -1:
+        def_start = drawer.find("function applyJobLinkPath(")
+    assert def_start != -1
+    body = drawer[def_start : def_start + 1600]
+    assert "confirmDiscardIfNeeded" in body
+    assert "restoreJobLinkHistory" in body
+
+
+def test_restore_job_link_history_replaces_path():
+    """restoreJobLinkHistory replaceStates `/jobs/{id}` when the path differs."""
+    result = _run_node(
+        """
+        import { restoreJobLinkHistory } from './src/web/static/js/jobLinks.js';
+
+        const replaces = [];
+        globalThis.location = { pathname: '/' };
+        globalThis.history = {
+          replaceState(state, _title, url) {
+            replaces.push({ state, url });
+            globalThis.location.pathname = url;
+          },
+          pushState() {
+            process.exit(9);
+          },
+        };
+
+        restoreJobLinkHistory(42);
+        if (replaces.length !== 1 || replaces[0].url !== '/jobs/42') process.exit(1);
+        restoreJobLinkHistory(42);
+        if (replaces.length !== 1) process.exit(2);
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout

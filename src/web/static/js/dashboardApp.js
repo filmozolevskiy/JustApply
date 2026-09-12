@@ -305,5 +305,9 @@ export function bootstrapDashboard() {
     board.restoreActiveScrapeTask();
     board.restoreActiveEnrichTask();
     board.restoreActiveReclassifyTasks();
+    void board.applyJobLinkPath(location.pathname);
+  });
+  window.addEventListener('popstate', () => {
+    void board.applyJobLinkPath(location.pathname);
   });
 }

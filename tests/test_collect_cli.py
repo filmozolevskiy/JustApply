@@ -187,6 +187,7 @@ async def test_collect_once_with_no_in_flight_batches(tmp_db):
     assert result["batches_polled"] == 0
     assert result["matched"] == 0
     assert result["attribute_filtered"] == 0
+    assert result["role_filtered"] == 0
     assert result["fallback_rejected"] == 0
     assert result["in_flight_remaining"] == 0
 
@@ -247,18 +248,20 @@ async def test_collect_cli_footer_prints_split_rejection_counters(tmp_db, monkey
 
     assert result["matched"] == 1
     assert result["attribute_filtered"] == 1
+    assert result["role_filtered"] == 0
     assert result["fallback_rejected"] == 0
     assert "Attribute-filtered: 1" in captured.out
+    assert "Role-filtered: 0" in captured.out
     assert "Fallback-rejected: 0" in captured.out
     assert "Rejected:" not in captured.out
     assert any(
         "Batch chunk completed: 1 matched, 1 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified" in line
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified" in line
         for line in captured.err.splitlines()
     )
     assert any(
         "Evaluation round complete (search): 1 matched, 1 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified" in line
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified" in line
         for line in captured.err.splitlines()
     )
     assert "Attribute mismatch" not in captured.err
@@ -321,5 +324,5 @@ async def test_collect_wait_prints_round_summary_after_chunk(
     assert chunk_idx < round_idx
     assert (
         "Evaluation round complete (search): 1 matched, 0 attribute-filtered, "
-        "0 fallback-rejected, 0 failed, 0 unclassified"
+        "0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified"
     ) in err_lines[round_idx]

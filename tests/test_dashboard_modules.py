@@ -982,7 +982,7 @@ def test_task_log_client_batch_poller_sse_uses_single_event_source():
           data: JSON.stringify({
             type: 'log',
             level: 'summary',
-            message: 'Batch chunk completed: 1 matched, 0 attribute-filtered, 0 fallback-rejected, 0 failed, 0 unclassified',
+            message: 'Batch chunk completed: 1 matched, 0 attribute-filtered, 0 role-filtered, 0 fallback-rejected, 0 failed, 0 unclassified',
           }),
         });
         if (store.get(BATCH_POLLER_LOG_SKIP_KEY) !== '3') process.exit(8);
@@ -1060,6 +1060,7 @@ def test_server_serves_kanban_static_modules():
         "/static/js/jobStore.js",
         "/static/js/boardRenderer.js",
         "/static/js/drawerController.js",
+        "/static/js/jobLinks.js",
         "/static/js/taskLogClient.js",
         "/static/js/boardOrchestration.js",
         "/static/js/jobSearchSettings.js",

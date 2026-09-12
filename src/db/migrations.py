@@ -20,7 +20,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-CURRENT_SCHEMA_VERSION = 15
+CURRENT_SCHEMA_VERSION = 17
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -382,6 +382,29 @@ def apply_legacy_comment_blob_migration(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+
+def _migration_016_jobs_role_filtered(conn: sqlite3.Connection) -> None:
+    """Persist Role-filtered flag and short drawer reason on the job."""
+    for column, ddl in (
+        ("roleFiltered", "ALTER TABLE jobs ADD COLUMN roleFiltered INTEGER DEFAULT 0"),
+        (
+            "roleFilteredReason",
+            "ALTER TABLE jobs ADD COLUMN roleFilteredReason TEXT DEFAULT ''",
+        ),
+    ):
+        _add_column_if_missing(conn, "jobs", column, ddl)
+
+
+def _migration_017_batch_jobs_search_query(conn: sqlite3.Connection) -> None:
+    """Search query snapshot for Role Relevance at poller write-back."""
+    _add_column_if_missing(
+        conn,
+        "batch_jobs",
+        "searchQuery",
+        "ALTER TABLE batch_jobs ADD COLUMN searchQuery TEXT DEFAULT ''",
+    )
+
+
 _MIGRATIONS: dict[int, MigrationFn] = {
     1: _migration_001_create_jobs_table,
     2: _migration_002_jobs_extra_columns,
@@ -398,6 +421,8 @@ _MIGRATIONS: dict[int, MigrationFn] = {
     13: _migration_013_jobs_annual_posted_salary,
     14: _migration_014_batch_jobs_search_salary_min,
     15: _migration_015_jobs_comments_json,
+    16: _migration_016_jobs_role_filtered,
+    17: _migration_017_batch_jobs_search_query,
 }
 
 

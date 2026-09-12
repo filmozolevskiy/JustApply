@@ -7,6 +7,12 @@ import {
   getBoardJobOrder,
   resolveJobsArchivedFetchParam,
 } from './boardRenderer.js';
+import {
+  parseJobLinkPath,
+  pushBoardRootHistory,
+  pushJobLinkHistory,
+  restoreJobLinkHistory,
+} from './jobLinks.js';
 
 export const NAME_PLACEHOLDER = '______';
 
@@ -47,6 +53,15 @@ export function buildDrawerCompanyRowHtml(company, companyUrl) {
       ? ` <a href="${companyUrl}" target="_blank" rel="noopener noreferrer" class="drawer-company-linkedin" title="View Company on LinkedIn"><i class="fa-brands fa-linkedin"></i></a>`
       : '';
   return `Company: <strong>${company}</strong>${badgeHtml}`;
+}
+
+export function drawerRoleRelevanceRow(job) {
+  if (!job?.roleFiltered) {
+    return '';
+  }
+  const reason = String(job.roleFilteredReason || '').trim();
+  const reasonHtml = reason ? ` — ${reason}` : '';
+  return `<div class="drawer-job-info-full">Role Relevance: Role-filtered${reasonHtml}</div>`;
 }
 
 /** Accepted jobs after enrichment — show Re-classify / Load More even with zero matching contacts. */
@@ -700,9 +715,54 @@ export function createDrawerController({
     updateDraftButtonStates();
   }
 
-  function closeDrawerImmediate() {
+  function closeDrawerImmediate(options = {}) {
+    const syncUrl = options.syncUrl ?? true;
     document.getElementById('kanban-drawer')?.classList.remove('active');
     drawerJobId = null;
+    if (syncUrl) pushBoardRootHistory();
+  }
+
+  async function ensureJobLoaded(jobId) {
+    if (findJob(jobId)) return true;
+    try {
+      const resp = await fetch(`/api/jobs/${jobId}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      upsertJob(await resp.json());
+      return true;
+    } catch (err) {
+      addLogLine(`Could not open job #${jobId}: ${err.message}`, 'error');
+      return false;
+    }
+  }
+
+  function wouldUrlPathLeaveOrSwitch(link) {
+    const overlay = document.getElementById('kanban-drawer');
+    const drawerOpen =
+      Boolean(overlay?.classList.contains('active')) && drawerJobId != null;
+    if (!drawerOpen) return false;
+    if (link.type !== 'job') return true;
+    return link.id !== drawerJobId;
+  }
+
+  async function applyJobLinkPath(pathname) {
+    const link = parseJobLinkPath(pathname);
+    if (wouldUrlPathLeaveOrSwitch(link)) {
+      if (!(await confirmDiscardIfNeeded())) {
+        restoreJobLinkHistory(drawerJobId);
+        return;
+      }
+    }
+    if (link.type !== 'job') {
+      closeDrawerImmediate({ syncUrl: false });
+      return;
+    }
+    const loaded = await ensureJobLoaded(link.id);
+    if (!loaded) {
+      closeDrawerImmediate({ syncUrl: false });
+      pushBoardRootHistory();
+      return;
+    }
+    await openJobDetailsDrawer(link.id, { syncUrl: false });
   }
 
   async function selectActiveContact(jobId, contactIdx) {
@@ -774,7 +834,8 @@ export function createDrawerController({
     document.querySelector('.drawer-content')?.scrollTo(0, 0);
   }
 
-  async function openJobDetailsDrawer(id) {
+  async function openJobDetailsDrawer(id, options = {}) {
+    const syncUrl = options.syncUrl ?? true;
     const overlay = document.getElementById('kanban-drawer');
     const switching =
       overlay?.classList.contains('active') &&
@@ -786,6 +847,7 @@ export function createDrawerController({
     if (!job) return;
 
     drawerJobId = id;
+    if (syncUrl) pushJobLinkHistory(id);
     showAllCommentRoots = false;
     editingCommentId = null;
     replyingToCommentId = null;
@@ -870,6 +932,7 @@ export function createDrawerController({
               ${job.employmentType ? `<div>Employment Type: <span>${job.employmentType}</span></div>` : ''}
               <div>Salary: <span class="drawer-salary">${drawerSalaryDisplay(job)}</span></div>
               <div class="drawer-job-info-full">Resume Profile: <code>${job.resumeUsed}</code></div>
+              ${drawerRoleRelevanceRow(job)}
             </div>
           </div>
 
@@ -1046,16 +1109,7 @@ export function createDrawerController({
   async function openContactedElsewhereJob(sourceJobId, event) {
     event?.stopPropagation?.();
     event?.preventDefault?.();
-    if (!findJob(sourceJobId)) {
-      try {
-        const resp = await fetch(`/api/jobs/${sourceJobId}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        upsertJob(await resp.json());
-      } catch (err) {
-        addLogLine(`Could not open job #${sourceJobId}: ${err.message}`, 'error');
-        return;
-      }
-    }
+    if (!(await ensureJobLoaded(sourceJobId))) return;
     await openJobDetailsDrawer(sourceJobId);
     onJobMutated();
   }
@@ -1209,6 +1263,7 @@ export function createDrawerController({
   return {
     cancelEditJobComment,
     cancelJobComment,
+    applyJobLinkPath,
     cancelOutreachTemplate,
     cancelReplyJobComment,
     closeDrawer,
