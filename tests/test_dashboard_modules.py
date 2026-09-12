@@ -1045,6 +1045,50 @@ def test_server_serves_justapply_logo():
     ico = client.get("/static/img/favicon.ico")
     assert ico.status_code == 200
 
+def test_reset_scrape_buttons_clears_running_state_after_failed_search():
+    """After scrape SSE done, reset must leave Running even if the button still says Running."""
+    result = _run_node(
+        """
+        import { createJobSearchSettingsController } from './src/web/static/js/jobSearchSettings.js';
+
+        const btn = {
+          disabled: true,
+          innerHTML: '<i class="fa-solid fa-spinner fa-spin"></i> Running...',
+        };
+        const hint = { hidden: true };
+        globalThis.document = {
+          getElementById: (id) => {
+            if (id === 'kb-scrape-btn-panel') return btn;
+            if (id === 'kb-region-hint') return hint;
+            return null;
+          },
+        };
+
+        const settings = createJobSearchSettingsController({
+          addLogLine: () => {},
+          closeTaskLogStreamQuietly: () => {},
+          connectTaskLogStream: () => {},
+          expandLogsConsole: () => {},
+          getActiveResume: () => '',
+          integrateSearchResultFromStream: () => {},
+          isEvaluationLockActive: () => false,
+          taskLog: {},
+        });
+
+        settings.updateScrapeRunButtonState();
+        if (!btn.innerHTML.includes('Running')) process.exit(1);
+
+        settings.resetScrapeButtons();
+        if (btn.innerHTML.includes('Running')) process.exit(2);
+        if (!btn.innerHTML.includes('Run Scraper with Filters')) process.exit(3);
+        if (btn.disabled !== true) process.exit(4);
+
+        console.log('ok');
+        """
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_server_serves_dashboard_stylesheet():
     """FastAPI serves extracted dashboard CSS."""
     client = TestClient(app)

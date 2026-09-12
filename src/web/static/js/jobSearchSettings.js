@@ -30,7 +30,7 @@ export function createJobSearchSettingsController({
   }
 
   function resetScrapeButtons() {
-    updateScrapeRunButtonState();
+    updateScrapeRunButtonState({ force: true });
   }
 
   function getSelectedCountries() {
@@ -60,13 +60,13 @@ export function createJobSearchSettingsController({
     return selectedSearchRegions.size > 0;
   }
 
-  function updateScrapeRunButtonState() {
+  function updateScrapeRunButtonState({ force = false } = {}) {
     const btnPanel = document.getElementById('kb-scrape-btn-panel');
     const hint = document.getElementById('kb-region-hint');
     if (!btnPanel) return;
 
     const running = btnPanel.innerHTML.includes('Running');
-    if (running) return;
+    if (running && !force) return;
 
     const regionsValid = isSearchRegionsValid();
 
